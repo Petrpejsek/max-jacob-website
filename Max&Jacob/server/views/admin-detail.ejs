@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submission #<%= submission.id %> - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181828;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .admin-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .back-link {
+            color: #6a82fb;
+            text-decoration: none;
+            font-size: 0.95rem;
+            margin-bottom: 24px;
+            display: inline-block;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #ff7ee7;
+        }
+
+        .back-link::before {
+            content: '← ';
+        }
+
+        .detail-header {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 32px rgba(106,130,251,0.1);
+        }
+
+        .detail-id {
+            color: #b6b6d6;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .detail-date {
+            color: #8a8aa8;
+            font-size: 0.9rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: 12px;
+        }
+
+        .badge-package {
+            background: linear-gradient(90deg, rgba(255,126,231,0.15), rgba(106,130,251,0.15));
+            border: 1px solid rgba(106,130,251,0.3);
+            color: #a5b4fc;
+        }
+
+        .detail-card {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 32px rgba(106,130,251,0.1);
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 24px;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .field-group {
+            margin-bottom: 24px;
+        }
+
+        .field-label {
+            color: #b6b6d6;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .field-value {
+            color: #d1d1e0;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+
+        .field-value-large {
+            background: #181828;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1.5px solid #2d2d44;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .field-value a {
+            color: #6a82fb;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .field-value a:hover {
+            color: #ff7ee7;
+        }
+
+        .needs-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .need-item {
+            background: rgba(106,130,251,0.1);
+            border: 1px solid rgba(106,130,251,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #a5b4fc;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-yes {
+            background: #4ade80;
+        }
+
+        .status-no {
+            background: #f87171;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-header,
+            .detail-card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <a href="/admin" class="back-link">Back to list</a>
+
+        <div class="detail-header">
+            <div class="detail-id">Submission ID: #<%= submission.id %></div>
+            <div class="detail-date">
+                Submitted on <%= new Date(submission.created_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) %>
+            </div>
+            <% if (submission.selected_package) { %>
+                <div class="badge badge-package">
+                    📦 <%= submission.selected_package %> Package
+                </div>
+            <% } %>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Contact Information</h2>
+            
+            <div class="grid-2">
+                <div class="field-group">
+                    <div class="field-label">Email</div>
+                    <div class="field-value">
+                        <a href="mailto:<%= submission.email %>"><%= submission.email %></a>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Name</div>
+                    <div class="field-value"><%= submission.name || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Company</div>
+                    <div class="field-value"><%= submission.company || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Website</div>
+                    <div class="field-value">
+                        <% if (submission.website) { %>
+                            <a href="<%= submission.website.startsWith('http') ? submission.website : 'https://' + submission.website %>" target="_blank">
+                                <%= submission.website %>
+                            </a>
+                        <% } else { %>
+                            -
+                        <% } %>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">ZIP Code</div>
+                    <div class="field-value"><%= submission.zip_code || '-' %></div>
+                </div>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #2d2d44; margin: 32px 0;">
+
+            <h2 class="section-title">Project Details</h2>
+
+            <div class="field-group">
+                <div class="field-label">What do you need help with?</div>
+                <div class="needs-list">
+                    <% if (submission.needs_help_with && Array.isArray(submission.needs_help_with)) { %>
+                        <% submission.needs_help_with.forEach(need => { %>
+                            <span class="need-item"><%= need %></span>
+                        <% }); %>
+                    <% } else if (submission.needs_help_with) { %>
+                        <span class="need-item"><%= submission.needs_help_with %></span>
+                    <% } else { %>
+                        <div class="field-value">-</div>
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="field-group">
+                    <div class="field-label">Industry</div>
+                    <div class="field-value"><%= submission.industry || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Budget Range</div>
+                    <div class="field-value"><%= submission.budget_range %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Timeline</div>
+                    <div class="field-value"><%= submission.timeline || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Has Attachment</div>
+                    <div class="field-value">
+                        <% if (submission.has_attachment) { %>
+                            <span class="status-indicator status-yes"></span>Yes
+                        <% } else { %>
+                            <span class="status-indicator status-no"></span>No
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Message</div>
+                <div class="field-value field-value-large"><%= submission.message %></div>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #2d2d44; margin: 32px 0;">
+
+            <h2 class="section-title">Technical Info</h2>
+
+            <div class="field-group">
+                <div class="field-label">IP Address</div>
+                <div class="field-value"><%= submission.ip_address || '-' %></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
