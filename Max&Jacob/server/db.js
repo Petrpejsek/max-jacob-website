@@ -205,10 +205,17 @@ function insertWebProjectSubmission(data, callback) {
     data.ip_address || null
   ];
 
+  console.log('[DB] Inserting web-project submission with', params.length, 'params');
+  console.log('[DB] Company name:', data.company_name);
+  
   db.run(sql, params, function(err) {
     if (err) {
+      console.error('[DB] Error inserting web-project submission:', err);
+      console.error('[DB] Error code:', err.code);
+      console.error('[DB] Error message:', err.message);
       callback(err, null);
     } else {
+      console.log('[DB] Web-project submission inserted successfully, ID:', this.lastID);
       callback(null, { id: this.lastID });
     }
   });
