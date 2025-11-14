@@ -30,18 +30,18 @@ app.use(express.static(path.join(__dirname, '..')));
 // Trust proxy (pro správné IP adresy za reverse proxy)
 app.set('trust proxy', 1);
 
+// Debug: log all API requests (před routes)
+app.use('/api', (req, res, next) => {
+  console.log('[API Request]', req.method, req.path, req.body ? JSON.stringify(req.body).substring(0, 100) : '');
+  next();
+});
+
 // Routes
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
-
-// Debug: log all API requests
-app.use('/api', (req, res, next) => {
-  console.log('[API Request]', req.method, req.path, req.body ? JSON.stringify(req.body).substring(0, 100) : '');
-  next();
-});
 
 // Start server
 app.listen(PORT, () => {
