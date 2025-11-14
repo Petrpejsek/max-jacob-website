@@ -24,24 +24,24 @@ app.use(session({
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Static files - servirování současného webu
-app.use(express.static(path.join(__dirname, '..')));
-
 // Trust proxy (pro správné IP adresy za reverse proxy)
 app.set('trust proxy', 1);
 
-// Debug: log all API requests (před routes)
+// Debug: log all API requests (PŘED static files, aby se API routes neprepisovaly)
 app.use('/api', (req, res, next) => {
   console.log('[API Request]', req.method, req.path, req.body ? JSON.stringify(req.body).substring(0, 100) : '');
   next();
 });
 
-// Routes
+// Routes (PŘED static files!)
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
+
+// Static files - servirování současného webu (PO routes, aby se nepřepisovaly API routes)
+app.use(express.static(path.join(__dirname, '..')));
 
 // Start server
 app.listen(PORT, () => {
