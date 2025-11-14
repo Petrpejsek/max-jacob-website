@@ -7,8 +7,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
-    healthCheckPath: /
+      # PORT je automaticky nastavený Renderem, nepotřebujeme ho explicitně nastavovat
+    healthCheckPath: /health
     autoDeploy: true
-
