@@ -4,7 +4,12 @@ const session = require('express-session');
 const path = require('path');
 
 const app = express();
+// Render používá PORT z environment variable, ne výchozí 3000
 const PORT = process.env.PORT || 3000;
+console.log('Starting server...');
+console.log('PORT:', PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Working directory:', process.cwd());
 
 // Middleware
 app.use(express.json());
@@ -43,10 +48,33 @@ app.use('/admin', adminRoutes);
 // Static files - servirování současného webu (PO routes, aby se nepřepisovaly API routes)
 app.use(express.static(path.join(__dirname, '..')));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Test API endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'API is working',
+    path: '/api/test',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server běží na http://localhost:${PORT}`);
   console.log(`Admin panel: http://localhost:${PORT}/admin`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`API test: http://localhost:${PORT}/api/test`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`PORT from env: ${process.env.PORT || 'not set, using default 3000'}`);
 });
 
 

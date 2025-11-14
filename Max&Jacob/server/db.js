@@ -5,14 +5,27 @@ const path = require('path');
 // Pro produkci použijeme persistent disk nebo vytvoříme databázi v aktuálním adresáři
 const dbPath = path.join(__dirname, '..', 'data.db');
 console.log('Database path:', dbPath);
+console.log('Working directory:', process.cwd());
+console.log('__dirname:', __dirname);
 
-const db = new sqlite3.Database(dbPath, (err) => {
+// Zkusíme vytvořit databázi s WRITE mode, aby se vytvořila pokud neexistuje
+const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
   if (err) {
     console.error('Error opening database:', err);
     console.error('Database path was:', dbPath);
+    console.error('Error code:', err.code);
+    console.error('Error message:', err.message);
   } else {
     console.log('Connected to SQLite database at:', dbPath);
-    initDatabase();
+    // Test, jestli můžeme psát do databáze
+    db.run('PRAGMA journal_mode=WAL;', (pragmaErr) => {
+      if (pragmaErr) {
+        console.error('Error setting WAL mode:', pragmaErr);
+      } else {
+        console.log('Database WAL mode enabled');
+      }
+      initDatabase();
+    });
   }
 });
 
