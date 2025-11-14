@@ -40,11 +40,43 @@ app.use((req, res, next) => {
   next();
 });
 
-// Load routes
+// Load routes modules
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 
-// TEST ENDPOINT - ÚPLNĚ NA ZAČÁTKU - funguje pro všechny HTTP metody
+// ========================================
+// ALL ROUTES - ÚPLNĚ NA ZAČÁTKU!
+// ========================================
+
+// DIAGNOSTIC ENDPOINT - test, jestli Express vůbec běží
+app.all('/diagnostic', (req, res) => {
+  console.log('[DIAGNOSTIC] Request received:', req.method, req.originalUrl);
+  res.json({
+    status: 'Express server is running',
+    method: req.method,
+    path: req.path,
+    originalUrl: req.originalUrl,
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
+    server: 'express',
+    message: 'If you see this, Express is working!'
+  });
+});
+
+// HEALTH CHECK
+app.all('/health', (req, res) => {
+  console.log('[HEALTH] Request received:', req.method, req.path);
+  res.json({ 
+    status: 'ok', 
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    server: 'express'
+  });
+});
+
+// TEST ENDPOINT - direct in server.js
 app.all('/api/test-direct', (req, res) => {
   console.log('[TEST-DIRECT] Request received:', req.method, req.path);
   res.json({ 
@@ -57,52 +89,30 @@ app.all('/api/test-direct', (req, res) => {
   });
 });
 
-// HEALTH CHECK - ÚPLNĚ NA ZAČÁTKU, PŘED VŠÍM
-app.all('/health', (req, res) => {
-  console.log('[HEALTH] Request received:', req.method, req.path);
-  res.json({ 
-    status: 'ok', 
-    port: PORT,
-    env: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString(),
-    server: 'express'
-  });
-});
-
-// DIAGNOSTIC ENDPOINT - test, jestli Express vůbec běží
-app.all('/diagnostic', (req, res) => {
-  console.log('[DIAGNOSTIC] Request received:', req.method, req.originalUrl);
-  res.json({
-    status: 'Express server is running',
-    method: req.method,
-    path: req.path,
-    originalUrl: req.originalUrl,
-    headers: req.headers,
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    env: process.env.NODE_ENV || 'development'
-  });
-});
-
 // API logging middleware
 app.use('/api', (req, res, next) => {
   console.log('[API] Request:', req.method, req.path);
   next();
 });
 
-// Register routes - PŘED static files
+// Register API and Admin routes
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
-// Static files - POUZE PRO NON-API/ADMIN/HEALTH ROUTES
-// Použijeme standardní express.static, ale až na konci
-// Express automaticky přeskočí tento middleware, pokud route handler už odpověděl
+// ========================================
+// STATIC FILES - ÚPLNĚ NA KOŇCI!
+// ========================================
+
 const staticPath = path.join(__dirname, '..');
 console.log('[SERVER] Static files path:', staticPath);
 
+// Static files middleware - pouze pokud request NENÍ API/admin/health/diagnostic
 app.use((req, res, next) => {
-  // Pokud je to API, admin nebo health, přeskočíme static files úplně
-  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
+  // Explicitní seznam paths, které NIKDY neservujeme jako static files
+  const skipStaticPaths = ['/api', '/admin', '/health', '/diagnostic'];
+  const shouldSkip = skipStaticPaths.some(skipPath => req.path.startsWith(skipPath) || req.path === skipPath);
+  
+  if (shouldSkip) {
     console.log('[STATIC] Skipping static files for:', req.path);
     // Pokud jsme se sem dostali a žádný route neodpověděl, je to 404
     if (!res.headersSent) {
@@ -110,7 +120,8 @@ app.use((req, res, next) => {
         error: 'Route not found',
         path: req.path,
         method: req.method,
-        message: 'No route handler matched this path'
+        message: 'No route handler matched this path. Express server is running but this route does not exist.',
+        availableRoutes: ['/health', '/diagnostic', '/api/test-direct', '/api/test', '/admin']
       });
     }
     return;
@@ -119,6 +130,7 @@ app.use((req, res, next) => {
   // Pro ostatní cesty zkus servovat static file
   console.log('[STATIC] Attempting to serve static file:', req.path);
   const staticMiddleware = express.static(staticPath, { fallthrough: false });
+  
   staticMiddleware(req, res, (err) => {
     if (err) {
       console.log('[STATIC] File not found:', req.path, err.message);
@@ -132,13 +144,15 @@ app.use((req, res, next) => {
 // Start server
 // KRITICKÉ: Na Renderu musí server naslouchat na 0.0.0.0, ne jen localhost!
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n=== SERVER STARTED ===`);
+  console.log(`\n=== SERVER STARTED SUCCESSFULLY ===`);
   console.log(`Server naslouchá na 0.0.0.0:${PORT}`);
   console.log(`Health: http://0.0.0.0:${PORT}/health`);
+  console.log(`Diagnostic: http://0.0.0.0:${PORT}/diagnostic`);
   console.log(`API Test: http://0.0.0.0:${PORT}/api/test-direct`);
   console.log(`API Routes: http://0.0.0.0:${PORT}/api/test`);
   console.log(`Admin: http://0.0.0.0:${PORT}/admin`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`PORT: ${PORT}`);
-  console.log(`========================\n`);
+  console.log(`Static files path: ${staticPath}`);
+  console.log(`========================================\n`);
 });
