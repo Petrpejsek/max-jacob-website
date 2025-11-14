@@ -32,13 +32,9 @@ app.set('views', path.join(__dirname, 'views'));
 // Trust proxy (pro správné IP adresy za reverse proxy)
 app.set('trust proxy', 1);
 
-// Routes (PŘED static files!) - kritické pro správné fungování
-const contactRoutes = require('./routes/contact');
-const adminRoutes = require('./routes/admin');
-
 // Debug: log all requests for diagnosis
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   console.log('Path:', req.path);
   console.log('Starts with /api?', req.path.startsWith('/api'));
   console.log('Starts with /admin?', req.path.startsWith('/admin'));
@@ -46,70 +42,74 @@ app.use((req, res, next) => {
   next();
 });
 
-// Debug: log all API requests (PŘED routes, aby se všechny API requests logovaly)
-app.use('/api', (req, res, next) => {
-  console.log('=== API REQUEST RECEIVED ===');
-  console.log('[API Request]', req.method, req.path);
-  console.log('[API Request] Full URL:', req.originalUrl);
-  console.log('[API Request] Headers:', JSON.stringify(req.headers));
-  console.log('[API Request] Body:', req.body ? JSON.stringify(req.body).substring(0, 200) : 'empty');
-  console.log('[API Request] IP:', req.ip);
-  next();
+// Routes - REGISTRUJEME JE ÚPLNĚ NA ZAČÁTKU, PŘED VŠÍM!
+const contactRoutes = require('./routes/contact');
+const adminRoutes = require('./routes/admin');
+
+// Test endpoint directly in server.js - NA ZAČÁTKU
+app.get('/api/test-direct', (req, res) => {
+  console.log('[Test Direct] Received request - WORKING!');
+  res.json({ 
+    status: 'Direct route works',
+    path: '/api/test-direct',
+    timestamp: new Date().toISOString(),
+    server: 'working'
+  });
 });
 
-// Routes - KRITICKÉ: Musí být PŘED static files!
-app.use('/api', contactRoutes);
-app.use('/admin', adminRoutes);
-
-// Health check endpoint
+// Health check endpoint - NA ZAČÁTKU
 app.get('/health', (req, res) => {
-  console.log('[Health Check] Received request');
+  console.log('[Health Check] Received request - WORKING!');
   res.json({ 
     status: 'ok', 
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    server: 'working'
   });
 });
 
-// Test endpoint directly in server.js to verify routing works
-app.get('/api/test-direct', (req, res) => {
-  console.log('[Test Direct] Received request');
-  res.json({ 
-    status: 'Direct route works',
-    path: '/api/test-direct',
-    timestamp: new Date().toISOString()
-  });
+// Debug: log all API requests
+app.use('/api', (req, res, next) => {
+  console.log('=== API REQUEST RECEIVED ===');
+  console.log('[API Request]', req.method, req.path);
+  console.log('[API Request] Full URL:', req.originalUrl);
+  console.log('[API Request] Body:', req.body ? JSON.stringify(req.body).substring(0, 200) : 'empty');
+  next();
 });
 
-// Static files - NA KOŇCI, pouze pokud request nebyl obsloužen routes výše
-// Explicitně přeskočíme API, admin a health routes
-const staticMiddleware = express.static(path.join(__dirname, '..'), {
-  fallthrough: true
-});
+// Routes - PŘED static files!
+app.use('/api', contactRoutes);
+app.use('/admin', adminRoutes);
 
+// Static files - JEN pro non-API/admin/health routes
+// Použijeme vlastní middleware, který explicitně kontroluje path
 app.use((req, res, next) => {
-  // Pokud je to API, admin nebo health route, přeskočíme static files
+  // Pokud je to API, admin nebo health route, NEPOKRAČUJEME ke static files
   if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
-    console.log('[Static Files Middleware] Skipping static files for:', req.path);
-    return next(); // Předáme dál - pokud route neodpověděl, dostaneme 404
-  }
-  console.log('[Static Files Middleware] Trying to serve static file:', req.path);
-  staticMiddleware(req, res, next);
-});
-
-// 404 handler - pokud žádný route neodpověděl
-app.use((req, res, next) => {
-  console.log('[404 Handler] No route matched:', req.method, req.originalUrl);
-  if (req.path.startsWith('/api') || req.path.startsWith('/admin')) {
-    res.status(404).json({ 
-      error: 'Not found',
+    console.log('[Static Files] SKIPPING for:', req.path);
+    // Pokud jsme se dostali sem, znamená to, že žádný route neodpověděl
+    // Vrátíme 404
+    return res.status(404).json({ 
+      error: 'Route not found',
       path: req.path,
-      method: req.method
+      method: req.method,
+      message: 'API route was not handled by any route handler'
     });
-  } else {
-    res.status(404).send('Not found');
   }
+  
+  // Pro všechny ostatní cesty zkusíme servovat static file
+  console.log('[Static Files] Trying to serve:', req.path);
+  const staticFileHandler = express.static(path.join(__dirname, '..'), {
+    fallthrough: false // Pokud soubor neexistuje, vrátíme 404
+  });
+  
+  staticFileHandler(req, res, (err) => {
+    if (err) {
+      console.log('[Static Files] File not found:', req.path);
+      return res.status(404).send('File not found');
+    }
+  });
 });
 
 // Start server
