@@ -61,6 +61,9 @@ router.post('/contact-submissions', (req, res) => {
 
 // POST /api/web-project-submissions
 router.post('/web-project-submissions', (req, res) => {
+  console.log('[WEB-PROJECT] Received request');
+  console.log('[WEB-PROJECT] Body:', JSON.stringify(req.body, null, 2));
+  
   const {
     company_name,
     current_website,
@@ -128,18 +131,22 @@ router.post('/web-project-submissions', (req, res) => {
     ip_address: req.ip
   };
 
+  console.log('[WEB-PROJECT] Prepared submission data:', JSON.stringify(submissionData, null, 2));
+  
   // Uložení do databáze
   insertWebProjectSubmission(submissionData, (err, result) => {
     if (err) {
-      console.error('Error inserting web-project submission:', err);
-      console.error('Submission data:', JSON.stringify(submissionData, null, 2));
+      console.error('[WEB-PROJECT] ERROR inserting submission:', err);
+      console.error('[WEB-PROJECT] Error code:', err.code);
+      console.error('[WEB-PROJECT] Error message:', err.message);
+      console.error('[WEB-PROJECT] Submission data:', JSON.stringify(submissionData, null, 2));
       return res.status(500).json({
         success: false,
-        error: 'Failed to save submission: ' + err.message
+        error: 'Failed to save submission: ' + (err.message || String(err))
       });
     }
 
-    console.log('Web-project submission saved successfully with ID:', result.id);
+    console.log('[WEB-PROJECT] Submission saved successfully with ID:', result.id);
     res.json({
       success: true,
       id: result.id

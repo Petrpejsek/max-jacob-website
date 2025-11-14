@@ -424,6 +424,9 @@
             }
             
             try {
+                // Debug: zobrazíme, co odesíláme
+                console.log('Submitting form data:', formData);
+                
                 // Odeslání dat na server
                 const response = await fetch('/api/web-project-submissions', {
                     method: 'POST',
@@ -433,10 +436,26 @@
                     body: JSON.stringify(formData)
                 });
                 
-                const result = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                // Zkusíme přečíst response jako text, abychom viděli i HTML error stránky
+                const responseText = await response.text();
+                console.log('Response text:', responseText.substring(0, 500));
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    // Pokud není JSON, je to pravděpodobně HTML error page
+                    console.error('Response is not JSON, it\'s probably an error page');
+                    alert('Server error: The API endpoint returned an error page.\n\nStatus: ' + response.status + '\n\nCheck the browser console for details.');
+                    return;
+                }
                 
                 if (response.ok && result.success) {
                     // Success - skrýt formulář a zobrazit thank you
+                    console.log('Form submitted successfully! ID:', result.id);
                     formContainer.style.display = 'none';
                     thankYouContainer.style.display = 'block';
                     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -444,13 +463,14 @@
                     // Error - zobrazíme detailní chybu
                     const errorMsg = result.error || 'Unknown error';
                     console.error('Server error:', errorMsg);
-                    console.error('Response status:', response.status);
-                    alert('Error submitting form: ' + errorMsg + '\n\nStatus: ' + response.status);
+                    console.error('Full response:', result);
+                    alert('Error submitting form: ' + errorMsg + '\n\nStatus: ' + response.status + '\n\nCheck the browser console (F12) for details.');
                 }
             } catch (error) {
                 console.error('Form submission error:', error);
                 console.error('Error details:', error.message);
-                alert('Network error. Please check your connection and try again.\n\nError: ' + error.message);
+                console.error('Error stack:', error.stack);
+                alert('Network error. Please check your connection and try again.\n\nError: ' + error.message + '\n\nCheck the browser console (F12) for details.');
             }
         }
         
