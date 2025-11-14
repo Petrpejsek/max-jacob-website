@@ -32,35 +32,25 @@ app.set('views', path.join(__dirname, 'views'));
 // Trust proxy (pro správné IP adresy za reverse proxy)
 app.set('trust proxy', 1);
 
-// Debug: log all API requests (PŘED static files, aby se API routes neprepisovaly)
+// Routes (PŘED static files!) - kritické pro správné fungování
+const contactRoutes = require('./routes/contact');
+const adminRoutes = require('./routes/admin');
+
+// Debug: log all API requests (PŘED routes, aby se všechny API requests logovaly)
 app.use('/api', (req, res, next) => {
   console.log('=== API REQUEST RECEIVED ===');
   console.log('[API Request]', req.method, req.path);
-  console.log('[API Request] Headers:', req.headers);
+  console.log('[API Request] Full URL:', req.originalUrl);
+  console.log('[API Request] Headers:', JSON.stringify(req.headers));
   console.log('[API Request] Body:', req.body ? JSON.stringify(req.body).substring(0, 200) : 'empty');
   console.log('[API Request] IP:', req.ip);
   next();
 });
 
-// Routes (PŘED static files!)
-const contactRoutes = require('./routes/contact');
-const adminRoutes = require('./routes/admin');
-
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
-// Static files - servirování současného webu (PO routes, aby se nepřepisovaly API routes)
-// Pouze pro GET requesty a pouze pokud to není API nebo admin route
-app.get('*', (req, res, next) => {
-  // Pokud je to API nebo admin route, přeskočíme static files
-  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path.startsWith('/health')) {
-    return next();
-  }
-  // Jinak servuj static file
-  express.static(path.join(__dirname, '..'))(req, res, next);
-});
-
-// Health check endpoint
+// Health check endpoint (PO routes, ale před static files)
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -70,11 +60,30 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Test API endpoint
-app.get('/api/test', (req, res) => {
+// Static files - servirování současného webu (NA KOŇCI, jako catch-all)
+// Pouze pro GET requesty, které nejsou API, admin nebo health
+app.get('*', (req, res, next) => {
+  // Pokud je to API nebo admin route, přeskočíme static files (mělo by být už obslouženo)
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
+    console.log('[Static Files] Skipping static files for:', req.path);
+    return next(); // Možná 404, ale nebudeme servovat static file
+  }
+  // Jinak servuj static file
+  console.log('[Static Files] Serving static file:', req.path);
+  express.static(path.join(__dirname, '..'))(req, res, (err) => {
+    if (err) {
+      console.error('[Static Files] Error serving:', req.path, err.message);
+      next();
+    }
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
   res.json({ 
-    status: 'API is working',
-    path: '/api/test',
+    status: 'ok', 
+    port: PORT,
+    env: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
 });
