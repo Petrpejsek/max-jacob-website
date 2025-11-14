@@ -78,16 +78,6 @@ app.get('*', (req, res, next) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    port: PORT,
-    env: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Start server
 app.listen(PORT, () => {
   console.log(`Server běží na http://localhost:${PORT}`);
