@@ -50,12 +50,13 @@ app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
 // Static files - servirování současného webu (PO routes, aby se nepřepisovaly API routes)
-// Ale pouze pokud to není API nebo admin route
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/admin')) {
-    // Pokud je to API nebo admin route, přeskočíme static files
+// Pouze pro GET requesty a pouze pokud to není API nebo admin route
+app.get('*', (req, res, next) => {
+  // Pokud je to API nebo admin route, přeskočíme static files
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path.startsWith('/health')) {
     return next();
   }
+  // Jinak servuj static file
   express.static(path.join(__dirname, '..'))(req, res, next);
 });
 
