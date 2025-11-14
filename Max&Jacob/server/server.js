@@ -37,6 +37,12 @@ const adminRoutes = require('./routes/admin');
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
+// Debug: log all API requests
+app.use('/api', (req, res, next) => {
+  console.log('[API Request]', req.method, req.path, req.body ? JSON.stringify(req.body).substring(0, 100) : '');
+  next();
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server běží na http://localhost:${PORT}`);

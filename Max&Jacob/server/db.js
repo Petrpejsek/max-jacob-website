@@ -2,12 +2,16 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Vytvoření/připojení k databázi
+// Pro produkci použijeme persistent disk nebo vytvoříme databázi v aktuálním adresáři
 const dbPath = path.join(__dirname, '..', 'data.db');
+console.log('Database path:', dbPath);
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err);
+    console.error('Database path was:', dbPath);
   } else {
-    console.log('Connected to SQLite database');
+    console.log('Connected to SQLite database at:', dbPath);
     initDatabase();
   }
 });
@@ -36,7 +40,7 @@ function initDatabase() {
 
   db.run(createTableSQL, (err) => {
     if (err) {
-      console.error('Error creating table:', err);
+      console.error('Error creating contact_submissions table:', err);
     } else {
       console.log('Table contact_submissions ready');
     }
@@ -76,6 +80,15 @@ function initDatabase() {
       console.error('Error creating web_project_submissions table:', err);
     } else {
       console.log('Table web_project_submissions ready');
+    }
+  });
+  
+  // Test zápisu do databáze
+  db.run('SELECT 1', (err) => {
+    if (err) {
+      console.error('Database write test failed:', err);
+    } else {
+      console.log('Database is writable');
     }
   });
 }

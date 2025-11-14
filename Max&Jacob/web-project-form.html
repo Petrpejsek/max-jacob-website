@@ -441,12 +441,16 @@
                     thankYouContainer.style.display = 'block';
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
-                    // Error
-                    alert('Error submitting form: ' + (result.error || 'Unknown error'));
+                    // Error - zobrazíme detailní chybu
+                    const errorMsg = result.error || 'Unknown error';
+                    console.error('Server error:', errorMsg);
+                    console.error('Response status:', response.status);
+                    alert('Error submitting form: ' + errorMsg + '\n\nStatus: ' + response.status);
                 }
             } catch (error) {
                 console.error('Form submission error:', error);
-                alert('Network error. Please check your connection and try again.');
+                console.error('Error details:', error.message);
+                alert('Network error. Please check your connection and try again.\n\nError: ' + error.message);
             }
         }
         

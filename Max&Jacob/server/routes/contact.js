@@ -44,12 +44,14 @@ router.post('/contact-submissions', (req, res) => {
   insertSubmission(submissionData, (err, result) => {
     if (err) {
       console.error('Error inserting submission:', err);
+      console.error('Submission data:', JSON.stringify(submissionData, null, 2));
       return res.status(500).json({
         success: false,
-        error: 'Failed to save submission'
+        error: 'Failed to save submission: ' + err.message
       });
     }
 
+    console.log('Contact submission saved successfully with ID:', result.id);
     res.json({
       success: true,
       id: result.id
@@ -130,12 +132,14 @@ router.post('/web-project-submissions', (req, res) => {
   insertWebProjectSubmission(submissionData, (err, result) => {
     if (err) {
       console.error('Error inserting web-project submission:', err);
+      console.error('Submission data:', JSON.stringify(submissionData, null, 2));
       return res.status(500).json({
         success: false,
-        error: 'Failed to save submission'
+        error: 'Failed to save submission: ' + err.message
       });
     }
 
+    console.log('Web-project submission saved successfully with ID:', result.id);
     res.json({
       success: true,
       id: result.id
