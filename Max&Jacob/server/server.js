@@ -76,28 +76,33 @@ app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
 // Static files - POUZE PRO NON-API/ADMIN/HEALTH ROUTES
-// Použijeme conditional middleware
+// Použijeme standardní express.static, ale až na konci
+// Express automaticky přeskočí tento middleware, pokud route handler už odpověděl
+const staticPath = path.join(__dirname, '..');
+console.log('[SERVER] Static files path:', staticPath);
+
 app.use((req, res, next) => {
-  // Pokud je to API, admin nebo health, NIKDY neservuj static file
+  // Pokud je to API, admin nebo health, přeskočíme static files úplně
   if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
-    console.log('[STATIC] Skipping - this is an API/admin/health route');
-    // Pokud jsme se sem dostali, žádný route handler neodpověděl
-    // To znamená, že route neexistuje
+    console.log('[STATIC] Skipping static files for:', req.path);
+    // Pokud jsme se sem dostali a žádný route neodpověděl, je to 404
     if (!res.headersSent) {
-      res.status(404).json({
+      return res.status(404).json({
         error: 'Route not found',
         path: req.path,
-        method: req.method
+        method: req.method,
+        message: 'No route handler matched this path'
       });
     }
     return;
   }
   
   // Pro ostatní cesty zkus servovat static file
-  console.log('[STATIC] Attempting to serve:', req.path);
-  express.static(path.join(__dirname, '..'))(req, res, (err) => {
+  console.log('[STATIC] Attempting to serve static file:', req.path);
+  const staticMiddleware = express.static(staticPath, { fallthrough: false });
+  staticMiddleware(req, res, (err) => {
     if (err) {
-      console.log('[STATIC] Error:', err.message);
+      console.log('[STATIC] File not found:', req.path, err.message);
       if (!res.headersSent) {
         res.status(404).send('File not found');
       }
@@ -106,13 +111,15 @@ app.use((req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+// KRITICKÉ: Na Renderu musí server naslouchat na 0.0.0.0, ne jen localhost!
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n=== SERVER STARTED ===`);
-  console.log(`Server běží na portu ${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/health`);
-  console.log(`API Test: http://localhost:${PORT}/api/test-direct`);
-  console.log(`API Routes: http://localhost:${PORT}/api/test`);
-  console.log(`Admin: http://localhost:${PORT}/admin`);
+  console.log(`Server naslouchá na 0.0.0.0:${PORT}`);
+  console.log(`Health: http://0.0.0.0:${PORT}/health`);
+  console.log(`API Test: http://0.0.0.0:${PORT}/api/test-direct`);
+  console.log(`API Routes: http://0.0.0.0:${PORT}/api/test`);
+  console.log(`Admin: http://0.0.0.0:${PORT}/admin`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`PORT: ${PORT}`);
   console.log(`========================\n`);
 });
