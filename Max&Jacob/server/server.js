@@ -61,22 +61,12 @@ app.get('/health', (req, res) => {
 });
 
 // Static files - servirování současného webu (NA KOŇCI, jako catch-all)
-// Pouze pro GET requesty, které nejsou API, admin nebo health
-app.get('*', (req, res, next) => {
-  // Pokud je to API nebo admin route, přeskočíme static files (mělo by být už obslouženo)
-  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
-    console.log('[Static Files] Skipping static files for:', req.path);
-    return next(); // Možná 404, ale nebudeme servovat static file
-  }
-  // Jinak servuj static file
-  console.log('[Static Files] Serving static file:', req.path);
-  express.static(path.join(__dirname, '..'))(req, res, (err) => {
-    if (err) {
-      console.error('[Static Files] Error serving:', req.path, err.message);
-      next();
-    }
-  });
-});
+// Express automaticky přeskočí tento middleware, pokud už route handler odpověděl
+// Toto by mělo být POSLEDNÍ middleware, aby se API routes zpracovaly dříve
+app.use(express.static(path.join(__dirname, '..'), {
+  // Pokud soubor neexistuje, nebudeme odpovídat, jen přeskočíme
+  fallthrough: true
+}));
 
 // Start server
 app.listen(PORT, () => {
