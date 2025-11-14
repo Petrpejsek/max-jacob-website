@@ -44,24 +44,43 @@ app.use((req, res, next) => {
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 
+// TEST ENDPOINT - ÚPLNĚ NA ZAČÁTKU - funguje pro všechny HTTP metody
+app.all('/api/test-direct', (req, res) => {
+  console.log('[TEST-DIRECT] Request received:', req.method, req.path);
+  res.json({ 
+    status: 'Direct route works',
+    path: '/api/test-direct',
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    server: 'express',
+    port: PORT
+  });
+});
+
 // HEALTH CHECK - ÚPLNĚ NA ZAČÁTKU, PŘED VŠÍM
-app.get('/health', (req, res) => {
-  console.log('[HEALTH] Request received');
+app.all('/health', (req, res) => {
+  console.log('[HEALTH] Request received:', req.method, req.path);
   res.json({ 
     status: 'ok', 
     port: PORT,
     env: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    server: 'express'
   });
 });
 
-// TEST ENDPOINT - ÚPLNĚ NA ZAČÁTKU
-app.get('/api/test-direct', (req, res) => {
-  console.log('[TEST-DIRECT] Request received');
-  res.json({ 
-    status: 'Direct route works',
-    path: '/api/test-direct',
-    timestamp: new Date().toISOString()
+// DIAGNOSTIC ENDPOINT - test, jestli Express vůbec běží
+app.all('/diagnostic', (req, res) => {
+  console.log('[DIAGNOSTIC] Request received:', req.method, req.originalUrl);
+  res.json({
+    status: 'Express server is running',
+    method: req.method,
+    path: req.path,
+    originalUrl: req.originalUrl,
+    headers: req.headers,
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    env: process.env.NODE_ENV || 'development'
   });
 });
 
