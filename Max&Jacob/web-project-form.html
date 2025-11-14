@@ -414,17 +414,29 @@
 
         // Handle form submission
         async function handleFormSubmit() {
+            console.log('=== handleFormSubmit CALLED ===');
+            console.log('Current step:', currentStep);
+            console.log('Total steps:', totalSteps);
+            
             // Shromáždění dat ze všech kroků formuláře
+            console.log('Collecting form data...');
             const formData = collectFormData();
+            console.log('Collected form data:', formData);
             
             // Validace - musí být company_name nebo contact email
             if (!formData.company_name && (!formData.contacts || !formData.contacts.length || !formData.contacts[0].email)) {
+                console.error('Validation failed: missing company name or contact email');
                 alert('Please fill in at least company name or contact email');
                 return;
             }
             
+            console.log('Validation passed, submitting to server...');
+            
             try {
                 // Debug: zobrazíme, co odesíláme
+                console.log('=== FETCH REQUEST STARTING ===');
+                console.log('URL: /api/web-project-submissions');
+                console.log('Method: POST');
                 console.log('Submitting form data:', formData);
                 
                 // Odeslání dat na server
@@ -594,11 +606,13 @@
 
         // Event listeners
         btnNext.addEventListener('click', () => {
+            console.log('btnNext clicked, currentStep:', currentStep, 'totalSteps:', totalSteps);
             if (currentStep < totalSteps - 1) {
                 currentStep++;
                 updateFormState();
             } else {
                 // Handle form submission
+                console.log('Last step reached, calling handleFormSubmit...');
                 handleFormSubmit();
             }
         });

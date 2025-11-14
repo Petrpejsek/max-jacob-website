@@ -34,7 +34,11 @@ app.set('trust proxy', 1);
 
 // Debug: log all API requests (PŘED static files, aby se API routes neprepisovaly)
 app.use('/api', (req, res, next) => {
-  console.log('[API Request]', req.method, req.path, req.body ? JSON.stringify(req.body).substring(0, 100) : '');
+  console.log('=== API REQUEST RECEIVED ===');
+  console.log('[API Request]', req.method, req.path);
+  console.log('[API Request] Headers:', req.headers);
+  console.log('[API Request] Body:', req.body ? JSON.stringify(req.body).substring(0, 200) : 'empty');
+  console.log('[API Request] IP:', req.ip);
   next();
 });
 
@@ -46,7 +50,14 @@ app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
 // Static files - servirování současného webu (PO routes, aby se nepřepisovaly API routes)
-app.use(express.static(path.join(__dirname, '..')));
+// Ale pouze pokud to není API nebo admin route
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin')) {
+    // Pokud je to API nebo admin route, přeskočíme static files
+    return next();
+  }
+  express.static(path.join(__dirname, '..'))(req, res, next);
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
