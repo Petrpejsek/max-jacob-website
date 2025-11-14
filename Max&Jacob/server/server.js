@@ -36,6 +36,16 @@ app.set('trust proxy', 1);
 const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 
+// Debug: log all requests for diagnosis
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log('Path:', req.path);
+  console.log('Starts with /api?', req.path.startsWith('/api'));
+  console.log('Starts with /admin?', req.path.startsWith('/admin'));
+  console.log('Is /health?', req.path === '/health');
+  next();
+});
+
 // Debug: log all API requests (PŘED routes, aby se všechny API requests logovaly)
 app.use('/api', (req, res, next) => {
   console.log('=== API REQUEST RECEIVED ===');
@@ -47,11 +57,13 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Routes - KRITICKÉ: Musí být PŘED static files!
 app.use('/api', contactRoutes);
 app.use('/admin', adminRoutes);
 
-// Health check endpoint (PO routes, ale před static files)
+// Health check endpoint
 app.get('/health', (req, res) => {
+  console.log('[Health Check] Received request');
   res.json({ 
     status: 'ok', 
     port: PORT,
@@ -60,13 +72,45 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Static files - servirování současného webu (NA KOŇCI, jako catch-all)
-// Express automaticky přeskočí tento middleware, pokud už route handler odpověděl
-// Toto by mělo být POSLEDNÍ middleware, aby se API routes zpracovaly dříve
-app.use(express.static(path.join(__dirname, '..'), {
-  // Pokud soubor neexistuje, nebudeme odpovídat, jen přeskočíme
+// Test endpoint directly in server.js to verify routing works
+app.get('/api/test-direct', (req, res) => {
+  console.log('[Test Direct] Received request');
+  res.json({ 
+    status: 'Direct route works',
+    path: '/api/test-direct',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Static files - NA KOŇCI, pouze pokud request nebyl obsloužen routes výše
+// Explicitně přeskočíme API, admin a health routes
+const staticMiddleware = express.static(path.join(__dirname, '..'), {
   fallthrough: true
-}));
+});
+
+app.use((req, res, next) => {
+  // Pokud je to API, admin nebo health route, přeskočíme static files
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin') || req.path === '/health') {
+    console.log('[Static Files Middleware] Skipping static files for:', req.path);
+    return next(); // Předáme dál - pokud route neodpověděl, dostaneme 404
+  }
+  console.log('[Static Files Middleware] Trying to serve static file:', req.path);
+  staticMiddleware(req, res, next);
+});
+
+// 404 handler - pokud žádný route neodpověděl
+app.use((req, res, next) => {
+  console.log('[404 Handler] No route matched:', req.method, req.originalUrl);
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin')) {
+    res.status(404).json({ 
+      error: 'Not found',
+      path: req.path,
+      method: req.method
+    });
+  } else {
+    res.status(404).send('Not found');
+  }
+});
 
 // Start server
 app.listen(PORT, () => {
