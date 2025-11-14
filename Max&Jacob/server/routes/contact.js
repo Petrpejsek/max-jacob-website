@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const { insertSubmission, insertWebProjectSubmission } = require('../db');
 
+// Test endpoint - ověření, že routes fungují
+router.get('/test', (req, res) => {
+  res.json({ 
+    status: 'Contact routes are working',
+    path: '/api/test',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // POST /api/contact-submissions
 router.post('/contact-submissions', (req, res) => {
   const { email, name, company, website, zip_code, needs_help_with, industry, budget_range, timeline, message, has_attachment, selected_package } = req.body;
