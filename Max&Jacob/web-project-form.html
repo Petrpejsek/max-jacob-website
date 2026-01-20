@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Project Form - Max & Jacob</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="form-style.css">
+</head>
+<body>
+    <!-- Header with menu -->
+    <header class="header">
+        <div class="logo">
+            <a href="index.html">
+                <img src="logo-maxandjacob.png" alt="Max & Jacob logo" />
+            </a>
+        </div>
+        
+        <div class="header-title">
+            <h1>Website Project Form</h1>
+            <p class="form-subtitle">Tell us about your website project so we can prepare an accurate proposal. This form takes about 3–5 minutes to complete.</p>
+        </div>
+        
+        <a href="#start" class="btn-header btn-start-project">Start Your Project</a>
+        
+        <div class="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </header>
+
+    <!-- Web Project Form Section -->
+    <section class="form-section" id="start">
+        <div class="form-container" id="form-container">
+            <div class="form-progress">
+                <div class="step-indicator">
+                    Step <span id="current-step">1</span> of <span id="total-steps">10</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress" id="progress-bar"></div>
+                </div>
+            </div>
+            
+            <h3 class="step-title" id="step-title">Company Information</h3>
+
+            <div class="form-steps">
+                <!-- Step 1: Company Info -->
+                <div class="form-step active" id="step-1">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <label class="form-label">Company Name</label>
+                            <input type="text" class="input-field" placeholder="e.g. Acme Studio">
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Current website (if any)</label>
+                            <input type="text" class="input-field" placeholder="e.g. https://yourwebsite.com">
+                            <div class="form-field-note">If you don't have a website yet, you can leave this field empty.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Contacts -->
+                <div class="form-step" id="step-2">
+                    <div class="form-fields">
+                        <p class="field-note">Tell us who we'll be in touch with about this project.</p>
+                        
+                        <div id="contacts-container">
+                            <div class="contact-entry">
+                                <div class="form-field">
+                                    <label class="form-label">Contact Name *</label>
+                                    <input type="text" class="input-field" placeholder="e.g. Sarah Johnson">
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Email *</label>
+                                    <input type="email" class="input-field" placeholder="name@company.com">
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Phone</label>
+                                    <input type="tel" class="input-field" placeholder="e.g. +1 555 123 4567 (optional)">
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Role in the company</label>
+                                    <input type="text" class="input-field" placeholder="e.g. Founder, Marketing Manager, CTO">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="button" class="btn-add-contact" id="btn-add-contact">+ Add Another Contact</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Project Goals -->
+                <div class="form-step" id="step-3">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <label class="form-label">What is the main goal of your website?</label>
+                            <textarea class="input-field textarea-field"></textarea>
+                            <div class="form-field-note">e.g. generate leads, sell products, get bookings, present your company, build trust…</div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Who is your target audience?</label>
+                            <textarea class="input-field textarea-field"></textarea>
+                            <div class="form-field-note">e.g. small business owners in the US, parents with young children, B2B clients in finance…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Site Structure -->
+                <div class="form-step" id="step-4">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <label class="form-label">Which pages or sections do you need?</label>
+                            <textarea class="input-field textarea-field"></textarea>
+                            <div class="form-field-note">e.g. Home, About, Services, Pricing, Blog, Contact, FAQ…</div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Estimated number of pages</label>
+                            <input type="number" class="input-field" placeholder="e.g. 5–7 pages">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Sections & Languages -->
+                <div class="form-step" id="step-5">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <label class="form-label">Main sections to include</label>
+                            <input type="text" class="input-field">
+                            <div class="form-field-note">e.g. company, services, products, blog, support…</div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Required languages (e.g. EN, DE, FR)</label>
+                            <input type="text" class="input-field">
+                            <div class="form-field-note">e.g. English only, or English + German, English + Czech…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: Functionalities -->
+                <div class="form-step" id="step-6">
+                    <div class="form-fields">
+                        <p class="field-note">Select all features you know you'll need. We can always adjust this later.</p>
+                        <p class="form-label">Select required features:</p>
+                        <div class="checkbox-grid">
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Contact Form</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Booking System</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Blog / CMS</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Client Portal</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">AI Chatbot</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">GDPR & Cookies</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Newsletter Signup</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">API/CRM Integration</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">E-shop</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Payment Gateway</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Membership Section</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Login System</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Multi-page Form</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Price Calculator</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Website Search</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Multi-language Website</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Event Calendar</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Online Orders</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Gallery/Portfolio</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" class="checkbox-input">
+                                <span class="checkbox-text">Reviews and Ratings</span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-field custom-functions-field">
+                            <label class="form-label">Other required features (list your own requirements)</label>
+                            <textarea class="input-field textarea-field" placeholder="e.g. product configurator, customer portal, discussion forum, custom integrations…"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 7: Branding & Style -->
+                <div class="form-step" id="step-7">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <p class="field-note">Share your branding materials so we can match the look and feel of your company.</p>
+                            
+                            <label class="form-label">Upload your logo, brand guide or other materials</label>
+                            <div class="upload-field">
+                                <input type="file" id="logo-upload" class="file-input" multiple>
+                                <label for="logo-upload" class="file-upload-btn">Upload your logo, brand guide or other materials</label>
+                                <span class="selected-files-label" id="logo-files-label">No file selected</span>
+                            </div>
+                            <div class="form-field-note">Accepted formats: JPG, PNG, SVG, PDF.</div>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label class="form-label">Describe the visual identity of your brand</label>
+                            <textarea class="input-field textarea-field" placeholder="Describe your colors, typography, visual style and anything we should follow."></textarea>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label class="form-label">Links to websites you like and why</label>
+                            <textarea class="input-field textarea-field" placeholder="Share links to websites you like and tell us what you like about them (layout, colors, simplicity, animations…)."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 8: Content -->
+                <div class="form-step" id="step-8">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <p class="field-note">The more we know about your products and services, the better we can structure your website.</p>
+                            
+                            <label class="form-label">Upload texts, product information or presentations</label>
+                            <div class="upload-field">
+                                <input type="file" id="content-upload" class="file-input" multiple>
+                                <label for="content-upload" class="file-upload-btn">Upload texts, product information or presentations</label>
+                                <span class="selected-files-label" id="content-files-label">No file selected</span>
+                            </div>
+                            <div class="form-field-note">You can upload DOC, PDF, images or other relevant files.</div>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label class="form-label">Detailed description of your business, products or services</label>
+                            <textarea class="input-field textarea-field" placeholder="Describe your products, services, company history, unique selling points and anything important for your website visitors."></textarea>
+                        </div>
+                        
+                        <div class="form-field">
+                            <label class="form-label">Do you already have website content or should we help you create it?</label>
+                            <textarea class="input-field textarea-field" placeholder="Tell us what content you already have (texts, photos, videos) and where you need our help."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 9: Technical -->
+                <div class="form-step" id="step-9">
+                    <div class="form-fields">
+                        <div class="form-field">
+                            <label class="form-label">Do you need hosting or domain from us?</label>
+                            <textarea class="input-field textarea-field" placeholder="e.g. I need both domain and hosting, I already have hosting, I only need help with setup…"></textarea>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Any technical requirements or integrations we should know about?</label>
+                            <textarea class="input-field textarea-field" placeholder="e.g. connect to your CRM, payment provider, booking system, internal API…"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 10: Completion Date -->
+                <div class="form-step" id="step-10">
+                    <div class="form-fields">
+                        <p class="field-note">This helps us plan capacity. It's not a strict commitment and can be adjusted later.</p>
+                        <div class="form-field">
+                            <label class="form-label">Preferred completion date *</label>
+                            <div class="radio-options">
+                                <label class="radio-label">
+                                    <input type="radio" name="deadline" class="radio-input" value="express">
+                                    <span class="radio-text">Express (within 72–120 hours)</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="deadline" class="radio-input" value="standard">
+                                    <span class="radio-text">Standard (1–2 weeks)</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="deadline" class="radio-input" value="flexible">
+                                    <span class="radio-text">Flexible (3+ weeks)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-navigation">
+                <button class="btn-form btn-back" id="btn-back" disabled>Back</button>
+                <button class="btn-form btn-next" id="btn-next">Next</button>
+            </div>
+        </div>
+
+        <!-- Thank You Message (hidden by default) -->
+        <div class="thank-you-container" id="thank-you-container" style="display: none;">
+            <div class="thank-you-content">
+                <h2 class="thank-you-title">Thank You!</h2>
+                <div class="thank-you-icon">✓</div>
+                <p class="thank-you-message">We've received your project brief. We'll review your answers and get back to you with next steps and a proposal.</p>
+                <p class="thank-you-contact">If you have any questions, please don't hesitate to contact us at <a href="mailto:info@maxandjacob.com">info@maxandjacob.com</a>.</p>
+                <a href="index.html" class="btn-return">Back to Home Page</a>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Hamburger menu functionality
+        const hamburger = document.querySelector('.hamburger');
+        const nav = document.querySelector('.nav');
+        const body = document.body;
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('active');
+            nav.classList.toggle('active');
+            body.classList.toggle('menu-open');
+        });
+
+        document.querySelectorAll('.nav a').forEach(link => {
+            link.addEventListener('click', () => {
+                hamburger.classList.remove('active');
+                nav.classList.remove('active');
+                body.classList.remove('menu-open');
+            });
+        });
+
+        // Form functionality
+        const steps = [
+            "Company Information",
+            "Contacts",
+            "Project Goals",
+            "Site Structure",
+            "Sections & Languages",
+            "Functionalities",
+            "Branding & Style",
+            "Content",
+            "Technical Information",
+            "Completion Date"
+        ];
+
+        let currentStep = 0;
+        const totalSteps = steps.length;
+
+        const formSteps = document.querySelectorAll('.form-step');
+        const btnNext = document.getElementById('btn-next');
+        const btnBack = document.getElementById('btn-back');
+        const currentStepElement = document.getElementById('current-step');
+        const totalStepsElement = document.getElementById('total-steps');
+        const stepTitleElement = document.getElementById('step-title');
+        const progressBar = document.getElementById('progress-bar');
+        const formContainer = document.getElementById('form-container');
+        const thankYouContainer = document.getElementById('thank-you-container');
+
+        // Update form state
+        function updateFormState() {
+            // Update step counters
+            currentStepElement.textContent = currentStep + 1;
+            totalStepsElement.textContent = totalSteps;
+            
+            // Update step title
+            stepTitleElement.textContent = steps[currentStep];
+            
+            // Update progress bar
+            progressBar.style.width = `${((currentStep + 1) / totalSteps) * 100}%`;
+            
+            // Show/hide steps
+            formSteps.forEach((step, index) => {
+                step.classList.toggle('active', index === currentStep);
+            });
+            
+            // Update buttons
+            btnBack.disabled = currentStep === 0;
+            btnNext.textContent = currentStep === totalSteps - 1 ? 'Submit' : 'Next';
+        }
+
+        // Handle form submission
+        async function handleFormSubmit() {
+            console.log('=== handleFormSubmit CALLED ===');
+            console.log('Current step:', currentStep);
+            console.log('Total steps:', totalSteps);
+            
+            // Shromáždění dat ze všech kroků formuláře
+            console.log('Collecting form data...');
+            const formData = collectFormData();
+            console.log('Collected form data:', formData);
+            
+            // Validace - musí být company_name nebo contact email
+            if (!formData.company_name && (!formData.contacts || !formData.contacts.length || !formData.contacts[0].email)) {
+                console.error('Validation failed: missing company name or contact email');
+                alert('Please fill in at least company name or contact email');
+                return;
+            }
+            
+            console.log('Validation passed, submitting to server...');
+            
+            try {
+                // Debug: zobrazíme, co odesíláme
+                console.log('=== FETCH REQUEST STARTING ===');
+                console.log('URL: /api/web-project-submissions');
+                console.log('Method: POST');
+                console.log('Submitting form data:', formData);
+                
+                // Odeslání dat na server
+                const response = await fetch('/api/web-project-submissions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                // Zkusíme přečíst response jako text, abychom viděli i HTML error stránky
+                const responseText = await response.text();
+                console.log('Response text:', responseText.substring(0, 500));
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    // Pokud není JSON, je to pravděpodobně HTML error page
+                    console.error('Response is not JSON, it\'s probably an error page');
+                    alert('Server error: The API endpoint returned an error page.\n\nStatus: ' + response.status + '\n\nCheck the browser console for details.');
+                    return;
+                }
+                
+                if (response.ok && result.success) {
+                    // Success - skrýt formulář a zobrazit thank you
+                    console.log('Form submitted successfully! ID:', result.id);
+                    formContainer.style.display = 'none';
+                    thankYouContainer.style.display = 'block';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    // Error - zobrazíme detailní chybu
+                    const errorMsg = result.error || 'Unknown error';
+                    console.error('Server error:', errorMsg);
+                    console.error('Full response:', result);
+                    alert('Error submitting form: ' + errorMsg + '\n\nStatus: ' + response.status + '\n\nCheck the browser console (F12) for details.');
+                }
+            } catch (error) {
+                console.error('Form submission error:', error);
+                console.error('Error details:', error.message);
+                console.error('Error stack:', error.stack);
+                alert('Network error. Please check your connection and try again.\n\nError: ' + error.message + '\n\nCheck the browser console (F12) for details.');
+            }
+        }
+        
+        // Funkce pro shromáždění dat ze všech kroků
+        function collectFormData() {
+            const data = {};
+            
+            // Step 1: Company Info
+            const step1 = document.getElementById('step-1');
+            if (step1) {
+                const inputs = step1.querySelectorAll('.input-field');
+                data.company_name = inputs[0] ? inputs[0].value.trim() : '';
+                data.current_website = inputs[1] ? inputs[1].value.trim() : '';
+            }
+            
+            // Step 2: Contacts
+            const contactsContainer = document.getElementById('contacts-container');
+            const contacts = [];
+            if (contactsContainer) {
+                const contactEntries = contactsContainer.querySelectorAll('.contact-entry');
+                contactEntries.forEach(entry => {
+                    const contactInputs = entry.querySelectorAll('.input-field');
+                    if (contactInputs.length >= 4) {
+                        contacts.push({
+                            name: contactInputs[0].value.trim(),
+                            email: contactInputs[1].value.trim(),
+                            phone: contactInputs[2].value.trim(),
+                            role: contactInputs[3].value.trim()
+                        });
+                    }
+                });
+            }
+            data.contacts = contacts;
+            
+            // Step 3: Project Goals
+            const step3 = document.getElementById('step-3');
+            if (step3) {
+                const textareas = step3.querySelectorAll('.textarea-field');
+                data.main_goal = textareas[0] ? textareas[0].value.trim() : '';
+                data.target_audience = textareas[1] ? textareas[1].value.trim() : '';
+            }
+            
+            // Step 4: Site Structure
+            const step4 = document.getElementById('step-4');
+            if (step4) {
+                const inputs = step4.querySelectorAll('.input-field');
+                data.pages_needed = inputs[0] ? inputs[0].value.trim() : '';
+                data.estimated_pages = inputs[1] ? inputs[1].value.trim() : '';
+            }
+            
+            // Step 5: Sections & Languages
+            const step5 = document.getElementById('step-5');
+            if (step5) {
+                const inputs = step5.querySelectorAll('.input-field');
+                data.main_sections = inputs[0] ? inputs[0].value.trim() : '';
+                data.required_languages = inputs[1] ? inputs[1].value.trim() : '';
+            }
+            
+            // Step 6: Functionalities
+            const step6 = document.getElementById('step-6');
+            const features = [];
+            if (step6) {
+                // Checkboxy s features
+                const checkboxes = step6.querySelectorAll('.checkbox-input:checked');
+                checkboxes.forEach(checkbox => {
+                    const label = checkbox.closest('.checkbox-label');
+                    if (label) {
+                        const text = label.querySelector('.checkbox-text');
+                        if (text) {
+                            features.push(text.textContent.trim());
+                        }
+                    }
+                });
+                
+                // Custom features
+                const customTextarea = step6.querySelector('.custom-functions-field .textarea-field');
+                data.custom_features = customTextarea ? customTextarea.value.trim() : '';
+            }
+            data.features = features;
+            data.has_content_files = false; // File uploady zatím jen označíme
+            
+            // Step 7: Branding & Style
+            const step7 = document.getElementById('step-7');
+            if (step7) {
+                const logoUpload = step7.querySelector('#logo-upload');
+                data.has_branding_files = logoUpload && logoUpload.files.length > 0;
+                
+                const textareas = step7.querySelectorAll('.textarea-field');
+                data.visual_identity = textareas[0] ? textareas[0].value.trim() : '';
+                data.liked_websites = textareas[1] ? textareas[1].value.trim() : '';
+            }
+            
+            // Step 8: Content
+            const step8 = document.getElementById('step-8');
+            if (step8) {
+                const contentUpload = step8.querySelector('#content-upload');
+                data.has_content_files = contentUpload && contentUpload.files.length > 0;
+                
+                const textareas = step8.querySelectorAll('.textarea-field');
+                data.business_description = textareas[0] ? textareas[0].value.trim() : '';
+                data.content_help = textareas[1] ? textareas[1].value.trim() : '';
+            }
+            
+            // Step 9: Technical
+            const step9 = document.getElementById('step-9');
+            if (step9) {
+                const textareas = step9.querySelectorAll('.textarea-field');
+                data.hosting_domain = textareas[0] ? textareas[0].value.trim() : '';
+                data.technical_requirements = textareas[1] ? textareas[1].value.trim() : '';
+            }
+            
+            // Step 10: Deadline
+            const step10 = document.getElementById('step-10');
+            if (step10) {
+                const deadlineRadio = step10.querySelector('input[name="deadline"]:checked');
+                data.deadline = deadlineRadio ? deadlineRadio.value : '';
+            }
+            
+            return data;
+        }
+
+        // Event listeners
+        btnNext.addEventListener('click', () => {
+            console.log('btnNext clicked, currentStep:', currentStep, 'totalSteps:', totalSteps);
+            if (currentStep < totalSteps - 1) {
+                currentStep++;
+                updateFormState();
+            } else {
+                // Handle form submission
+                console.log('Last step reached, calling handleFormSubmit...');
+                handleFormSubmit();
+            }
+        });
+
+        btnBack.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                updateFormState();
+            }
+        });
+
+        // Initialize form
+        updateFormState();
+        
+        // Functionality to add more contacts
+        const btnAddContact = document.getElementById('btn-add-contact');
+        const contactsContainer = document.getElementById('contacts-container');
+        
+        btnAddContact.addEventListener('click', () => {
+            // Create new contact entry
+            const newContact = document.createElement('div');
+            newContact.className = 'contact-entry';
+            
+            // Clone the first contact's fields
+            const template = contactsContainer.querySelector('.contact-entry').cloneNode(true);
+            
+            // Clear all inputs in the cloned template
+            template.querySelectorAll('input').forEach(input => {
+                input.value = '';
+            });
+            
+            // Add remove button for this contact
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn-remove-contact';
+            removeBtn.textContent = '✕ Remove Contact';
+            removeBtn.addEventListener('click', function() {
+                this.parentElement.remove();
+            });
+            
+            template.appendChild(removeBtn);
+            
+            // Add the new contact to the container
+            contactsContainer.appendChild(template);
+        });
+        
+        // File upload handling
+        function handleFileSelect(fileInput, fileLabel) {
+            fileInput.addEventListener('change', function(e) {
+                if (this.files.length > 0) {
+                    if (this.files.length === 1) {
+                        fileLabel.textContent = `Selected file: ${this.files[0].name}`;
+                    } else {
+                        fileLabel.textContent = `Selected files: ${this.files.length}`;
+                    }
+                } else {
+                    fileLabel.textContent = 'No file selected';
+                }
+            });
+        }
+        
+        // Setup file upload for logo/branding materials
+        const logoUpload = document.getElementById('logo-upload');
+        const logoFilesLabel = document.getElementById('logo-files-label');
+        handleFileSelect(logoUpload, logoFilesLabel);
+        
+        // Setup file upload for content materials
+        const contentUpload = document.getElementById('content-upload');
+        const contentFilesLabel = document.getElementById('content-files-label');
+        handleFileSelect(contentUpload, contentFilesLabel);
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href !== '#' && href.length > 1) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
