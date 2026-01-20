@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Jobs - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181828;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #181828;
+            border: 1.5px solid #2d2d44;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #2d2d44;
+        }
+
+        .table-container {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 32px rgba(106,130,251,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            color: #b6b6d6;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #2d2d44;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #2d2d44;
+            color: #d1d1e0;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: rgba(106,130,251,0.05);
+        }
+
+        .view-link {
+            color: #6a82fb;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .view-link:hover {
+            color: #ff7ee7;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-status {
+            background: linear-gradient(90deg, rgba(255,126,231,0.15), rgba(106,130,251,0.15));
+            border: 1px solid rgba(106,130,251,0.3);
+            color: #a5b4fc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #b6b6d6;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .table-container {
+                padding: 16px;
+            }
+
+            table {
+                font-size: 0.9rem;
+            }
+
+            th, td {
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="header">
+            <h1>Audit Jobs</h1>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="/admin" class="logout-btn">Back to Admin</a>
+                <a href="/admin/logout" class="logout-btn">Logout</a>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div style="margin-bottom: 32px; display: flex; justify-content: center;">
+                <a href="/admin/audits/new" style="
+                    padding: 16px 40px;
+                    border-radius: 12px;
+                    background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+                    color: #fff;
+                    text-decoration: none;
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    transition: all 0.3s;
+                    box-shadow: 0 4px 20px rgba(106,130,251,0.3);
+                    border: none;
+                    cursor: pointer;
+                    text-align: center;
+                ">
+                    + New Audit
+                </a>
+            </div>
+            <% if (!auditJobs || auditJobs.length === 0) { %>
+                <div class="empty-state">
+                    <div class="empty-state-icon">🧩</div>
+                    <p>No audit jobs yet</p>
+                </div>
+            <% } else { %>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            <th>Niche</th>
+                            <th>City</th>
+                            <th>URL</th>
+                            <th>Status</th>
+                            <th>Public URL</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% auditJobs.forEach(job => { %>
+                            <tr>
+                                <td>#<%= job.id %></td>
+                                <td><%= new Date(job.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
+                                <td><%= job.niche %></td>
+                                <td><%= job.city %></td>
+                                <td><%= job.input_url %></td>
+                                <td><span class="badge badge-status"><%= job.status %></span></td>
+                                <td>
+                                    <% if (job.public_page_slug) { %>
+                                        <a href="/<%= job.public_page_slug %>?v=2" class="view-link" target="_blank">Open →</a>
+                                    <% } else { %>
+                                        -
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <a href="/admin/audits/<%= job.id %>" class="view-link">View →</a>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>
+

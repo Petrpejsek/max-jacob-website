@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Project Submission #<%= submission.id %> - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181828;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .admin-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .back-link {
+            color: #6a82fb;
+            text-decoration: none;
+            font-size: 0.95rem;
+            margin-bottom: 24px;
+            display: inline-block;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #ff7ee7;
+        }
+
+        .back-link::before {
+            content: '← ';
+        }
+
+        .detail-header {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 32px rgba(106,130,251,0.1);
+        }
+
+        .detail-id {
+            color: #b6b6d6;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .detail-date {
+            color: #8a8aa8;
+            font-size: 0.9rem;
+        }
+
+        .detail-card {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 32px rgba(106,130,251,0.1);
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 24px;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .field-group {
+            margin-bottom: 24px;
+        }
+
+        .field-label {
+            color: #b6b6d6;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .field-value {
+            color: #d1d1e0;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+
+        .field-value-large {
+            background: #181828;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1.5px solid #2d2d44;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .field-value a {
+            color: #6a82fb;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .field-value a:hover {
+            color: #ff7ee7;
+        }
+
+        .contacts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .contact-card {
+            background: #181828;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1.5px solid #2d2d44;
+        }
+
+        .contact-card .field-value {
+            font-size: 0.95rem;
+            margin-top: 4px;
+        }
+
+        .features-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .feature-item {
+            background: rgba(106,130,251,0.1);
+            border: 1px solid rgba(106,130,251,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #a5b4fc;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-yes {
+            background: #4ade80;
+        }
+
+        .status-no {
+            background: #f87171;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-header,
+            .detail-card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <a href="/admin" class="back-link">Back to list</a>
+
+        <div class="detail-header">
+            <div class="detail-id">Web Project Submission ID: #<%= submission.id %></div>
+            <div class="detail-date">
+                Submitted on <%= new Date(submission.created_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) %>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Company Information</h2>
+            
+            <div class="grid-2">
+                <div class="field-group">
+                    <div class="field-label">Company Name</div>
+                    <div class="field-value"><%= submission.company_name || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Current Website</div>
+                    <div class="field-value">
+                        <% if (submission.current_website) { %>
+                            <a href="<%= submission.current_website.startsWith('http') ? submission.current_website : 'https://' + submission.current_website %>" target="_blank">
+                                <%= submission.current_website %>
+                            </a>
+                        <% } else { %>
+                            -
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <% if (submission.contacts && (Array.isArray(submission.contacts) ? submission.contacts.length > 0 : true)) { %>
+                <div class="field-group" style="margin-top: 24px;">
+                    <div class="field-label">Contacts</div>
+                    <div class="contacts-list">
+                        <% 
+                            let contactsList = [];
+                            if (Array.isArray(submission.contacts)) {
+                                contactsList = submission.contacts;
+                            } else if (typeof submission.contacts === 'string') {
+                                try {
+                                    contactsList = JSON.parse(submission.contacts);
+                                } catch(e) {
+                                    contactsList = [];
+                                }
+                            }
+                        %>
+                        <% contactsList.forEach(contact => { %>
+                            <div class="contact-card">
+                                <div><strong><%= contact.name || '-' %></strong></div>
+                                <div class="field-value">Email: <a href="mailto:<%= contact.email %>"><%= contact.email || '-' %></a></div>
+                                <div class="field-value">Phone: <%= contact.phone || '-' %></div>
+                                <div class="field-value">Role: <%= contact.role || '-' %></div>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+            <% } %>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Project Goals</h2>
+            
+            <div class="field-group">
+                <div class="field-label">Main Goal</div>
+                <div class="field-value field-value-large"><%= submission.main_goal || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Target Audience</div>
+                <div class="field-value field-value-large"><%= submission.target_audience || '-' %></div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Site Structure</h2>
+            
+            <div class="grid-2">
+                <div class="field-group">
+                    <div class="field-label">Pages/Sections Needed</div>
+                    <div class="field-value field-value-large"><%= submission.pages_needed || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Estimated Number of Pages</div>
+                    <div class="field-value"><%= submission.estimated_pages || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Main Sections</div>
+                    <div class="field-value"><%= submission.main_sections || '-' %></div>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Required Languages</div>
+                    <div class="field-value"><%= submission.required_languages || '-' %></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Features & Functionality</h2>
+            
+            <% 
+                let featuresList = [];
+                if (submission.features) {
+                    if (Array.isArray(submission.features)) {
+                        featuresList = submission.features;
+                    } else if (typeof submission.features === 'string') {
+                        try {
+                            featuresList = JSON.parse(submission.features);
+                        } catch(e) {
+                            featuresList = [];
+                        }
+                    }
+                }
+            %>
+            
+            <% if (featuresList.length > 0) { %>
+                <div class="field-group">
+                    <div class="field-label">Selected Features</div>
+                    <div class="features-list">
+                        <% featuresList.forEach(feature => { %>
+                            <span class="feature-item"><%= feature %></span>
+                        <% }); %>
+                    </div>
+                </div>
+            <% } %>
+
+            <% if (submission.custom_features) { %>
+                <div class="field-group">
+                    <div class="field-label">Custom Features</div>
+                    <div class="field-value field-value-large"><%= submission.custom_features %></div>
+                </div>
+            <% } %>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Branding & Style</h2>
+            
+            <div class="field-group">
+                <div class="field-label">Has Branding Files</div>
+                <div class="field-value">
+                    <% if (submission.has_branding_files) { %>
+                        <span class="status-indicator status-yes"></span>Yes
+                    <% } else { %>
+                        <span class="status-indicator status-no"></span>No
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Visual Identity</div>
+                <div class="field-value field-value-large"><%= submission.visual_identity || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Liked Websites</div>
+                <div class="field-value field-value-large"><%= submission.liked_websites || '-' %></div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Content</h2>
+            
+            <div class="field-group">
+                <div class="field-label">Has Content Files</div>
+                <div class="field-value">
+                    <% if (submission.has_content_files) { %>
+                        <span class="status-indicator status-yes"></span>Yes
+                    <% } else { %>
+                        <span class="status-indicator status-no"></span>No
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Business Description</div>
+                <div class="field-value field-value-large"><%= submission.business_description || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Content Help Needed</div>
+                <div class="field-value field-value-large"><%= submission.content_help || '-' %></div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Technical Requirements</h2>
+            
+            <div class="field-group">
+                <div class="field-label">Hosting/Domain Needs</div>
+                <div class="field-value field-value-large"><%= submission.hosting_domain || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Technical Requirements</div>
+                <div class="field-value field-value-large"><%= submission.technical_requirements || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Preferred Deadline</div>
+                <div class="field-value">
+                    <%= submission.deadline === 'express' ? 'Express (within 72–120 hours)' : 
+                        submission.deadline === 'standard' ? 'Standard (1–2 weeks)' : 
+                        submission.deadline === 'flexible' ? 'Flexible (3+ weeks)' : 
+                        submission.deadline || '-' %>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2 class="section-title">Technical Info</h2>
+            <div class="field-group">
+                <div class="field-label">IP Address</div>
+                <div class="field-value"><%= submission.ip_address || '-' %></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

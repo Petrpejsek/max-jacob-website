@@ -1,0 +1,28 @@
+{
+  "name": "max-and-jacob-website",
+  "version": "1.0.0",
+  "description": "Max & Jacob - Websites, Automation & AI",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "test": "node tests/evidence-pack-empire.test.js && node tests/evidence-pack-wm.test.js"
+  },
+  "keywords": [
+    "website",
+    "automation",
+    "ai",
+    "express"
+  ],
+  "author": "Max & Jacob",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "multer": "^2.0.2",
+    "playwright": "^1.47.2",
+    "sqlite3": "^5.1.6"
+  }
+}

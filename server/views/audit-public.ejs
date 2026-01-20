@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Audit</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0f1020;
+            color: #f5f5f5;
+            padding: 32px 20px 60px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .hero {
+            background: #181828;
+            border-radius: 18px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(106,130,251,0.12);
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+        }
+
+        .subhead {
+            color: #b6b6d6;
+            font-size: 1rem;
+        }
+
+        .section {
+            background: #181828;
+            border-radius: 18px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .label {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(106,130,251,0.2);
+            color: #a5b4fc;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .card {
+            background: #0f1020;
+            border-radius: 14px;
+            padding: 18px;
+            border: 1px solid #2d2d44;
+        }
+
+        .leak-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .screenshot {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #2d2d44;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #2d2d44;
+            background: #0f1020;
+            color: #fff;
+        }
+
+        button {
+            background: linear-gradient(90deg, #6a82fb, #ff7ee7);
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .cta-note {
+            font-size: 0.85rem;
+            color: #b6b6d6;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1><%= page.hero && page.hero.headline ? page.hero.headline : 'Website audit highlights' %></h1>
+            <p class="subhead"><%= page.hero && page.hero.subhead ? page.hero.subhead : '' %></p>
+        </div>
+
+        <div class="section">
+            <div class="label">Concept preview (example layout for your industry)</div>
+            <div class="grid-2">
+                <div>
+                    <h2><%= page.concept_preview && page.concept_preview.headline ? page.concept_preview.headline : '' %></h2>
+                    <p class="subhead" style="margin-top: 8px;"><%= page.concept_preview && page.concept_preview.subhead ? page.concept_preview.subhead : '' %></p>
+                    <div class="card" style="margin-top: 16px;">
+                        <strong>Primary CTA:</strong> <%= page.concept_preview && page.concept_preview.cta ? page.concept_preview.cta : 'Get a fast estimate' %>
+                        <% if (page.concept_preview && page.concept_preview.secondary_cta) { %>
+                            <div style="margin-top: 8px;"><strong>Secondary CTA:</strong> <%= page.concept_preview.secondary_cta %></div>
+                        <% } %>
+                    </div>
+                    <% if (page.concept_preview && page.concept_preview.bullets && page.concept_preview.bullets.length > 0) { %>
+                        <div class="card" style="margin-top: 12px;">
+                            <strong>Benefits:</strong>
+                            <ul style="margin-left: 18px; margin-top: 6px;">
+                                <% page.concept_preview.bullets.forEach(bullet => { %>
+                                    <li><%= bullet %></li>
+                                <% }); %>
+                            </ul>
+                        </div>
+                    <% } %>
+                </div>
+                <div>
+                    <% if (page.concept_preview && page.concept_preview.concept_image_url) { %>
+                        <img class="screenshot" src="/<%= page.concept_preview.concept_image_url %>" alt="Concept preview for <%= job.niche %> businesses">
+                        <div style="font-size: 0.8rem; color: #b6b6d6; margin-top: 6px; font-style: italic;">This is a concept example for <%= job.niche %> businesses in <%= job.city %>, not your current website.</div>
+                    <% } else if (job.screenshots_json && job.screenshots_json.above_fold) { %>
+                        <img class="screenshot" src="/<%= job.screenshots_json.above_fold %>" alt="Your current page">
+                        <div style="font-size: 0.8rem; color: #b6b6d6; margin-top: 6px; font-style: italic;">Your current page snapshot</div>
+                    <% } else { %>
+                        <div class="card">Concept preview image not available.</div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Your current page leaks leads here</h2>
+            <div style="margin-top: 16px;">
+                <% if (page.current_page_leaks && page.current_page_leaks.screenshot) { %>
+                    <img class="screenshot" src="<%= page.current_page_leaks.screenshot %>" alt="Current page screenshot">
+                <% } %>
+            </div>
+            <div class="grid-2" style="margin-top: 16px;">
+                <% (page.leaks || []).forEach(leak => { %>
+                    <div class="card">
+                        <div class="leak-title"><%= leak.problem %></div>
+                        <div class="subhead"><%= leak.fix %></div>
+                    </div>
+                <% }) %>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>What we can ship in 7 days</h2>
+            <div class="grid-2" style="margin-top: 16px;">
+                <% (page.plan || []).forEach(item => { %>
+                    <div class="card"><%= item %></div>
+                <% }) %>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Get a pricing range + next steps</h2>
+            <p class="subhead" style="margin: 8px 0 16px;">Short form first — we’ll prefill the longer form after this.</p>
+            <form action="/web-project-form.html" method="GET">
+                <div class="form-grid">
+                    <input type="text" name="name" placeholder="Name" required>
+                    <input type="email" name="email" placeholder="Email" required>
+                    <input type="text" name="website" placeholder="Website" value="<%= job.input_url %>">
+                    <select name="budget_range">
+                        <option value="">Budget range</option>
+                        <option value="5k-10k">$5k–$10k</option>
+                        <option value="10k-20k">$10k–$20k</option>
+                        <option value="20k+">$20k+</option>
+                    </select>
+                    <select name="decision_maker">
+                        <option value="">Decision maker?</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+                <button type="submit" style="margin-top: 16px;"><%= page.form && page.form.cta ? page.form.cta : 'Get pricing range + next steps' %></button>
+                <div class="cta-note"><%= page.disclaimer || 'No guarantees or performance promises. Concept preview only.' %></div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+

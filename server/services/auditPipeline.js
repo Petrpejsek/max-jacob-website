@@ -1,0 +1,3624 @@
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { chromium } = require('playwright');
+// (no direct http/https usage; downloads use fetch)
+const {
+  getAuditJobById,
+  updateAuditJob,
+  appendAuditRunLog,
+  getActivePromptTemplates,
+  createPromptTemplateVersion,
+  getNichePresetById,
+  insertCrawledPage,
+  insertLighthouseReport,
+  getAllAssistants
+} = require('../db');
+const { getDefaultPromptTemplates } = require('./promptTemplates');
+
+// Scraper v3 (multi-page crawler)
+let scraperV3 = null;
+try {
+  scraperV3 = require('./scraperV3');
+} catch (err) {
+  console.log('[AUDIT PIPELINE] Scraper v3 not available:', err.message);
+}
+
+// Check if Scraper v3 is enabled via environment variable
+const USE_SCRAPER_V3 = process.env.USE_SCRAPER_V3 === 'true' || process.env.USE_SCRAPER_V3 === '1';
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'you', 'our',
+  'are', 'was', 'were', 'can', 'will', 'have', 'has', 'had', 'but', 'not',
+  'all', 'any', 'get', 'call', 'now', 'free', 'best', 'top', 'about', 'home',
+  'service', 'services', 'contact', 'learn', 'more', 'request', 'quote'
+]);
+
+const TRUST_KEYWORDS = [
+  'licensed', 'insured', 'reviews', 'certified', 'award', 'years', 'since',
+  'family owned', 'warranty', 'guarantee', 'bbb'
+];
+
+function logStep(jobId, step, message) {
+  return new Promise((resolve, reject) => {
+    appendAuditRunLog(jobId, step, 'info', message, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+}
+
+function updateJob(jobId, updates) {
+  return new Promise((resolve, reject) => {
+    updateAuditJob(jobId, updates, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+}
+
+function loadJob(jobId) {
+  return new Promise((resolve, reject) => {
+    getAuditJobById(jobId, (err, job) => {
+      if (err) return reject(err);
+      resolve(job);
+    });
+  });
+}
+
+function loadActivePrompts() {
+  return new Promise((resolve, reject) => {
+    getActivePromptTemplates((err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+}
+
+async function ensureDefaultPrompts() {
+  const active = await loadActivePrompts();
+  const defaults = getDefaultPromptTemplates();
+  const activeByName = {};
+
+  active.forEach((item) => {
+    activeByName[item.name] = item;
+  });
+
+  const names = Object.keys(defaults);
+  const missing = names.filter((name) => !activeByName[name]);
+
+  if (missing.length === 0) {
+    return activeByName;
+  }
+
+  await Promise.all(
+    missing.map((name) => {
+      return new Promise((resolve, reject) => {
+        createPromptTemplateVersion(name, defaults[name].trim(), (err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+    })
+  );
+
+  const refreshed = await loadActivePrompts();
+  const refreshedByName = {};
+  refreshed.forEach((item) => {
+    refreshedByName[item.name] = item;
+  });
+
+  return refreshedByName;
+}
+
+function sanitizeText(text) {
+  return (text || '').toString().trim();
+}
+
+function assertCompliantJson(output) {
+  const text = JSON.stringify(output || {});
+  const bannedPatterns = [
+    /%/i,
+    /percent/i,
+    /guarantee/i,
+    /guaranteed/i,
+    /your website is bad/i
+  ];
+
+  for (const pattern of bannedPatterns) {
+    if (pattern.test(text)) {
+      throw new Error('Compliance violation in LLM output');
+    }
+  }
+}
+
+function validateEvidenceInIssues(uxJson) {
+  // Validate that each issue has proper evidence
+  const issues = uxJson.top_3_leaks || [];
+  const invalidIssues = [];
+
+  issues.forEach((issue, index) => {
+    const hasEvidence = issue.evidence && typeof issue.evidence === 'string' && issue.evidence.length > 10;
+    const isInsufficientSignal = issue.insufficient_signal === true;
+
+    // If insufficient_signal is set, that's OK (they acknowledged missing data)
+    if (isInsufficientSignal) {
+      return;
+    }
+
+    // Otherwise, evidence must be present and substantial
+    if (!hasEvidence) {
+      invalidIssues.push({
+        index,
+        problem: issue.problem || 'Unknown issue',
+        reason: 'Missing or insufficient evidence field'
+      });
+    }
+  });
+
+  if (invalidIssues.length > 0) {
+    const errorMessage = `LLM output validation failed: ${invalidIssues.length} issue(s) missing evidence:\n` +
+      invalidIssues.map((inv) => `  - Issue ${inv.index + 1}: "${inv.problem}" (${inv.reason})`).join('\n');
+    throw new Error(errorMessage);
+  }
+
+  return true;
+}
+
+async function callOpenRouter({ model, temperature, messages }) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY is not set');
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      messages
+    })
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`OpenRouter error: ${response.status} ${errorBody}`);
+  }
+
+  const payload = await response.json();
+  return payload.choices && payload.choices[0] && payload.choices[0].message
+    ? payload.choices[0].message.content
+    : '';
+}
+
+function parseJsonFromText(text) {
+  const trimmed = sanitizeText(text);
+  if (!trimmed) {
+    throw new Error('Empty LLM response');
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      const candidate = trimmed.slice(firstBrace, lastBrace + 1);
+      return JSON.parse(candidate);
+    }
+    throw e;
+  }
+}
+
+// Contact extraction utilities for Scraper v2
+
+function normalizePhoneToUS(phone) {
+  // Remove all non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // If it starts with 1 and has 11 digits, remove the 1
+  if (digits.length === 11 && digits[0] === '1') {
+    return digits.slice(1);
+  }
+  
+  // Return 10 digits if valid US format
+  if (digits.length === 10) {
+    return digits;
+  }
+  
+  // Return as-is if not standard format
+  return digits;
+}
+
+function parseJsonLdContacts(structuredDataArray) {
+  // Parse JSON-LD for LocalBusiness/Organization contact info
+  const result = {
+    phones: [],
+    emails: [],
+    address: null,
+    hours: null,
+    organization_name: null,
+    localbusiness_name: null,
+    website_name: null,
+    logo_url: null,
+    logo_source: null,
+    social_links: {
+      facebook: [],
+      instagram: [],
+      twitter: [],
+      linkedin: [],
+      yelp: []
+    }
+  };
+  
+  if (!structuredDataArray || structuredDataArray.length === 0) {
+    return result;
+  }
+  
+  structuredDataArray.forEach((data) => {
+    // Handle arrays of items (common in JSON-LD)
+    const items = Array.isArray(data) ? data : [data];
+    
+    items.forEach((item) => {
+      // Normalize types for matching
+      const rawType = item['@type'];
+      const typeList = Array.isArray(rawType) ? rawType : (rawType ? [rawType] : []);
+      const typeStr = typeList.join(' ');
+      const isOrg = typeList.includes('Organization') || /Organization/i.test(typeStr);
+      const isWebsite = typeList.includes('WebSite') || /WebSite/i.test(typeStr);
+      const isLocalish = typeList.includes('LocalBusiness') || /LocalBusiness|Plumber|PlumbingService|HomeAndConstructionBusiness|ProfessionalService/i.test(typeStr);
+
+      // Names (for company_name selection)
+      if (item.name) {
+        if (isOrg && !result.organization_name) result.organization_name = String(item.name).slice(0, 200);
+        if (isLocalish && !result.localbusiness_name) result.localbusiness_name = String(item.name).slice(0, 200);
+        if (isWebsite && !result.website_name) result.website_name = String(item.name).slice(0, 200);
+      }
+
+      // Logo candidates (for v1 pack / fallback)
+      if (!result.logo_url) {
+        if (isOrg && item.logo) {
+          const u = typeof item.logo === 'string' ? item.logo : (item.logo.url || item.logo['@url']);
+          if (u) { result.logo_url = u; result.logo_source = 'jsonld_organization'; }
+        } else if (isLocalish && item.image) {
+          const u = typeof item.image === 'string' ? item.image : (item.image.url || item.image['@url']);
+          if (u) { result.logo_url = u; result.logo_source = 'jsonld_localbusiness'; }
+        }
+      }
+
+      // Only LocalBusiness/Organization/WebSite are relevant for contacts
+      if (!isOrg && !isLocalish && !isWebsite) {
+        return;
+      }
+      
+      // Extract telephone
+      if (item.telephone) {
+        const normalized = normalizePhoneToUS(item.telephone);
+        if (normalized.length >= 10) {
+          const formatted = normalized.length === 10 
+            ? `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`
+            : normalized;
+          result.phones.push({ value: formatted, source: 'jsonld', raw: item.telephone });
+        }
+      }
+      
+      // Extract email
+      if (item.email) {
+        const email = item.email.replace('mailto:', '').trim().toLowerCase();
+        if (email && email.includes('@')) {
+          result.emails.push({ value: email, source: 'jsonld' });
+        }
+      }
+      
+      // Extract address
+      if (item.address && !result.address) {
+        let addressText = '';
+        if (typeof item.address === 'string') {
+          addressText = item.address;
+        } else if (item.address['@type'] === 'PostalAddress') {
+          const parts = [
+            item.address.streetAddress,
+            item.address.addressLocality,
+            item.address.addressRegion,
+            item.address.postalCode
+          ].filter(Boolean);
+          addressText = parts.join(', ');
+        }
+        if (addressText.length > 10) {
+          result.address = { value: addressText, source: 'jsonld' };
+        }
+      }
+      
+      // Extract opening hours
+      if (!result.hours) {
+        if (item.openingHours) {
+          const hoursText = Array.isArray(item.openingHours)
+            ? item.openingHours.join('\n')
+            : item.openingHours;
+          result.hours = { value: String(hoursText).slice(0, 500), source: 'jsonld_openingHours' };
+        } else if (item.openingHoursSpecification && Array.isArray(item.openingHoursSpecification)) {
+          // MVP: detect 24/7 (00:00 to 23:59 / 24:00 for all days)
+          const spec = item.openingHoursSpecification;
+          const days = new Set();
+          let opens = null;
+          let closes = null;
+          spec.forEach(row => {
+            const d = row.dayOfWeek;
+            const addDay = (x) => {
+              const s = String(x || '').toLowerCase().replace(/^https?:\/\/schema\.org\//i, '');
+              if (s.includes('monday')) days.add('mon');
+              else if (s.includes('tuesday')) days.add('tue');
+              else if (s.includes('wednesday')) days.add('wed');
+              else if (s.includes('thursday')) days.add('thu');
+              else if (s.includes('friday')) days.add('fri');
+              else if (s.includes('saturday')) days.add('sat');
+              else if (s.includes('sunday')) days.add('sun');
+            };
+            if (Array.isArray(d)) d.forEach(addDay); else if (d) addDay(d);
+            if (!opens && row.opens) opens = String(row.opens);
+            if (!closes && row.closes) closes = String(row.closes);
+          });
+          const norm = (t) => String(t || '').trim().replace(/:00$/,'').replace(/:00:00$/,'');
+          const o = norm(opens);
+          const c = norm(closes);
+          const is247 = days.size >= 7 && (o === '00:00' || o === '0:00') && (c === '23:59' || c === '24:00');
+          result.hours = is247
+            ? { value: '24/7', source: 'jsonld_openingHoursSpecification' }
+            : { value: `${o || ''}${o && c ? '–' : ''}${c || ''}`.trim() || null, source: 'jsonld_openingHoursSpecification' };
+        }
+      }
+      
+      // Extract social links (sameAs property)
+      if (item.sameAs) {
+        const sameAsLinks = Array.isArray(item.sameAs) ? item.sameAs : [item.sameAs];
+        sameAsLinks.forEach((link) => {
+          const lower = link.toLowerCase();
+          if (lower.includes('facebook.com')) {
+            result.social_links.facebook.push({ value: link, source: 'jsonld' });
+          } else if (lower.includes('instagram.com')) {
+            result.social_links.instagram.push({ value: link, source: 'jsonld' });
+          } else if (lower.includes('twitter.com') || lower.includes('x.com')) {
+            result.social_links.twitter.push({ value: link, source: 'jsonld' });
+          } else if (lower.includes('linkedin.com')) {
+            result.social_links.linkedin.push({ value: link, source: 'jsonld' });
+          } else if (lower.includes('yelp.com')) {
+            result.social_links.yelp.push({ value: link, source: 'jsonld' });
+          }
+        });
+      }
+    });
+  });
+  
+  return result;
+}
+
+function mergeContactSources(homepageContacts, jsonLdContacts, contactPageData) {
+  // Priority: JSON-LD > tel/mailto links > homepage text > contact page
+  // Dedup and track sources
+  
+  const phonesMap = new Map(); // normalized -> {value, source, raw}
+  const emailsMap = new Map(); // email -> {value, source}
+  const socialMap = {
+    facebook: new Map(),
+    instagram: new Map(),
+    twitter: new Map(),
+    linkedin: new Map(),
+    yelp: new Map(),
+    google_maps: new Map(),
+    google_business: new Map()
+  };
+  
+  let finalAddress = null;
+  let finalHours = null;
+  
+  // Priority 1: JSON-LD
+  if (jsonLdContacts) {
+    (jsonLdContacts.phones || []).forEach((item) => {
+      const normalized = normalizePhoneToUS(item.raw || item.value);
+      if (!phonesMap.has(normalized)) {
+        phonesMap.set(normalized, item);
+      }
+    });
+    
+    (jsonLdContacts.emails || []).forEach((item) => {
+      if (!emailsMap.has(item.value)) {
+        emailsMap.set(item.value, item);
+      }
+    });
+    
+    if (jsonLdContacts.address) {
+      finalAddress = jsonLdContacts.address;
+    }
+    
+    if (jsonLdContacts.hours) {
+      finalHours = jsonLdContacts.hours;
+    }
+    
+    Object.keys(jsonLdContacts.social_links || {}).forEach((platform) => {
+      (jsonLdContacts.social_links[platform] || []).forEach((item) => {
+        if (socialMap[platform]) {
+          socialMap[platform].set(item.value, item);
+        }
+      });
+    });
+  }
+  
+  // Priority 2: Homepage DOM extraction
+  if (homepageContacts) {
+    (homepageContacts.phones || []).forEach((item) => {
+      const normalized = normalizePhoneToUS(item.raw || item.value);
+      if (!phonesMap.has(normalized)) {
+        phonesMap.set(normalized, item);
+      }
+    });
+    
+    (homepageContacts.emails || []).forEach((item) => {
+      if (!emailsMap.has(item.value)) {
+        emailsMap.set(item.value, item);
+      }
+    });
+    
+    if (!finalAddress && homepageContacts.address) {
+      finalAddress = homepageContacts.address;
+    }
+    
+    if (!finalHours && homepageContacts.hours) {
+      finalHours = homepageContacts.hours;
+    }
+    
+    Object.keys(homepageContacts.social_links || {}).forEach((platform) => {
+      (homepageContacts.social_links[platform] || []).forEach((item) => {
+        if (socialMap[platform] && !socialMap[platform].has(item.value)) {
+          socialMap[platform].set(item.value, item);
+        }
+      });
+    });
+  }
+  
+  // Priority 3: Contact page data
+  if (contactPageData) {
+    (contactPageData.phones || []).forEach((item) => {
+      const normalized = normalizePhoneToUS(item.raw || item.value);
+      if (!phonesMap.has(normalized)) {
+        phonesMap.set(normalized, item);
+      }
+    });
+    
+    (contactPageData.emails || []).forEach((item) => {
+      if (!emailsMap.has(item.value)) {
+        emailsMap.set(item.value, item);
+      }
+    });
+  }
+  
+  // Convert maps to arrays and limit
+  const finalContacts = {
+    phones: Array.from(phonesMap.values()).slice(0, 5),
+    emails: Array.from(emailsMap.values()).slice(0, 5),
+    address: finalAddress,
+    hours: finalHours,
+    social_links: {}
+  };
+  
+  Object.keys(socialMap).forEach((platform) => {
+    finalContacts.social_links[platform] = Array.from(socialMap[platform].values()).slice(0, 2);
+  });
+  
+  return finalContacts;
+}
+
+function extractPhones(page) {
+  // Extract from tel: links and text
+  const phones = new Set();
+  
+  // Get tel: links
+  const telLinks = page.querySelectorAll('a[href^="tel:"]');
+  telLinks.forEach((link) => {
+    const href = link.getAttribute('href');
+    const phone = href.replace('tel:', '').trim();
+    const normalized = normalizePhoneToUS(phone);
+    if (normalized.length >= 10) {
+      phones.add(normalized);
+    }
+  });
+  
+  // Extract from text using regex (US format)
+  const bodyText = page.body ? page.body.innerText : '';
+  const phoneRegex = /(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g;
+  const matches = bodyText.matchAll(phoneRegex);
+  
+  for (const match of matches) {
+    const normalized = normalizePhoneToUS(match[0]);
+    if (normalized.length >= 10) {
+      phones.add(normalized);
+    }
+  }
+  
+  return Array.from(phones).slice(0, 5); // Limit to top 5
+}
+
+function extractEmails(page) {
+  const emails = new Set();
+  
+  // Get mailto: links
+  const mailtoLinks = page.querySelectorAll('a[href^="mailto:"]');
+  mailtoLinks.forEach((link) => {
+    const href = link.getAttribute('href');
+    const email = href.replace('mailto:', '').split('?')[0].trim().toLowerCase();
+    if (email && email.includes('@')) {
+      emails.add(email);
+    }
+  });
+  
+  // Extract from text using regex
+  const bodyText = page.body ? page.body.innerText : '';
+  const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+  const matches = bodyText.matchAll(emailRegex);
+  
+  for (const match of matches) {
+    const email = match[0].toLowerCase();
+    // Filter out common placeholder/generic emails
+    if (!email.includes('example.com') && !email.includes('yourdomain')) {
+      emails.add(email);
+    }
+  }
+  
+  return Array.from(emails).slice(0, 5); // Limit to top 5
+}
+
+function extractSocialLinks(page) {
+  const socialLinks = {
+    facebook: [],
+    instagram: [],
+    yelp: [],
+    google_maps: [],
+    google_business: []
+  };
+  
+  const allLinks = page.querySelectorAll('a[href]');
+  
+  allLinks.forEach((link) => {
+    const href = link.getAttribute('href') || '';
+    const lowerHref = href.toLowerCase();
+    
+    // Facebook
+    if ((lowerHref.includes('facebook.com') || lowerHref.includes('fb.com')) && 
+        !lowerHref.includes('facebook.com/sharer')) {
+      socialLinks.facebook.push(href);
+    }
+    
+    // Instagram
+    if (lowerHref.includes('instagram.com')) {
+      socialLinks.instagram.push(href);
+    }
+    
+    // Yelp
+    if (lowerHref.includes('yelp.com')) {
+      socialLinks.yelp.push(href);
+    }
+    
+    // Google Maps
+    if (lowerHref.includes('maps.google.com') || lowerHref.includes('goo.gl/maps')) {
+      socialLinks.google_maps.push(href);
+    }
+    
+    // Google Business Profile
+    if (lowerHref.includes('business.google.com') || lowerHref.includes('g.page/')) {
+      socialLinks.google_business.push(href);
+    }
+  });
+  
+  // Deduplicate and limit
+  return {
+    facebook: [...new Set(socialLinks.facebook)].slice(0, 2),
+    instagram: [...new Set(socialLinks.instagram)].slice(0, 2),
+    yelp: [...new Set(socialLinks.yelp)].slice(0, 2),
+    google_maps: [...new Set(socialLinks.google_maps)].slice(0, 2),
+    google_business: [...new Set(socialLinks.google_business)].slice(0, 2)
+  };
+}
+
+function extractAddress(page) {
+  // Simple heuristic: look for elements with address-like keywords
+  const addressKeywords = ['address', 'location', 'find us', 'visit us'];
+  const bodyText = page.body ? page.body.innerText : '';
+  
+  // Look for address schema.org markup
+  const addressElements = page.querySelectorAll('[itemprop="address"], .address, #address');
+  if (addressElements.length > 0) {
+    const addressText = addressElements[0].innerText.trim();
+    if (addressText.length > 10 && addressText.length < 200) {
+      return addressText;
+    }
+  }
+  
+  // Look for US address pattern (simplified)
+  const addressRegex = /\d+\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Circle|Cir)[.,\s]+[\w\s]+,?\s+[A-Z]{2}\s+\d{5}/i;
+  const match = bodyText.match(addressRegex);
+  
+  if (match) {
+    return match[0].trim();
+  }
+  
+  return null;
+}
+
+function extractHours(page) {
+  // Simple heuristic: look for hours-related elements
+  const hoursElements = page.querySelectorAll('[itemprop="openingHours"], .hours, #hours, .business-hours, #business-hours');
+  
+  if (hoursElements.length > 0) {
+    const hoursText = hoursElements[0].innerText.trim();
+    if (hoursText.length > 10 && hoursText.length < 500) {
+      return hoursText;
+    }
+  }
+  
+  // Look for days of week pattern
+  const bodyText = page.body ? page.body.innerText : '';
+  const daysPattern = /(Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat|Sunday|Sun)[\s:\-]+\d{1,2}:\d{2}/i;
+  
+  if (daysPattern.test(bodyText)) {
+    // Extract a snippet around the match
+    const match = bodyText.match(daysPattern);
+    if (match) {
+      const index = match.index;
+      const snippet = bodyText.slice(Math.max(0, index - 50), Math.min(bodyText.length, index + 300));
+      return snippet.trim();
+    }
+  }
+  
+  return null;
+}
+
+async function scrapeWebsite(url, jobId) {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+  const extracted = await page.evaluate(() => {
+    // Utility functions for contact extraction (browser context) - v2 with source tracking
+    function normalizePhoneToUS(phone) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 11 && digits[0] === '1') {
+        return digits.slice(1);
+      }
+      if (digits.length === 10) {
+        return digits;
+      }
+      return digits;
+    }
+
+    function formatPhoneDisplay(digits) {
+      // Format as (XXX) XXX-XXXX
+      if (digits.length === 10) {
+        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+      }
+      return digits;
+    }
+
+    function extractPhones() {
+      const phonesMap = new Map(); // normalized -> {value, source}
+      const debugInfo = {
+        sources_checked: ['homepage_dom', 'tel_links', 'header_text', 'footer_text', 'body_regex'],
+        candidates_found: 0
+      };
+      
+      // 1. Extract from tel: links (highest priority)
+      const telLinks = document.querySelectorAll('a[href^="tel:"]');
+      telLinks.forEach((link) => {
+        const href = link.getAttribute('href');
+        const phone = href.replace('tel:', '').trim();
+        const normalized = normalizePhoneToUS(phone);
+        if (normalized.length >= 10) {
+          debugInfo.candidates_found++;
+          if (!phonesMap.has(normalized)) {
+            phonesMap.set(normalized, {
+              value: formatPhoneDisplay(normalized),
+              source: 'tel_link',
+              raw: phone
+            });
+          }
+        }
+      });
+      
+      // 2. Extract from header/footer (higher priority than general body)
+      const headerEl = document.querySelector('header, .header, nav, .nav, .top-bar');
+      const footerEl = document.querySelector('footer, .footer');
+      const phoneRegex = /(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g;
+      
+      if (headerEl) {
+        const headerText = headerEl.innerText || '';
+        const matches = [...headerText.matchAll(phoneRegex)];
+        matches.forEach((match) => {
+          const normalized = normalizePhoneToUS(match[0]);
+          if (normalized.length >= 10) {
+            debugInfo.candidates_found++;
+            if (!phonesMap.has(normalized)) {
+              phonesMap.set(normalized, {
+                value: formatPhoneDisplay(normalized),
+                source: 'header_text',
+                raw: match[0]
+              });
+            }
+          }
+        });
+      }
+      
+      if (footerEl) {
+        const footerText = footerEl.innerText || '';
+        const matches = [...footerText.matchAll(phoneRegex)];
+        matches.forEach((match) => {
+          const normalized = normalizePhoneToUS(match[0]);
+          if (normalized.length >= 10) {
+            debugInfo.candidates_found++;
+            if (!phonesMap.has(normalized)) {
+              phonesMap.set(normalized, {
+                value: formatPhoneDisplay(normalized),
+                source: 'footer_text',
+                raw: match[0]
+              });
+            }
+          }
+        });
+      }
+      
+      // 3. Extract from general body text (lowest priority)
+      const bodyText = document.body ? document.body.innerText : '';
+      const bodyMatches = [...bodyText.matchAll(phoneRegex)];
+      bodyMatches.forEach((match) => {
+        const normalized = normalizePhoneToUS(match[0]);
+        if (normalized.length >= 10) {
+          debugInfo.candidates_found++;
+          if (!phonesMap.has(normalized)) {
+            phonesMap.set(normalized, {
+              value: formatPhoneDisplay(normalized),
+              source: 'body_regex',
+              raw: match[0]
+            });
+          }
+        }
+      });
+      
+      return {
+        phones: Array.from(phonesMap.values()).slice(0, 5),
+        debug: debugInfo
+      };
+    }
+
+    function extractEmails() {
+      const emailsMap = new Map(); // email -> {value, source}
+      const debugInfo = {
+        sources_checked: ['homepage_dom', 'mailto_links', 'header_text', 'footer_text', 'body_regex'],
+        candidates_found: 0
+      };
+      
+      // 1. Extract from mailto: links (highest priority)
+      const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
+      mailtoLinks.forEach((link) => {
+        const href = link.getAttribute('href');
+        const email = href.replace('mailto:', '').split('?')[0].trim().toLowerCase();
+        if (email && email.includes('@') && !email.includes('example.com') && !email.includes('yourdomain')) {
+          debugInfo.candidates_found++;
+          if (!emailsMap.has(email)) {
+            emailsMap.set(email, {
+              value: email,
+              source: 'mailto_link'
+            });
+          }
+        }
+      });
+      
+      // 2. Extract from header/footer text
+      const headerEl = document.querySelector('header, .header, nav, .nav, .top-bar');
+      const footerEl = document.querySelector('footer, .footer');
+      const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+      
+      if (headerEl) {
+        const headerText = headerEl.innerText || '';
+        const matches = [...headerText.matchAll(emailRegex)];
+        matches.forEach((match) => {
+          const email = match[0].toLowerCase();
+          if (!email.includes('example.com') && !email.includes('yourdomain')) {
+            debugInfo.candidates_found++;
+            if (!emailsMap.has(email)) {
+              emailsMap.set(email, {
+                value: email,
+                source: 'header_text'
+              });
+            }
+          }
+        });
+      }
+      
+      if (footerEl) {
+        const footerText = footerEl.innerText || '';
+        const matches = [...footerText.matchAll(emailRegex)];
+        matches.forEach((match) => {
+          const email = match[0].toLowerCase();
+          if (!email.includes('example.com') && !email.includes('yourdomain')) {
+            debugInfo.candidates_found++;
+            if (!emailsMap.has(email)) {
+              emailsMap.set(email, {
+                value: email,
+                source: 'footer_text'
+              });
+            }
+          }
+        });
+      }
+      
+      // 3. Extract from general body text (lowest priority)
+      const bodyText = document.body ? document.body.innerText : '';
+      const bodyMatches = [...bodyText.matchAll(emailRegex)];
+      bodyMatches.forEach((match) => {
+        const email = match[0].toLowerCase();
+        if (!email.includes('example.com') && !email.includes('yourdomain')) {
+          debugInfo.candidates_found++;
+          if (!emailsMap.has(email)) {
+            emailsMap.set(email, {
+              value: email,
+              source: 'body_regex'
+            });
+          }
+        }
+      });
+      
+      return {
+        emails: Array.from(emailsMap.values()).slice(0, 5),
+        debug: debugInfo
+      };
+    }
+
+    function extractSocialLinks() {
+      const socialLinksMap = {
+        facebook: new Map(),
+        instagram: new Map(),
+        twitter: new Map(),
+        linkedin: new Map(),
+        yelp: new Map(),
+        google_maps: new Map(),
+        google_business: new Map()
+      };
+      const debugInfo = {
+        sources_checked: ['homepage_dom', 'all_links'],
+        candidates_found: 0
+      };
+      
+      const allLinks = document.querySelectorAll('a[href]');
+      
+      allLinks.forEach((link) => {
+        const href = link.getAttribute('href') || '';
+        const lowerHref = href.toLowerCase();
+        
+        // Skip share/sharer links and generic pages
+        if (lowerHref.includes('/sharer') || lowerHref.includes('/share') || lowerHref.includes('intent/tweet')) {
+          return;
+        }
+        
+        // Facebook (prefer profile/page URLs)
+        if ((lowerHref.includes('facebook.com') || lowerHref.includes('fb.com'))) {
+          debugInfo.candidates_found++;
+          // Prefer URLs with actual usernames/pages
+          const isProfile = lowerHref.includes('facebook.com/') && !lowerHref.includes('facebook.com/?');
+          if (isProfile) {
+            socialLinksMap.facebook.set(href, { value: href, source: 'profile_link' });
+          }
+        }
+        
+        // Instagram
+        if (lowerHref.includes('instagram.com') && !lowerHref.includes('instagram.com/?')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.instagram.set(href, { value: href, source: 'profile_link' });
+        }
+        
+        // Twitter/X
+        if (lowerHref.includes('twitter.com') || lowerHref.includes('x.com')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.twitter.set(href, { value: href, source: 'profile_link' });
+        }
+        
+        // LinkedIn
+        if (lowerHref.includes('linkedin.com') && lowerHref.includes('/company/')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.linkedin.set(href, { value: href, source: 'profile_link' });
+        }
+        
+        // Yelp
+        if (lowerHref.includes('yelp.com') && lowerHref.includes('/biz/')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.yelp.set(href, { value: href, source: 'business_link' });
+        }
+        
+        // Google Maps
+        if (lowerHref.includes('maps.google.com') || lowerHref.includes('goo.gl/maps') || lowerHref.includes('maps.app.goo.gl')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.google_maps.set(href, { value: href, source: 'maps_link' });
+        }
+        
+        // Google Business Profile
+        if (lowerHref.includes('business.google.com') || lowerHref.includes('g.page/')) {
+          debugInfo.candidates_found++;
+          socialLinksMap.google_business.set(href, { value: href, source: 'business_link' });
+        }
+      });
+      
+      return {
+        social_links: {
+          facebook: Array.from(socialLinksMap.facebook.values()).slice(0, 2),
+          instagram: Array.from(socialLinksMap.instagram.values()).slice(0, 2),
+          twitter: Array.from(socialLinksMap.twitter.values()).slice(0, 2),
+          linkedin: Array.from(socialLinksMap.linkedin.values()).slice(0, 2),
+          yelp: Array.from(socialLinksMap.yelp.values()).slice(0, 2),
+          google_maps: Array.from(socialLinksMap.google_maps.values()).slice(0, 2),
+          google_business: Array.from(socialLinksMap.google_business.values()).slice(0, 2)
+        },
+        debug: debugInfo
+      };
+    }
+
+    function extractAddressAndHours() {
+      const result = {
+        address: null,
+        hours: null,
+        debug: {
+          address: { sources_checked: ['jsonld', 'schema_markup', 'css_selectors', 'regex'], candidates_found: 0 },
+          hours: { sources_checked: ['jsonld', 'schema_markup', 'css_selectors', 'day_pattern'], candidates_found: 0 }
+        }
+      };
+      
+      // Address extraction
+      const addressElements = document.querySelectorAll('[itemprop="address"], .address, #address');
+      if (addressElements.length > 0) {
+        const addressText = addressElements[0].innerText.trim();
+        if (addressText.length > 10 && addressText.length < 200) {
+          result.address = { value: addressText, source: 'schema_markup' };
+          result.debug.address.candidates_found++;
+        }
+      }
+      
+      if (!result.address) {
+        const bodyText = document.body ? document.body.innerText : '';
+        const addressRegex = /\d+\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Circle|Cir)[.,\s]+[\w\s]+,?\s+[A-Z]{2}\s+\d{5}/i;
+        const match = bodyText.match(addressRegex);
+        
+        if (match) {
+          result.address = { value: match[0].trim(), source: 'regex' };
+          result.debug.address.candidates_found++;
+        }
+      }
+      
+      // Hours extraction
+      const hoursElements = document.querySelectorAll('[itemprop="openingHours"], .hours, #hours, .business-hours, #business-hours');
+      if (hoursElements.length > 0) {
+        const hoursText = hoursElements[0].innerText.trim();
+        if (hoursText.length > 10 && hoursText.length < 500) {
+          result.hours = { value: hoursText, source: 'schema_markup' };
+          result.debug.hours.candidates_found++;
+        }
+      }
+      
+      if (!result.hours) {
+        const bodyText = document.body ? document.body.innerText : '';
+        const daysPattern = /(Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat|Sunday|Sun)[\s:\-]+\d{1,2}:\d{2}/i;
+        
+        if (daysPattern.test(bodyText)) {
+          const match = bodyText.match(daysPattern);
+          if (match) {
+            const index = match.index;
+            const snippet = bodyText.slice(Math.max(0, index - 50), Math.min(bodyText.length, index + 300));
+            result.hours = { value: snippet.trim(), source: 'day_pattern' };
+            result.debug.hours.candidates_found++;
+          }
+        }
+      }
+      
+      return result;
+    }
+
+    // Extract basic page data
+    const title = document.title || '';
+    const h1 = document.querySelector('h1') ? document.querySelector('h1').innerText : '';
+    const h2 = Array.from(document.querySelectorAll('h2')).map((el) => el.innerText).filter(Boolean);
+    const metaDescription = document.querySelector('meta[name="description"]')
+      ? document.querySelector('meta[name="description"]').getAttribute('content')
+      : '';
+    const ogSiteName = document.querySelector('meta[property="og:site_name"]')
+      ? document.querySelector('meta[property="og:site_name"]').getAttribute('content')
+      : '';
+
+    const makeAbs = (u) => {
+      try { return new URL(u, window.location.href).href; } catch { return u; }
+    };
+    const ogImage = document.querySelector('meta[property="og:image"]')
+      ? document.querySelector('meta[property="og:image"]').getAttribute('content')
+      : '';
+    const ogImageAbs = ogImage ? makeAbs(ogImage) : '';
+    const headerElForLogo = document.querySelector('header, .header, nav, .nav, .top-bar');
+    let headerLogo = '';
+    if (headerElForLogo) {
+      const img = headerElForLogo.querySelector('img[alt*="logo" i], img[class*="logo" i], img[id*="logo" i], .logo img, #logo img');
+      const src = img ? (img.getAttribute('src') || '') : '';
+      headerLogo = src ? makeAbs(src) : '';
+    }
+
+    const ctaCandidates = Array.from(document.querySelectorAll('a, button'))
+      .map((el) => (el.innerText || '').trim())
+      .filter(Boolean);
+
+    const contactLink = Array.from(document.querySelectorAll('a'))
+      .map((el) => el.getAttribute('href') || '')
+      .find((href) => href.toLowerCase().includes('contact')) || '';
+
+    const navText = Array.from(document.querySelectorAll('nav a'))
+      .map((el) => (el.innerText || '').trim())
+      .filter(Boolean);
+
+    const headingText = []
+      .concat(h1 ? [h1] : [])
+      .concat(h2 || []);
+
+    const bodyText = document.body ? document.body.innerText : '';
+    
+    // Extract all headings for raw dump
+    const allHeadings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+      .map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        text: el.innerText.trim()
+      }))
+      .filter((h) => h.text.length > 0)
+      .slice(0, 50); // Limit to 50 headings
+    
+    // Extract structured data (JSON-LD)
+    const structuredData = [];
+    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    jsonLdScripts.forEach((script) => {
+      try {
+        const data = JSON.parse(script.textContent);
+        structuredData.push(data);
+      } catch (e) {
+        // Ignore invalid JSON-LD
+      }
+    });
+    
+    // Extract contact data (v2 with source tracking)
+    const phonesResult = extractPhones();
+    const emailsResult = extractEmails();
+    const socialResult = extractSocialLinks();
+    const addressHoursResult = extractAddressAndHours();
+
+    // Layout summary for evidence-based LLM evaluation
+    const layoutSummary = {};
+
+    // Phone detection in header
+    const headerEl = document.querySelector('header, .header, nav, .nav, .top-bar');
+    const phoneRegex = /(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/;
+    const headerText = headerEl ? headerEl.innerText : '';
+    layoutSummary.has_phone_in_header = phoneRegex.test(headerText);
+    
+    // Check if phone is clickable (tel: link)
+    const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'));
+    layoutSummary.phone_clickable_tel_link = telLinks.length > 0;
+
+    // Hero detection (first h1 + nearby text)
+    const h1El = document.querySelector('h1');
+    if (h1El) {
+      const h1Text = h1El.innerText || '';
+      layoutSummary.hero_h1_text = h1Text.slice(0, 140).trim();
+      
+      // Try to find subheadline (p or h2 near h1)
+      const h1Parent = h1El.parentElement;
+      const subheadCandidates = h1Parent 
+        ? Array.from(h1Parent.querySelectorAll('p, h2, .subhead, .subtitle'))
+        : [];
+      const subhead = subheadCandidates.length > 0 ? subheadCandidates[0].innerText : '';
+      layoutSummary.hero_subheadline = subhead.slice(0, 140).trim();
+    } else {
+      layoutSummary.hero_h1_text = '';
+      layoutSummary.hero_subheadline = '';
+    }
+
+    // Primary CTA detection (above fold - first 720px) with nav filtering
+    const navBlacklist = new Set(['home', 'services', 'about']);
+    const ctaKeywordRe = /\b(call|get a quote|quote|request|schedule|book|estimate|contact|emergency|24\/7)\b/i;
+    const isInNav = (el) => !!el.closest('nav, [role="navigation"], .nav, .navbar, .navbar-nav, .nav-menu, .menu, .main-menu, .primary-menu, .header-menu, header nav, header .menu, header .nav-menu, header .navbar');
+    const isButtonLike = (el) => {
+      const cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+      return el.tagName === 'BUTTON' || /btn|button|cta/.test(cls);
+    };
+    const getText = (el) => ((el.innerText || el.value || '') + '').trim();
+
+    const aboveFoldCandidates = Array.from(document.querySelectorAll('a, button, input[type="submit"]'))
+      .filter((el) => {
+        const rect = el.getBoundingClientRect();
+        if (!(rect.top < 720 && rect.top > 0)) return false;
+        if (isInNav(el)) return false;
+        const text = getText(el);
+        if (!text || text.length > 60) return false;
+        if (navBlacklist.has(text.toLowerCase())) return false;
+        const href = el.tagName === 'A' ? (el.getAttribute('href') || '') : '';
+        const isTel = href.toLowerCase().startsWith('tel:');
+        return isTel || isButtonLike(el) || ctaKeywordRe.test(text);
+      })
+      .map((el) => {
+        const text = getText(el);
+        const href = el.tagName === 'A' ? (el.getAttribute('href') || '') : '';
+        const isTel = href.toLowerCase().startsWith('tel:');
+        const source = isTel ? 'tel' : (isButtonLike(el) ? 'button' : 'hero');
+        return { text, source };
+      })
+      .filter((x) => x.text);
+
+    layoutSummary.has_primary_cta_above_fold = aboveFoldCandidates.length > 0;
+    layoutSummary.primary_cta_text = aboveFoldCandidates.length > 0 ? aboveFoldCandidates[0].text : '';
+    layoutSummary.primary_cta_source = aboveFoldCandidates.length > 0 ? aboveFoldCandidates[0].source : null;
+
+    // Trust badge detection (licensed, insured, reviews, ratings, years, certified)
+    const trustKeywords = ['licensed', 'insured', 'certified', 'years', 'rating', 'reviews', 'bbb', 'warranty'];
+    const aboveFoldText = Array.from(document.querySelectorAll('*'))
+      .filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.top < 720 && rect.top > 0;
+      })
+      .map((el) => (el.innerText || '').toLowerCase())
+      .join(' ');
+    
+    layoutSummary.has_trust_badge_above_fold = trustKeywords.some((kw) => aboveFoldText.includes(kw));
+
+    // Contact page detection
+    const contactPageLinks = Array.from(document.querySelectorAll('a'))
+      .filter((el) => (el.getAttribute('href') || '').toLowerCase().includes('contact'));
+    layoutSummary.contact_page_detected = contactPageLinks.length > 0;
+
+    // Contact form detection
+    const forms = Array.from(document.querySelectorAll('form'));
+    const hasContactForm = forms.some((form) => {
+      const formText = (form.innerText || '').toLowerCase();
+      return formText.includes('contact') || formText.includes('message') || formText.includes('email');
+    });
+    layoutSummary.contact_form_detected = hasContactForm;
+
+    return {
+      title,
+      h1,
+      h2,
+      metaDescription,
+      ogSiteName,
+      ogImage: ogImageAbs,
+      headerLogo,
+      ctaCandidates,
+      contactLink,
+      navText,
+      headingText,
+      bodyText,
+      layoutSummary,
+      // New v2 fields
+      contacts: {
+        phones: phonesResult.phones,
+        emails: emailsResult.emails,
+        social_links: socialResult.social_links,
+        address: addressHoursResult.address,
+        hours: addressHoursResult.hours
+      },
+      contactsDebug: {
+        phones: phonesResult.debug,
+        emails: emailsResult.debug,
+        social_links: socialResult.debug,
+        address: addressHoursResult.debug.address,
+        hours: addressHoursResult.debug.hours
+      },
+      rawDump: {
+        headings: allHeadings,
+        nav_items: navText,
+        structured_data_jsonld: structuredData.slice(0, 3), // Limit to 3 JSON-LD blocks
+        homepage_text_snippet: bodyText.slice(0, 5000), // Limit to 5000 chars
+        contact_text_snippet: null // Will be filled if contact page is scraped
+      }
+    };
+  });
+
+  // Parse JSON-LD for additional contact info
+  const jsonLdContacts = parseJsonLdContacts(extracted.rawDump.structured_data_jsonld || []);
+  
+  // Contact page scraping (if detected)
+  let contactPageData = null;
+  if (extracted.contactLink && extracted.contactLink.trim() !== '') {
+    try {
+      const contactUrl = new URL(extracted.contactLink, url).href;
+      await logStep(jobId, 'scrape', `Contact page detected: ${contactUrl}`);
+      
+      await page.goto(contactUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      
+      contactPageData = await page.evaluate(() => {
+        // Reuse the same extraction functions (simplified)
+        function normalizePhoneToUS(phone) {
+          const digits = phone.replace(/\D/g, '');
+          if (digits.length === 11 && digits[0] === '1') return digits.slice(1);
+          if (digits.length === 10) return digits;
+          return digits;
+        }
+        
+        function formatPhoneDisplay(digits) {
+          if (digits.length === 10) {
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+          }
+          return digits;
+        }
+        
+        const phones = [];
+        const emails = [];
+        const bodyText = document.body ? document.body.innerText : '';
+        
+        // Extract phones from tel: links
+        document.querySelectorAll('a[href^="tel:"]').forEach((link) => {
+          const href = link.getAttribute('href');
+          const phone = href.replace('tel:', '').trim();
+          const normalized = normalizePhoneToUS(phone);
+          if (normalized.length >= 10) {
+            phones.push({ value: formatPhoneDisplay(normalized), source: 'contact_page_tel_link', raw: phone });
+          }
+        });
+        
+        // Extract phones from text
+        const phoneRegex = /(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g;
+        const phoneMatches = [...bodyText.matchAll(phoneRegex)];
+        phoneMatches.slice(0, 3).forEach((match) => {
+          const normalized = normalizePhoneToUS(match[0]);
+          if (normalized.length >= 10) {
+            phones.push({ value: formatPhoneDisplay(normalized), source: 'contact_page_text', raw: match[0] });
+          }
+        });
+        
+        // Extract emails from mailto: links
+        document.querySelectorAll('a[href^="mailto:"]').forEach((link) => {
+          const href = link.getAttribute('href');
+          const email = href.replace('mailto:', '').split('?')[0].trim().toLowerCase();
+          if (email && email.includes('@')) {
+            emails.push({ value: email, source: 'contact_page_mailto_link' });
+          }
+        });
+        
+        // Extract emails from text
+        const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+        const emailMatches = [...bodyText.matchAll(emailRegex)];
+        emailMatches.slice(0, 3).forEach((match) => {
+          const email = match[0].toLowerCase();
+          if (!email.includes('example.com') && !email.includes('yourdomain')) {
+            emails.push({ value: email, source: 'contact_page_text' });
+          }
+        });
+        
+        return {
+          phones,
+          emails,
+          text_snippet: bodyText.slice(0, 2000)
+        };
+      });
+      
+      await logStep(jobId, 'scrape', `Contact page scraped: ${contactPageData.phones.length} phones, ${contactPageData.emails.length} emails`);
+    } catch (err) {
+      await logStep(jobId, 'scrape', `Contact page scraping failed: ${err.message}`);
+      contactPageData = null;
+    }
+  }
+
+  // Merge all contact sources: JSON-LD (highest priority) > tel/mailto links > text extraction > contact page
+  const mergedContacts = mergeContactSources(extracted.contacts, jsonLdContacts, contactPageData);
+  
+  const bodyText = extracted.bodyText || '';
+  const phoneMatch = bodyText.match(/(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
+  const emailMatch = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+
+  const ctas = extracted.ctaCandidates
+    .filter((text) => /call|contact|get|estimate|quote|schedule|book|request/i.test(text))
+    .slice(0, 6);
+
+  const trustSignals = TRUST_KEYWORDS.filter((keyword) =>
+    bodyText.toLowerCase().includes(keyword)
+  );
+
+  const keywordSource = []
+    .concat(extracted.headingText || [])
+    .concat(extracted.navText || [])
+    .join(' ');
+
+  const wordCounts = {};
+  keywordSource
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 3 && !STOPWORDS.has(word))
+    .forEach((word) => {
+      wordCounts[word] = (wordCounts[word] || 0) + 1;
+    });
+
+  const servicesKeywords = Object.entries(wordCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map((entry) => entry[0]);
+
+  const screenshotDir = path.join(__dirname, '..', '..', 'public', 'audit_screenshots', String(jobId));
+  fs.mkdirSync(screenshotDir, { recursive: true });
+
+  // Desktop screenshots
+  const aboveFoldPath = path.join(screenshotDir, 'above-fold.png');
+  
+  // Navigate back to homepage for screenshot
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  
+  // Set desktop viewport
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: aboveFoldPath, fullPage: false });
+
+  const fullPagePath = path.join(screenshotDir, 'fullpage.png');
+  await page.screenshot({ path: fullPagePath, fullPage: true });
+
+  // Mobile screenshots
+  await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE size
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(500);
+  
+  const mobileAboveFoldPath = path.join(screenshotDir, 'mobile-above-fold.png');
+  await page.screenshot({ path: mobileAboveFoldPath, fullPage: false });
+
+  const mobileFullPath = path.join(screenshotDir, 'mobile-full.png');
+  await page.screenshot({ path: mobileFullPath, fullPage: true });
+
+  await browser.close();
+
+  // Static files are served from project root (see server/server.js),
+  // so public assets must be referenced with the "public/..." prefix.
+  const relativeBase = path.join('public', 'audit_screenshots', String(jobId));
+  
+  // Update rawDump with contact page snippet if available
+  if (contactPageData && contactPageData.text_snippet) {
+    extracted.rawDump.contact_text_snippet = contactPageData.text_snippet;
+  }
+
+  return {
+    scrapeResult: {
+      title: extracted.title,
+      meta_description: extracted.metaDescription,
+      og_site_name: extracted.ogSiteName || null,
+      og_image_url: extracted.ogImage || null,
+      header_logo_url: extracted.headerLogo || null,
+      h1: extracted.h1,
+      h2: extracted.h2,
+      ctas,
+      phone: phoneMatch ? phoneMatch[0] : null,
+      email: emailMatch ? emailMatch[0] : null,
+      contact_url: extracted.contactLink || null,
+      trust_signals: trustSignals,
+      services_keywords: servicesKeywords,
+      performance_summary: 'Not run',
+      layout_summary: extracted.layoutSummary || {},
+      // New v2 fields with merged sources
+      contacts: mergedContacts,
+      contacts_debug: extracted.contactsDebug
+    },
+    rawDump: extracted.rawDump || {},
+    screenshots: {
+      above_fold: path.join(relativeBase, 'above-fold.png'),
+      fullpage: path.join(relativeBase, 'fullpage.png'),
+      mobile: path.join(relativeBase, 'mobile-above-fold.png'),
+      mobile_full: path.join(relativeBase, 'mobile-full.png')
+    }
+  };
+}
+
+/**
+ * Generate Evidence Pack v2 with strict validation rules
+ * This function builds a structured, LLM-ready evidence pack from raw dump data
+ * with comprehensive validation and quality warnings
+ */
+function generateEvidencePackV2(job, crawledPages, screenshots) {
+  const warnings = [];
+
+  const homepage = crawledPages.find(p => p.page_type === 'home') || crawledPages[0];
+  if (!homepage) return null;
+
+  const contactPage = crawledPages.find(p => p.page_type === 'contact') || null;
+
+  // Merge JSON-LD extracted data (homepage priority)
+  let jsonldExtracted = homepage.jsonld_extracted_json || { organization: {}, website: {}, localbusiness: {}, offer_catalog_services: [] };
+  crawledPages.forEach((p) => {
+    if (!p.jsonld_extracted_json || p.url === homepage.url) return;
+    const other = p.jsonld_extracted_json;
+    if (other.offer_catalog_services && other.offer_catalog_services.length) {
+      jsonldExtracted.offer_catalog_services = [...new Set([...(jsonldExtracted.offer_catalog_services || []), ...other.offer_catalog_services])];
+    }
+    if (!jsonldExtracted.localbusiness?.openingHoursSpecification && other.localbusiness?.openingHoursSpecification) {
+      jsonldExtracted.localbusiness.openingHoursSpecification = other.localbusiness.openingHoursSpecification;
+    }
+    if (!jsonldExtracted.localbusiness?.address && other.localbusiness?.address) {
+      jsonldExtracted.localbusiness.address = other.localbusiness.address;
+    }
+    if (!jsonldExtracted.website?.name && other.website?.name) {
+      jsonldExtracted.website = jsonldExtracted.website || {};
+      jsonldExtracted.website.name = other.website.name;
+    }
+  });
+
+  // Helpers
+  const normalizeDay = (d) => {
+    const s = (d || '').toString();
+    const lower = s.toLowerCase();
+    if (lower.includes('monday')) return 'Mon';
+    if (lower.includes('tuesday')) return 'Tue';
+    if (lower.includes('wednesday')) return 'Wed';
+    if (lower.includes('thursday')) return 'Thu';
+    if (lower.includes('friday')) return 'Fri';
+    if (lower.includes('saturday')) return 'Sat';
+    if (lower.includes('sunday')) return 'Sun';
+    return s.replace(/^https?:\/\/schema\.org\//i, '').slice(0, 10);
+  };
+
+  const parseOpeningHoursSpec = (spec) => {
+    if (!spec) return null;
+    
+    // Handle string format (e.g., "Mo,Tu,We,Th,Fr,Sa,Su 07:00-19:00")
+    if (typeof spec === 'string') {
+      const s = spec.trim();
+      // Try to parse "Mo,Tu,... HH:MM-HH:MM" pattern
+      const match = s.match(/^((?:[A-Z][a-z],?\s*)+)\s+(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/i);
+      if (match) {
+        const daysStr = match[1];
+        const opens = match[2];
+        const closes = match[3];
+        // Parse days: "Mo,Tu,We,..." -> ['Mon', 'Tue', 'Wed', ...]
+        const daysParsed = daysStr.split(',').map(d => normalizeDay(d.trim())).filter(Boolean);
+        return { days: daysParsed, opens, closes, _openingHoursString: true };
+      }
+      // Fallback: return as raw string if pattern doesn't match
+      return { _raw: s };
+    }
+    
+    if (!Array.isArray(spec)) return null;
+    const daysSet = new Set();
+    let opens = null;
+    let closes = null;
+    spec.forEach((row) => {
+      const d = row.dayOfWeek;
+      if (Array.isArray(d)) d.forEach(x => daysSet.add(normalizeDay(x)));
+      else if (d) daysSet.add(normalizeDay(d));
+      if (!opens && row.opens) opens = row.opens;
+      if (!closes && row.closes) closes = row.closes;
+    });
+    const days = Array.from(daysSet);
+    return { days, opens, closes };
+  };
+
+  const normalizeTime = (t) => {
+    const s = (t || '').toString().trim();
+    if (!s) return null;
+    // Accept 00:00, 00:00:00, 23:59, 23:59:00, 24:00, 24:00:00
+    const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return s;
+    const hh = m[1].padStart(2, '0');
+    const mm = m[2];
+    return `${hh}:${mm}`;
+  };
+
+  const formatTimeShort = (t) => {
+    const s = normalizeTime(t);
+    if (!s) return '';
+    const m = s.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return s;
+    const hh = parseInt(m[1], 10);
+    const mm = m[2];
+    if (mm === '00') return String(hh);
+    return `${hh}:${mm}`;
+  };
+
+  const formatDays = (days) => {
+    const set = new Set((days || []).map(d => String(d).slice(0, 3)));
+    const ordered = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const hasAll = ordered.every(d => set.has(d));
+    if (hasAll) return 'Mon–Sun';
+    const wk = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].every(d => set.has(d));
+    const we = ['Sat', 'Sun'].every(d => set.has(d));
+    if (wk && !we) return 'Mon–Fri';
+    const present = ordered.filter(d => set.has(d));
+    return present.join(', ');
+  };
+
+  const buildFormFromDetected = (forms) => {
+    const usable = (forms || []).find(f => f.fields_count >= 2) || (forms || []).find(f => f.fields_count >= 1);
+    if (!usable) return { contact_form_detected: false, contact_form_fields_count: 0, contact_form_fields: [], form_action_detected: null, detection_source: null };
+    return {
+      contact_form_detected: true,
+      contact_form_fields_count: usable.fields_count || 0,
+      contact_form_fields: (usable.fields || []).slice(0, 20).map(f => ({
+        name: f.name || null,
+        label: f.label || null,
+        required: !!f.required,
+        type_guess: f.type || null
+      })),
+      form_action_detected: usable.action || null,
+      detection_source: 'dom'
+    };
+  };
+
+  const detectContactFormFromText = (text) => {
+    const t = (text || '').toString().toLowerCase();
+    if (!t) return { detected: false, reason: null, matched: [] };
+    if (t.includes('leave this field blank')) {
+      return { detected: true, reason: 'honeypot', matched: ['leave this field blank'] };
+    }
+    const checks = [
+      { key: 'name', re: /\bname\b|your name/ },
+      { key: 'email', re: /\bemail\b|e-mail/ },
+      { key: 'phone', re: /\bphone\b|phone number|\btel\b/ },
+      { key: 'message', re: /\bmessage\b|comments?\b|question\b/ },
+      { key: 'send', re: /\bsend\b/ },
+      { key: 'submit', re: /\bsubmit\b/ }
+    ];
+    const matched = checks.filter(c => c.re.test(t)).map(c => c.key);
+    const unique = new Set(matched);
+    return unique.size >= 2
+      ? { detected: true, reason: 'text_fields', matched: Array.from(unique) }
+      : { detected: false, reason: null, matched: Array.from(unique) };
+  };
+
+  const sanitizeName = (s) => {
+    const t = (s || '').toString().trim();
+    if (!t) return null;
+    const cleaned = t.replace(/\s+/g, ' ').slice(0, 200);
+    return cleaned || null;
+  };
+
+  const deriveDomainFallback = (inputUrl) => {
+    try {
+      const u = new URL(inputUrl);
+      const host = u.hostname.replace(/^www\./i, '');
+      const parts = host.split('.').filter(Boolean);
+      if (parts.length <= 1) return host;
+      return parts.slice(0, -1).join('.') || host;
+    } catch {
+      return (inputUrl || '').toString().replace(/^https?:\/\//i, '').split('/')[0] || null;
+    }
+  };
+
+  // Company name
+  let company_name = null;
+  let company_name_source = null;
+  const orgName = sanitizeName(jsonldExtracted.organization?.name);
+  const localName = sanitizeName(jsonldExtracted.localbusiness?.name);
+  const webName = sanitizeName(jsonldExtracted.website?.name);
+  const htmlTitle = sanitizeName(homepage.title ? homepage.title.split('|')[0].trim() : null);
+  const ogSiteName = sanitizeName(homepage.og_site_name || null);
+
+  if (orgName) { company_name = orgName; company_name_source = 'jsonld_organization'; }
+  else if (localName) { company_name = localName; company_name_source = 'jsonld_localbusiness'; }
+  else if (webName) { company_name = webName; company_name_source = 'jsonld_website'; }
+  else if (htmlTitle) { company_name = htmlTitle; company_name_source = 'html_title'; }
+  else if (ogSiteName) { company_name = ogSiteName; company_name_source = 'og_site_name'; }
+  else {
+    const fallback = sanitizeName(deriveDomainFallback(job.input_url));
+    company_name = fallback;
+    company_name_source = 'domain_fallback';
+  }
+
+  // Address (allow partial, warn if no street)
+  let address = null;
+  const addr = jsonldExtracted.localbusiness?.address || null;
+  if (addr && typeof addr === 'object' && (addr.streetAddress || addr.addressLocality || addr.addressRegion || addr.postalCode || addr.addressCountry)) {
+    address = {
+      street: addr.streetAddress || null,
+      city: addr.addressLocality || null,
+      region: addr.addressRegion || null,
+      postal: addr.postalCode || null,
+      country: addr.addressCountry || null,
+      source: 'jsonld'
+    };
+    if (!address.street) {
+      warnings.push({ code: 'WARN_ADDRESS_PARTIAL_MISSING_STREET', severity: 'medium', message: 'Missing full street address (partial address from JSON-LD)' });
+    }
+  }
+
+  // Hours
+  let hours = null;
+  const hoursSpec = jsonldExtracted.localbusiness?.openingHoursSpecification || null;
+  const parsedHours = parseOpeningHoursSpec(hoursSpec);
+  if (parsedHours && parsedHours._raw) {
+    // Fallback for unparseable string blob
+    warnings.push({ code: 'WARN_HOURS_BLOB', severity: 'low', message: 'Hours came as blob string (openingHoursSpecification)' });
+    const raw = (parsedHours._raw || '').toString().trim();
+    if (raw) hours = { value: raw.slice(0, 500), source: 'jsonld_openingHours' };
+  } else if (parsedHours) {
+    const days = parsedHours.days || [];
+    const opens = normalizeTime(parsedHours.opens);
+    const closes = normalizeTime(parsedHours.closes);
+    const source = parsedHours._openingHoursString ? 'jsonld_openingHours' : 'jsonld_openingHoursSpecification';
+    const is247 =
+      days && days.length >= 7 &&
+      (opens === '00:00') &&
+      (closes === '23:59' || closes === '24:00');
+    if (is247) {
+      hours = { value: '24/7', source };
+    } else if (opens && closes) {
+      const dayStr = formatDays(days);
+      const timeStr = `${formatTimeShort(opens)}–${formatTimeShort(closes)}`;
+      hours = { value: dayStr ? `${dayStr} ${timeStr}` : timeStr, source };
+    } else if (days && days.length) {
+      hours = { value: formatDays(days), source };
+    }
+  }
+
+  // Contacts
+  const extractPhonesFromText = (text) => {
+    const t = (text || '').toString();
+    if (!t) return [];
+    const phoneRegex = /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+    const matches = [...t.matchAll(phoneRegex)];
+    return matches.map(m => m[0]).slice(0, 5);
+  };
+  
+  const extractEmailsFromText = (text) => {
+    const t = (text || '').toString();
+    if (!t) return [];
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const matches = [...t.matchAll(emailRegex)];
+    return matches.map(m => m[0].toLowerCase()).slice(0, 5);
+  };
+  
+  // Phones: JSON-LD first, fallback to text extraction
+  const phonesFromJsonLd = jsonldExtracted.organization?.contactPoint?.telephone || jsonldExtracted.localbusiness?.telephone || null;
+  const phonesArray = [];
+  if (phonesFromJsonLd) {
+    phonesArray.push({ display: phonesFromJsonLd, e164: null, source: 'jsonld', evidence_url: homepage.url });
+  }
+  
+  // Fallback: extract from homepage text snippet
+  if (phonesArray.length === 0 && homepage.text_snippet) {
+    const extracted = extractPhonesFromText(homepage.text_snippet);
+    extracted.forEach(p => {
+      phonesArray.push({ display: p, e164: null, source: 'homepage_text', evidence_url: homepage.url });
+    });
+  }
+  
+  // Fallback: extract from contact page text snippet
+  if (phonesArray.length === 0 && contactPage && contactPage.text_snippet) {
+    const extracted = extractPhonesFromText(contactPage.text_snippet);
+    extracted.forEach(p => {
+      phonesArray.push({ display: p, e164: null, source: 'contact_text', evidence_url: contactPage.url });
+    });
+  }
+  
+  // Emails: fallback extraction from text snippets
+  const emailsArray = [];
+  if (homepage.text_snippet) {
+    const extracted = extractEmailsFromText(homepage.text_snippet);
+    extracted.forEach(e => {
+      if (!emailsArray.some(x => x.address === e)) {
+        emailsArray.push({ address: e, source: 'homepage_text', evidence_url: homepage.url });
+      }
+    });
+  }
+  if (contactPage && contactPage.text_snippet) {
+    const extracted = extractEmailsFromText(contactPage.text_snippet);
+    extracted.forEach(e => {
+      if (!emailsArray.some(x => x.address === e)) {
+        emailsArray.push({ address: e, source: 'contact_text', evidence_url: contactPage.url });
+      }
+    });
+  }
+  
+  const sameAs = (jsonldExtracted.organization?.sameAs || []).slice(0, 20);
+  const social_links = {
+    facebook: [],
+    instagram: [],
+    twitter: [],
+    linkedin: [],
+    yelp: [],
+    google_maps: [],
+    google_business: []
+  };
+  const pushUnique = (arr, obj) => {
+    if (!obj || !obj.value) return;
+    const v = String(obj.value);
+    if (!arr.some(x => (x && x.value) === v)) arr.push({ value: v, source: obj.source || 'unknown' });
+  };
+  (sameAs || []).forEach((link) => {
+    const v = (link || '').toString();
+    const lower = v.toLowerCase();
+    if (!v) return;
+    if (lower.includes('facebook.com')) pushUnique(social_links.facebook, { value: v, source: 'jsonld_sameAs' });
+    else if (lower.includes('instagram.com')) pushUnique(social_links.instagram, { value: v, source: 'jsonld_sameAs' });
+    else if (lower.includes('twitter.com') || lower.includes('x.com')) pushUnique(social_links.twitter, { value: v, source: 'jsonld_sameAs' });
+    else if (lower.includes('linkedin.com')) pushUnique(social_links.linkedin, { value: v, source: 'jsonld_sameAs' });
+    else if (lower.includes('yelp.com')) pushUnique(social_links.yelp, { value: v, source: 'jsonld_sameAs' });
+    else if (lower.includes('maps.google.com') || lower.includes('goo.gl/maps') || lower.includes('maps.app.goo.gl') || lower.includes('google.com/maps')) {
+      pushUnique(social_links.google_maps, { value: v, source: 'jsonld_sameAs' });
+    }
+  });
+
+  // Google Maps generation (no API): prefer geo, fallback to address
+  const geo = jsonldExtracted.localbusiness?.geo || null;
+  if ((social_links.google_maps || []).length === 0) {
+    const lat = geo && geo.latitude != null ? String(geo.latitude).trim() : '';
+    const lng = geo && geo.longitude != null ? String(geo.longitude).trim() : '';
+    if (lat && lng) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+      pushUnique(social_links.google_maps, { value: url, source: 'generated_geo' });
+    } else if (address) {
+      const parts = [address.street, address.city, address.region, address.postal, address.country].filter(Boolean);
+      const q = parts.join(', ');
+      if (q) {
+        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+        pushUnique(social_links.google_maps, { value: url, source: 'generated_address' });
+      }
+    }
+  }
+
+  // Fallback: address/hours from contact page text snippet (best-effort parsing)
+  const contactText = (contactPage && contactPage.text_snippet) ? contactPage.text_snippet : '';
+  if (!address && contactText) {
+    const m = contactText.match(/\b([A-Za-z][A-Za-z\s]+),\s*([A-Z]{2})\s*(\d{5})\b/);
+    if (m) {
+      address = { street: null, city: m[1].trim(), region: m[2], postal: m[3], country: null, source: 'page_text' };
+      warnings.push({ code: 'WARN_ADDRESS_PARTIAL_FROM_TEXT', severity: 'low', message: 'Address inferred from contact page text (partial)' });
+    }
+  }
+  if (!hours && contactText) {
+    // Simple time range extraction (e.g., 07:00–19:00)
+    const tm = contactText.match(/(\d{1,2}:\d{2})\s*(?:-|–|to)\s*(\d{1,2}:\d{2})/);
+    if (tm) {
+      hours = { value: `${tm[1]}–${tm[2]}`, source: 'page_text' };
+      warnings.push({ code: 'WARN_HOURS_FROM_TEXT', severity: 'low', message: 'Hours inferred from contact page text (lower confidence)' });
+    }
+  }
+
+  // Services: featured + other_services (from extracted page services)
+  const servicesFeatured = [];
+  const servicesOther = [];
+  crawledPages.forEach((p) => {
+    const ex = p.services_extracted_json || {};
+    (ex.featured || []).forEach((s) => {
+      if (s && s.title) {
+        servicesFeatured.push({
+          title: s.title,
+          description: s.description || '',
+          learn_more_href: s.learn_more_href || null,
+          source_page_url: p.url
+        });
+      }
+    });
+    (ex.other_services || []).forEach((t) => {
+      if (t) servicesOther.push(t);
+    });
+  });
+  
+  // Fallback: extract services from H3/H6 pattern when empty
+  if (servicesFeatured.length === 0) {
+    crawledPages.forEach((p) => {
+      const h3s = p.h3_json || [];
+      const h6s = p.h6_json || [];
+      
+      // Match H3 + nearby H6 pattern (service name + description)
+      h3s.slice(0, 20).forEach((h3, idx) => {
+        const title = String(h3 || '').trim();
+        if (!title || title.length < 3 || title.length > 100) return;
+        
+        // Check if this looks like a service (keywords: repair, install, service, maintenance, etc.)
+        const lower = title.toLowerCase();
+        const serviceKeywords = /repair|install|service|maintenance|replacement|inspection|cleaning|plumbing|drain|sewer|water|pump|tank|heater/;
+        if (!serviceKeywords.test(lower)) return;
+        
+        // Look for H6 as description (if nearby index)
+        let description = '';
+        if (h6s[idx]) description = String(h6s[idx] || '').trim().slice(0, 220);
+        
+        servicesFeatured.push({
+          title,
+          description,
+          learn_more_href: null,
+          source_page_url: p.url
+        });
+      });
+    });
+  }
+
+  // service areas (jsonld)
+  const service_areas = (jsonldExtracted.localbusiness?.areaServed || []).slice(0, 20);
+
+  // CTA candidates + primary
+  const validIntents = new Set(['call', 'schedule', 'book', 'estimate', 'quote', 'contact']);
+  const normTxt = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+  const navBlacklist = new Set(['home', 'services', 'about']);
+  const inferIntent = (text, href) => {
+    const t = normTxt(text);
+    const h = (href || '').toString().toLowerCase();
+    if (!t && !h) return null;
+    if (h.startsWith('tel:') || /\bcall\b|\bemergency\b|\b24\/7\b/.test(t)) return 'call';
+    if (/\b(get a quote|quote|request a quote|pricing|price)\b/.test(t)) return 'quote';
+    if (/\b(estimate|request an estimate)\b/.test(t)) return 'estimate';
+    if (/\b(schedule|appointment)\b/.test(t)) return 'schedule';
+    if (/\bbook\b/.test(t)) return 'book';
+    if (/\bcontact\b|\bget in touch\b/.test(t) || h.startsWith('mailto:')) return 'contact';
+    return null;
+  };
+  const isButtonLike = (c) => {
+    const sel = (c && c.dom_debug_selector) ? String(c.dom_debug_selector).toLowerCase() : '';
+    return sel.startsWith('button') || sel.includes('.btn') || sel.includes('.button') || sel.includes('.cta');
+  };
+  let allCtas = (crawledPages.flatMap(p => p.cta_candidates_json || []) || [])
+    .filter(c => c && c.text)
+    .filter(c => !c.is_in_nav)
+    .filter(c => !navBlacklist.has(normTxt(c.text)));
+  
+  // Fallback: if no CTA candidates, generate from phones (tel: links) and headings
+  if (allCtas.length === 0) {
+    const fallbackCtas = [];
+    
+    // Generate tel: CTA from phones
+    if (phonesArray.length > 0) {
+      phonesArray.slice(0, 2).forEach(p => {
+        fallbackCtas.push({
+          text: `Call ${p.display}`,
+          href: `tel:${p.display}`,
+          cta_intent: 'call',
+          target_type: 'tel',
+          is_above_fold_desktop: true,
+          is_above_fold_mobile: true,
+          page_url: p.evidence_url || homepage.url,
+          dom_debug_selector: 'generated_tel',
+          is_in_nav: false
+        });
+      });
+    }
+    
+    // Extract text CTAs from headings (H3/H6 with "Free", "Get", "Request", "Schedule", etc.)
+    crawledPages.forEach(p => {
+      const headings = [...(p.h3_json || []), ...(p.h6_json || [])].slice(0, 10);
+      headings.forEach(h => {
+        const t = String(h || '').trim();
+        if (t.length < 10 || t.length > 100) return;
+        const lower = t.toLowerCase();
+        if (/\b(free|get|request|schedule|book|contact|call|estimate|quote)\b/.test(lower)) {
+          fallbackCtas.push({
+            text: t,
+            href: null,
+            cta_intent: null,
+            target_type: 'text',
+            is_above_fold_desktop: false,
+            is_above_fold_mobile: false,
+            page_url: p.url,
+            dom_debug_selector: 'heading_text',
+            is_in_nav: false
+          });
+        }
+      });
+    });
+    
+    allCtas = fallbackCtas;
+  }
+
+  const scored = allCtas
+    .map((c) => {
+      const derivedIntent = validIntents.has(c.cta_intent) ? c.cta_intent : inferIntent(c.text, c.href);
+      const aboveFold = !!(c.is_above_fold_desktop || c.is_above_fold_mobile);
+      const tel = c.target_type === 'tel' || (c.href || '').toString().toLowerCase().startsWith('tel:');
+      const btn = isButtonLike(c);
+      const score = (aboveFold ? 50 : 0) + (tel ? 40 : 0) + (btn ? 20 : 0) + (derivedIntent ? 10 : 0);
+      return { c, derivedIntent, aboveFold, tel, btn, score };
+    })
+    .filter(x => x.derivedIntent && x.aboveFold)
+    .sort((a, b) => b.score - a.score);
+
+  const primaryPick = scored[0] || null;
+  const primary = primaryPick ? primaryPick.c : null;
+  const primary_intent = primaryPick ? primaryPick.derivedIntent : null;
+  const primary_cta_source = primaryPick
+    ? (primaryPick.tel ? 'tel' : (primaryPick.btn ? 'button' : 'hero'))
+    : null;
+  const cta_map = {
+    primary: primary
+      ? { text: primary.text, intent: primary_intent, href: primary.href, source: primary_cta_source, evidence: { page_url: primary.page_url, selector: primary.dom_debug_selector } }
+      : null,
+    primary_cta_text: primary ? primary.text : null,
+    primary_cta_source,
+    primary_cta_reason: primary ? 'above_fold + intent + not_in_nav + nav_blacklist' : null,
+    cta_candidates: allCtas.slice(0, 40).map(c => ({
+      text: c.text,
+      href: c.href,
+      intent: validIntents.has(c.cta_intent) ? c.cta_intent : inferIntent(c.text, c.href) || c.cta_intent,
+      target_type: c.target_type,
+      above_fold_desktop: !!c.is_above_fold_desktop,
+      above_fold_mobile: !!c.is_above_fold_mobile,
+      evidence: { page_url: c.page_url, selector: c.dom_debug_selector }
+    }))
+  };
+  if (cta_map.primary && !validIntents.has(cta_map.primary.intent)) {
+    warnings.push({ code: 'WARN_PRIMARY_CTA_NOT_INTENT', severity: 'high', message: 'Primary CTA intent not allowed' });
+  }
+
+  // Contact form detection (DOM forms; best-effort)
+  const allForms = crawledPages.flatMap(p => p.forms_detailed_json || []);
+  const contactForms = (contactPage && contactPage.url)
+    ? allForms.filter(f => (f.page_url || '').toString() === contactPage.url || (f.page_url || '').toString().toLowerCase().includes('contact'))
+    : allForms.filter(f => (f.page_url || '').toString().toLowerCase().includes('contact'));
+  let formPack = buildFormFromDetected(contactForms.length ? contactForms : allForms);
+  if (!formPack.contact_form_detected) {
+    // Fallback 1: page-level signal from crawler (any <form> in DOM)
+    const contactHasForm = !!(contactPage && contactPage.has_form);
+    if (contactHasForm) {
+      warnings.push({ code: 'WARN_CONTACT_FORM_DETECTED_VIA_TEXT', severity: 'low', message: 'Contact form detected via text snippet (lower confidence, possibly JS-rendered)' });
+      formPack = {
+        contact_form_detected: true,
+        contact_form_fields_count: 0,
+        contact_form_fields: [
+          { name: null, label: 'Form detected', required: false, type_guess: null }
+        ],
+        form_action_detected: null,
+        detection_source: 'dom_has_form'
+      };
+    } else {
+      // Fallback 2: heuristic detection from contact page text snippet (robust when DOM parsing fails)
+      const txt = (contactPage && contactPage.text_snippet) ? contactPage.text_snippet : '';
+      const d = detectContactFormFromText(txt);
+      if (d.detected) {
+        warnings.push({ code: 'WARN_CONTACT_FORM_DETECTED_VIA_TEXT', severity: 'low', message: `Contact form detected via text snippet (${d.reason})` });
+        formPack = {
+          contact_form_detected: true,
+          contact_form_fields_count: 0,
+          contact_form_fields: (d.matched || []).slice(0, 8).map(k => ({ name: null, label: k, required: false, type_guess: null })),
+          form_action_detected: null,
+          detection_source: 'text'
+        };
+      }
+    }
+  }
+
+  // Trust evidence: years + 1 review snippet (from extracted trust_extracted_json or body snippet)
+  const trustEvidence = [];
+  const yearsSnippet =
+    homepage.trust_extracted_json?.years_in_business_snippet ||
+    (homepage.text_snippet || '').match(/(over\s+)?(\d{1,2})\+?\s*(years?|yrs?)\b/i)?.[0] ||
+    null;
+  if (yearsSnippet) {
+    trustEvidence.push({ type: 'years_in_business', value: yearsSnippet, snippet: yearsSnippet, source: 'homepage_text_snippet' });
+  }
+  const reviewFromExtracted = (homepage.trust_extracted_json?.review_snippets || [])[0] || null;
+  if (reviewFromExtracted) {
+    trustEvidence.push({ type: 'review_snippet', snippet: reviewFromExtracted, source: 'homepage_text_snippet' });
+  }
+  if (trustEvidence.length === 0) {
+    warnings.push({ code: 'WARN_TRUST_HAS_NO_NUMBERS_OR_LICENSE', severity: 'medium', message: 'Trust evidence missing years/reviews/ratings' });
+  }
+
+  // Brand assets: choose best logo candidate deterministically by priority_score (already computed)
+  const logoCandidates = crawledPages.flatMap(p => p.brand_assets_json?.logo_candidates || []);
+  const logoBest = logoCandidates.sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0))[0] || null;
+  const normalizeLogoSource = (src) => {
+    const s = (src || '').toString();
+    if (!s) return null;
+    if (s === 'jsonld_org_logo') return 'jsonld_organization';
+    if (s === 'jsonld_localbusiness_image') return 'jsonld_localbusiness';
+    if (s === 'og_image') return 'og_image';
+    if (s === 'header_img' || s === 'header_svg') return 'header_logo';
+    return s;
+  };
+  let logo_url = null;
+  let logo_source = null;
+  if (logoBest && logoBest.url) {
+    logo_url = logoBest.url;
+    logo_source = normalizeLogoSource(logoBest.source);
+  } else if (jsonldExtracted.organization?.logo) {
+    logo_url = jsonldExtracted.organization.logo;
+    logo_source = 'jsonld_organization';
+  } else if (jsonldExtracted.localbusiness?.image) {
+    logo_url = jsonldExtracted.localbusiness.image;
+    logo_source = 'jsonld_localbusiness';
+  }
+  const brand_assets = {
+    detected_logo: logoBest
+      ? { url: logoBest.url, source: normalizeLogoSource(logoBest.source), source_raw: logoBest.source, local_path: null, width: logoBest.width || null, height: logoBest.height || null }
+      : null
+  };
+
+  // Data quality warnings extras
+  if (brand_assets.detected_logo && (brand_assets.detected_logo.width && brand_assets.detected_logo.width < 80)) {
+    warnings.push({ code: 'WARN_LOGO_LOW_RES', severity: 'low', message: 'Logo detected but seems low resolution' });
+  }
+
+  return {
+    niche: job.niche,
+    city: job.city,
+    input_url: job.input_url,
+    company_name,
+    company_name_source,
+    company_profile: {
+      name: company_name,
+      phones: phonesArray.slice(0, 5),
+      emails: emailsArray.slice(0, 5),
+      address: address ? { ...address, evidence_url: homepage.url } : null,
+      hours: hours ? { ...hours, evidence_url: homepage.url } : null,
+      social_links
+    },
+    logo_url,
+    logo_source,
+    contact_form: formPack,
+    cta_map,
+    services: {
+      featured: servicesFeatured.slice(0, 20),
+      other_services: [...new Set(servicesOther)].slice(0, 60),
+      service_areas: service_areas.slice(0, 20)
+    },
+    trust: {
+      evidence: trustEvidence.slice(0, 8)
+    },
+    brand_assets,
+    data_quality_warnings: warnings,
+    screenshots_available: {
+      above_fold: screenshots && screenshots.above_fold ? true : false,
+      fullpage: screenshots && screenshots.fullpage ? true : false
+    },
+    version: 'v2'
+  };
+}
+
+function generateEvidencePack(job, scrapeResult, rawDump, screenshots) {
+  // Generate Evidence Pack for LLM (Scraper v2)
+  // This is the ONLY data that goes to LLM evaluators
+  
+  const contacts = scrapeResult.contacts || {};
+  const layoutSummary = scrapeResult.layout_summary || {};
+  
+  // Company profile from extracted contacts
+  const companyProfile = {
+    name: null,
+    phones: contacts.phones || [],
+    emails: contacts.emails || [],
+    address: contacts.address || null,
+    hours: contacts.hours || null,
+    social_links: contacts.social_links || {}
+  };
+
+  // Company name (deterministic; keep consistent with Evidence Pack v2)
+  const sanitizeName = (s) => {
+    const t = (s || '').toString().trim();
+    if (!t) return null;
+    const cleaned = t.replace(/\s+/g, ' ').slice(0, 200);
+    return cleaned || null;
+  };
+  const deriveDomainFallback = (inputUrl) => {
+    try {
+      const u = new URL(inputUrl);
+      const host = u.hostname.replace(/^www\./i, '');
+      const parts = host.split('.').filter(Boolean);
+      if (parts.length <= 1) return host;
+      return parts.slice(0, -1).join('.') || host;
+    } catch {
+      return (inputUrl || '').toString().replace(/^https?:\/\//i, '').split('/')[0] || null;
+    }
+  };
+  const jsonldBlocks = rawDump.structured_data_jsonld || [];
+  const jsonldMeta = parseJsonLdContacts(jsonldBlocks) || {};
+  const orgName = sanitizeName(jsonldMeta.organization_name);
+  const localName = sanitizeName(jsonldMeta.localbusiness_name);
+  const webName = sanitizeName(jsonldMeta.website_name);
+  const htmlTitle = sanitizeName(scrapeResult.title ? String(scrapeResult.title).split('|')[0].trim() : null);
+  const ogSiteName = sanitizeName(scrapeResult.og_site_name || scrapeResult.ogSiteName || null);
+
+  let company_name = null;
+  let company_name_source = null;
+  if (orgName) { company_name = orgName; company_name_source = 'jsonld_organization'; }
+  else if (localName) { company_name = localName; company_name_source = 'jsonld_localbusiness'; }
+  else if (webName) { company_name = webName; company_name_source = 'jsonld_website'; }
+  else if (htmlTitle) { company_name = htmlTitle; company_name_source = 'html_title'; }
+  else if (ogSiteName) { company_name = ogSiteName; company_name_source = 'og_site_name'; }
+  else { company_name = sanitizeName(deriveDomainFallback(job.input_url)); company_name_source = 'domain_fallback'; }
+
+  companyProfile.name = company_name;
+
+  // Logo (v1 pack): JSON-LD logo first (org/localbusiness), then keep as null (no extra API/crawl)
+  let logo_url = jsonldMeta.logo_url ? String(jsonldMeta.logo_url) : null;
+  let logo_source = jsonldMeta.logo_source ? String(jsonldMeta.logo_source) : null;
+  if (!logo_url) {
+    if (scrapeResult.og_image_url) {
+      logo_url = String(scrapeResult.og_image_url);
+      logo_source = 'og_image';
+    } else if (scrapeResult.header_logo_url) {
+      logo_url = String(scrapeResult.header_logo_url);
+      logo_source = 'header_logo';
+    }
+  }
+
+  // Google Maps generation (no API) for v1 pack
+  if (!companyProfile.social_links || typeof companyProfile.social_links !== 'object' || Array.isArray(companyProfile.social_links)) {
+    companyProfile.social_links = {};
+  }
+  if (!Array.isArray(companyProfile.social_links.google_maps)) {
+    companyProfile.social_links.google_maps = [];
+  }
+  if (companyProfile.social_links.google_maps.length === 0) {
+    const addrText =
+      (contacts.address && typeof contacts.address === 'object' && contacts.address.value) ? contacts.address.value :
+      (typeof contacts.address === 'string' ? contacts.address : null);
+    const q = (addrText || '').toString().trim();
+    if (q) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+      companyProfile.social_links.google_maps.push({ value: url, source: 'generated_address' });
+    }
+  }
+  
+  // Service offers from headings and nav (top 5)
+  const headings = (rawDump.headings || []).map(h => h.text).slice(0, 10);
+  const navItems = (rawDump.nav_items || []).slice(0, 10);
+  const serviceOffers = [...new Set([...headings, ...navItems])]
+    .filter(text => text.length > 3 && text.length < 100)
+    .slice(0, 5);
+  
+  // Trust snippets (top 5 specific snippets)
+  const trustSnippets = [];
+  
+  // Add trust signals with context
+  (scrapeResult.trust_signals || []).forEach((signal) => {
+    trustSnippets.push(`Trust signal found: "${signal}"`);
+  });
+  
+  // Check for specific trust indicators
+  if (layoutSummary.has_trust_badge_above_fold) {
+    trustSnippets.push('Trust badge visible above the fold');
+  }
+  
+  // Add more context from structured data if available
+  const structuredData = rawDump.structured_data_jsonld || [];
+  structuredData.forEach((data) => {
+    if (data['@type'] === 'LocalBusiness' && data.aggregateRating) {
+      trustSnippets.push(`Structured data shows rating: ${data.aggregateRating.ratingValue || 'N/A'}`);
+    }
+  });
+  
+  const limitedTrustSnippets = trustSnippets.slice(0, 5);
+  
+  // CTA map (primary/secondary + text + location)
+  const ctaMap = {
+    primary: {
+      text: layoutSummary.primary_cta_text || '',
+      location: layoutSummary.has_primary_cta_above_fold ? 'above_fold' : 'unknown',
+      exists: layoutSummary.has_primary_cta_above_fold || false,
+      source: layoutSummary.primary_cta_source || null
+    },
+    primary_cta_text: layoutSummary.primary_cta_text || '',
+    primary_cta_source: layoutSummary.primary_cta_source || null,
+    secondary: {
+      texts: (scrapeResult.ctas || []).slice(1, 3), // Next 2 CTAs
+      exists: (scrapeResult.ctas || []).length > 1
+    },
+    all_ctas: (scrapeResult.ctas || []).slice(0, 6) // Top 6 CTAs
+  };
+  
+  // Contact friction (tel clickable, clicks-to-contact)
+  const detectContactFormFromText = (text) => {
+    const t = (text || '').toString().toLowerCase();
+    if (!t) return { detected: false, reason: null, matched: [] };
+    if (t.includes('leave this field blank')) return { detected: true, reason: 'honeypot', matched: ['leave this field blank'] };
+    const checks = [
+      { key: 'name', re: /\bname\b|your name/ },
+      { key: 'email', re: /\bemail\b|e-mail/ },
+      { key: 'phone', re: /\bphone\b|phone number|\btel\b/ },
+      { key: 'message', re: /\bmessage\b|comments?\b|question\b/ },
+      { key: 'send', re: /\bsend\b/ },
+      { key: 'submit', re: /\bsubmit\b/ }
+    ];
+    const matched = checks.filter(c => c.re.test(t)).map(c => c.key);
+    return new Set(matched).size >= 2
+      ? { detected: true, reason: 'text_fields', matched: Array.from(new Set(matched)) }
+      : { detected: false, reason: null, matched: Array.from(new Set(matched)) };
+  };
+  const contactFormFromContactText = detectContactFormFromText(rawDump.contact_text_snippet || '');
+  const contact_form_detected = (layoutSummary.contact_form_detected || false) || !!contactFormFromContactText.detected;
+
+  const contactFriction = {
+    phone_in_header: layoutSummary.has_phone_in_header || false,
+    phone_clickable: layoutSummary.phone_clickable_tel_link || false,
+    phones_found: (contacts.phones || []).length,
+    emails_found: (contacts.emails || []).length,
+    contact_page_detected: layoutSummary.contact_page_detected || false,
+    contact_form_detected,
+    clicks_to_contact: calculateClicksToContact({ ...layoutSummary, contact_form_detected }, contacts)
+  };
+  
+  // Layout summary (already exists)
+  const layoutSummaryClean = {
+    hero_h1_text: layoutSummary.hero_h1_text || '',
+    hero_subheadline: layoutSummary.hero_subheadline || '',
+    has_primary_cta_above_fold: layoutSummary.has_primary_cta_above_fold || false,
+    has_trust_badge_above_fold: layoutSummary.has_trust_badge_above_fold || false,
+    has_phone_in_header: layoutSummary.has_phone_in_header || false,
+    phone_clickable_tel_link: layoutSummary.phone_clickable_tel_link || false,
+    contact_page_detected: layoutSummary.contact_page_detected || false,
+    contact_form_detected
+  };
+  
+  return {
+    // Job context
+    niche: job.niche,
+    city: job.city,
+    input_url: job.input_url,
+    company_name,
+    company_name_source,
+    logo_url,
+    logo_source,
+    
+    // Evidence Pack v2
+    company_profile: companyProfile,
+    service_offers: serviceOffers,
+    trust_snippets: limitedTrustSnippets,
+    cta_map: ctaMap,
+    contact_friction: contactFriction,
+    layout_summary: layoutSummaryClean,
+    
+    // Meta
+    screenshots_available: {
+      above_fold: screenshots && screenshots.above_fold ? true : false,
+      fullpage: screenshots && screenshots.fullpage ? true : false
+    }
+  };
+}
+
+function calculateClicksToContact(layoutSummary, contacts) {
+  // Calculate minimum clicks needed to contact the business
+  
+  // If phone is clickable in header: 1 click (best case)
+  if (layoutSummary.phone_clickable_tel_link && layoutSummary.has_phone_in_header) {
+    return 1;
+  }
+  
+  // If phone is visible in header but not clickable: 0 clicks (can call directly)
+  if (layoutSummary.has_phone_in_header && (contacts.phones || []).length > 0) {
+    return 0; // Can see and dial manually
+  }
+  
+  // If contact page exists: 1 click
+  if (layoutSummary.contact_page_detected) {
+    return 1;
+  }
+  
+  // If contact form is on homepage: 0 clicks (can fill immediately)
+  if (layoutSummary.contact_form_detected) {
+    return 0;
+  }
+  
+  // If we found emails or phones elsewhere: estimate 2 clicks (scroll + find)
+  if ((contacts.phones || []).length > 0 || (contacts.emails || []).length > 0) {
+    return 2;
+  }
+  
+  // Otherwise: unknown, assume 3+ clicks
+  return 3;
+}
+
+function buildLlmInput(job, scrapeResult, screenshots, evidencePack) {
+  // V2: Use evidence pack ONLY for LLM input
+  // Keep old structure for backwards compatibility, but prefer evidence_pack
+  
+  if (evidencePack) {
+    return evidencePack;
+  }
+  
+  // Fallback to old structure if evidence pack not available
+  return {
+    niche: job.niche,
+    city: job.city,
+    input_url: job.input_url,
+    company_name: job.company_name,
+    scrape_result_json: {
+      // Primary signals for LLM
+      layout_summary: scrapeResult.layout_summary || {},
+      trust_snippets: {
+        trust_signals: scrapeResult.trust_signals || [],
+        has_trust_above_fold: (scrapeResult.layout_summary || {}).has_trust_badge_above_fold || false
+      },
+      cta_analysis: {
+        primary_cta_text: (scrapeResult.layout_summary || {}).primary_cta_text || '',
+        has_cta_above_fold: (scrapeResult.layout_summary || {}).has_primary_cta_above_fold || false,
+        all_ctas: scrapeResult.ctas || []
+      },
+      contact_friction: {
+        phone: scrapeResult.phone || null,
+        phone_in_header: (scrapeResult.layout_summary || {}).has_phone_in_header || false,
+        phone_clickable: (scrapeResult.layout_summary || {}).phone_clickable_tel_link || false,
+        email: scrapeResult.email || null,
+        contact_url: scrapeResult.contact_url || null,
+        contact_page_detected: (scrapeResult.layout_summary || {}).contact_page_detected || false,
+        contact_form_detected: (scrapeResult.layout_summary || {}).contact_form_detected || false
+      },
+      hero_content: {
+        h1: scrapeResult.h1 || '',
+        hero_h1_text: (scrapeResult.layout_summary || {}).hero_h1_text || '',
+        hero_subheadline: (scrapeResult.layout_summary || {}).hero_subheadline || '',
+        meta_description: scrapeResult.meta_description || ''
+      },
+      // Secondary signals (for context only, not primary evidence)
+      service_offers: {
+        h2_headings: scrapeResult.h2 || [],
+        keywords: scrapeResult.services_keywords || []
+      }
+    },
+    screenshots_available: {
+      above_fold: screenshots && screenshots.above_fold ? true : false,
+      fullpage: screenshots && screenshots.fullpage ? true : false
+    }
+  };
+}
+
+async function runLlmEvaluators(job, scrapeResult, screenshots, rawDump, evidencePack, options) {
+  const prompts = await ensureDefaultPrompts();
+  const promptOverrides = options.promptOverrides || {};
+  const settings = options.settings || {};
+
+  // Load all assistants from database
+  const assistants = await new Promise((resolve, reject) => {
+    getAllAssistants((err, data) => {
+      if (err) {
+        console.error('Error loading assistants, using defaults:', err);
+        // Fallback to old hardcoded system if DB fails
+        resolve([]);
+      } else {
+        resolve(data || []);
+      }
+    });
+  });
+
+  // V2: Try to use Evidence Pack v2 first (from job.evidence_pack_v2_json), then v1, then fallback
+  let llmInput = evidencePack;
+  if (job.evidence_pack_v2_json) {
+    try {
+      llmInput = typeof job.evidence_pack_v2_json === 'string' ? JSON.parse(job.evidence_pack_v2_json) : job.evidence_pack_v2_json;
+      console.log('[LLM] Using Evidence Pack v2 for evaluation');
+    } catch (e) {
+      console.error('[LLM] Failed to parse Evidence Pack v2, falling back to v1');
+    }
+  }
+  if (!llmInput) {
+    llmInput = evidencePack || buildLlmInput(job, scrapeResult, screenshots, null);
+  }
+  
+  const sharedContext = `Input JSON:\n${JSON.stringify(llmInput, null, 2)}`;
+
+  // Initialize results object
+  const assistantResults = {};
+  const llmSnapshot = {
+    settings: {},
+    prompts: {},
+    assistants: []
+  };
+
+  // If no assistants in DB, use legacy hardcoded system for backward compatibility
+  if (assistants.length === 0) {
+    console.log('No assistants found in DB, using legacy hardcoded system');
+    
+    const uxModel = settings.ux_model || 'openai/gpt-4.1-mini';
+    const uxTemperature = Number.isFinite(settings.ux_temperature) ? settings.ux_temperature : 0.3;
+    const webModel = settings.web_model || 'openai/gpt-4.1-mini';
+    const webTemperature = Number.isFinite(settings.web_temperature) ? settings.web_temperature : 0.3;
+
+    const uxPrompt = sanitizeText(promptOverrides.ux || prompts.ux_specialist.content);
+    const webPrompt = sanitizeText(promptOverrides.web || prompts.web_designer.content);
+
+    const uxResponse = await callOpenRouter({
+      model: uxModel,
+      temperature: uxTemperature,
+      messages: [
+        { role: 'system', content: uxPrompt },
+        { role: 'user', content: sharedContext }
+      ]
+    });
+
+    const webResponse = await callOpenRouter({
+      model: webModel,
+      temperature: webTemperature,
+      messages: [
+        { role: 'system', content: webPrompt },
+        { role: 'user', content: sharedContext }
+      ]
+    });
+
+    const uxJson = parseJsonFromText(uxResponse);
+    const webJson = parseJsonFromText(webResponse);
+
+    assertCompliantJson(uxJson);
+    assertCompliantJson(webJson);
+    validateEvidenceInIssues(uxJson);
+
+    const miniAudit = {
+      top_3_leaks: uxJson.top_3_leaks || [],
+      seven_day_plan: uxJson['7_day_plan'] || uxJson.seven_day_plan || [],
+      copy_suggestions: webJson.copy_suggestions || [],
+      concept_headline: webJson.concept_headline || '',
+      concept_subhead: webJson.concept_subhead || '',
+      tone: uxJson.tone || webJson.tone || ''
+    };
+
+    llmSnapshot.settings = {
+      ux_model: uxModel,
+      ux_temperature: uxTemperature,
+      web_model: webModel,
+      web_temperature: webTemperature,
+      email_model: settings.email_model || 'openai/gpt-4.1-mini',
+      email_temperature: Number.isFinite(settings.email_temperature) ? settings.email_temperature : 0.2
+    };
+    llmSnapshot.prompts = {
+      ux_specialist: { name: 'ux_specialist', version: prompts.ux_specialist.version || null },
+      web_designer: { name: 'web_designer', version: prompts.web_designer.version || null }
+    };
+
+    return { miniAudit, llmSnapshot };
+  }
+
+  // New dynamic assistant system
+  for (const assistant of assistants) {
+    const model = settings[`${assistant.key}_model`] || assistant.model;
+    const temperature = Number.isFinite(settings[`${assistant.key}_temperature`]) 
+      ? settings[`${assistant.key}_temperature`] 
+      : assistant.temperature;
+    const prompt = sanitizeText(promptOverrides[assistant.key] || assistant.prompt);
+
+    console.log(`Running assistant: ${assistant.name} (${assistant.key}) with model ${model}`);
+
+    try {
+      const response = await callOpenRouter({
+        model,
+        temperature,
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: sharedContext }
+        ]
+      });
+
+      const resultJson = parseJsonFromText(response);
+      assertCompliantJson(resultJson);
+
+      // Store result with assistant key
+      assistantResults[assistant.key] = resultJson;
+
+      // Track in snapshot
+      llmSnapshot.settings[`${assistant.key}_model`] = model;
+      llmSnapshot.settings[`${assistant.key}_temperature`] = temperature;
+      llmSnapshot.assistants.push({
+        id: assistant.id,
+        key: assistant.key,
+        name: assistant.name,
+        model: model,
+        temperature: temperature
+      });
+    } catch (error) {
+      console.error(`Error running assistant ${assistant.name}:`, error);
+      assistantResults[assistant.key] = { error: error.message };
+    }
+  }
+
+  // Build miniAudit - try to maintain backward compatibility
+  const uxResult = assistantResults['ux_specialist'] || {};
+  const webResult = assistantResults['web_designer'] || {};
+
+  // Validate UX results if available
+  if (uxResult.top_3_leaks) {
+    try {
+      validateEvidenceInIssues(uxResult);
+    } catch (error) {
+      console.error('Evidence validation failed:', error);
+    }
+  }
+
+  const miniAudit = {
+    top_3_leaks: uxResult.top_3_leaks || [],
+    seven_day_plan: uxResult['7_day_plan'] || uxResult.seven_day_plan || [],
+    copy_suggestions: webResult.copy_suggestions || [],
+    concept_headline: webResult.concept_headline || '',
+    concept_subhead: webResult.concept_subhead || '',
+    tone: uxResult.tone || webResult.tone || '',
+    // Store all assistant results for future use
+    assistant_results: assistantResults
+  };
+
+  return { miniAudit, llmSnapshot };
+}
+
+async function runEmailPolish(job, miniAudit, options) {
+  const prompts = await ensureDefaultPrompts();
+  const promptOverrides = options.promptOverrides || {};
+  const settings = options.settings || {};
+  const model = settings.email_model || 'openai/gpt-4.1-mini';
+  const temperature = Number.isFinite(settings.email_temperature) ? settings.email_temperature : 0.2;
+
+  const emailPrompt = sanitizeText(promptOverrides.email || prompts.email_copy.content);
+  if (!emailPrompt) {
+    return null;
+  }
+
+  const context = `Mini audit:\n${JSON.stringify(miniAudit, null, 2)}`;
+  const response = await callOpenRouter({
+    model,
+    temperature,
+    messages: [
+      { role: 'system', content: emailPrompt },
+      { role: 'user', content: context }
+    ]
+  });
+
+  const emailJson = parseJsonFromText(response);
+  assertCompliantJson(emailJson);
+  return emailJson;
+}
+
+function generatePublicSlug(job) {
+  const niche = (job.niche || 'service').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const city = (job.city || 'miami').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const companySeed = job.company_name
+    ? job.company_name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)
+    : 'audit';
+  const randomSuffix = crypto.randomBytes(3).toString('hex');
+  return `${niche}${city}/${companySeed}-${randomSuffix}`;
+}
+
+/**
+ * Download and store logo locally
+ * Validates content type and size, stores in public/brand_assets/<jobId>/logo.<ext>
+ */
+async function downloadAndStoreLogo(logoUrl, jobId) {
+  if (!logoUrl || logoUrl.startsWith('inline-svg-')) {
+    return null; // Skip inline SVGs and null URLs
+  }
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const response = await fetch(logoUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MaxAndJacob-Audit/1.0)'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.error(`[LOGO DOWNLOAD] Failed to download ${logoUrl}: ${response.status}`);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type') || '';
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    
+    // Validate content type
+    if (!contentType.startsWith('image/')) {
+      console.error(`[LOGO DOWNLOAD] Invalid content type: ${contentType}`);
+      return null;
+    }
+    
+    // Validate size (max 4MB)
+    if (contentLength > 4 * 1024 * 1024) {
+      console.error(`[LOGO DOWNLOAD] Logo too large: ${contentLength} bytes`);
+      return null;
+    }
+    
+    // Determine extension
+    let ext = 'png'; // default
+    if (contentType.includes('svg')) {
+      ext = 'svg';
+    } else if (contentType.includes('png')) {
+      ext = 'png';
+    } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+      ext = 'jpg';
+    } else if (contentType.includes('webp')) {
+      ext = 'webp';
+    }
+    
+    // Create directory (spec: public/brand_assets/<jobId>/logo.ext)
+    const dir = path.join(__dirname, '..', '..', 'public', 'brand_assets', String(jobId));
+    fs.mkdirSync(dir, { recursive: true });
+    
+    // Save file
+    const filename = `logo.${ext}`;
+    const filepath = path.join(dir, filename);
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(filepath, Buffer.from(buffer));
+    
+    console.log(`[LOGO DOWNLOAD] Successfully saved logo to ${filepath}`);
+    
+    return {
+      stored_path: `public/brand_assets/${jobId}/${filename}`,
+      public_url: `/brand_assets/${jobId}/${filename}`,
+      format: ext,
+      size_bytes: buffer.byteLength
+    };
+  } catch (error) {
+    console.error(`[LOGO DOWNLOAD] Error downloading logo from ${logoUrl}:`, error.message);
+    return null;
+  }
+}
+
+async function generateConceptPreview(job, miniAudit, preset = null) {
+  return {
+    label: 'Concept preview (not your current website)',
+    headline: preset && preset.default_headline 
+      ? preset.default_headline.replace('{city}', job.city).replace('{niche}', job.niche)
+      : miniAudit.concept_headline || `A faster way for ${job.city} customers to book ${job.niche} services`,
+    subhead: miniAudit.concept_subhead || 'Clear CTA, local trust signals, and a simplified path to request service.',
+    cta: (preset && preset.default_primary_cta) || (miniAudit.copy_suggestions && miniAudit.copy_suggestions[0]) || 'Get a fast estimate',
+    secondary_cta: (preset && preset.default_secondary_cta) || null,
+    logo_url: job.brand_logo_url || null,
+    concept_image_url: preset && preset.concept_image_url ? preset.concept_image_url : null,
+    city: job.city,
+    niche: job.niche,
+    bullets: preset && preset.default_bullets_json ? preset.default_bullets_json : []
+  };
+}
+
+function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = null) {
+  const leaks = miniAudit.top_3_leaks || [];
+  const plan = miniAudit.seven_day_plan || [];
+  const introLine = emailPolish && emailPolish.intro_line
+    ? emailPolish.intro_line
+    : `We pulled a quick audit for your ${job.niche} website in ${job.city}.`;
+
+  const ctaText = (preset && preset.default_primary_cta) || (miniAudit.copy_suggestions && miniAudit.copy_suggestions[0]) || 'Unlock full audit';
+  
+  // Use preset concept image if available, otherwise use screenshot
+  const imageUrl = preset && preset.concept_image_url 
+    ? `/${preset.concept_image_url}` 
+    : (screenshots && screenshots.above_fold ? `/${screenshots.above_fold}` : '');
+  
+  const imageLabel = preset && preset.concept_image_url 
+    ? 'Concept preview for your industry' 
+    : 'Website snapshot';
+
+  return `
+  <html>
+    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f6f6f8;color:#111;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f6f8;padding:24px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:24px;">
+              <tr>
+                <td>
+                  <h2 style="margin:0 0 12px 0;">3 quick wins for your ${job.niche} site (${job.city})</h2>
+                  <p style="margin:0 0 16px 0;">${introLine}</p>
+                  ${imageUrl ? `<img src="${imageUrl}" alt="${imageLabel}" style="width:100%;border-radius:8px;margin-bottom:8px;"><p style="font-size:11px;color:#999;margin:0 0 16px 0;font-style:italic;">${imageLabel}</p>` : ''}
+                  <h3 style="margin:0 0 8px 0;">Top 3 leaks we found</h3>
+                  <ul style="padding-left:18px;margin:0 0 16px 0;">
+                    ${leaks.map((item) => `<li style="margin-bottom:6px;">${item.problem}</li>`).join('')}
+                  </ul>
+                  <h3 style="margin:0 0 8px 0;">What we can ship in 7 days</h3>
+                  <ul style="padding-left:18px;margin:0 0 16px 0;">
+                    ${plan.map((item) => `<li style="margin-bottom:6px;">${item}</li>`).join('')}
+                  </ul>
+                  <a href="mailto:hello@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;margin-top:8px;">${ctaText}</a>
+                  <p style="font-size:12px;color:#666;margin-top:16px;">This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake. No guarantees or performance promises.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>
+  `.trim();
+}
+
+function generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset = null) {
+  return {
+    hero: {
+      headline: `We found 3 quick wins for your ${job.niche} website (${job.city})`,
+      subhead: 'Local, practical fixes to help convert more visitors into leads.'
+    },
+    concept_preview: conceptPreview,
+    current_page_leaks: {
+      screenshot: screenshots && screenshots.above_fold ? `/${screenshots.above_fold}` : null,
+      callouts: miniAudit.top_3_leaks || []
+    },
+    leaks: miniAudit.top_3_leaks || [],
+    plan: miniAudit.seven_day_plan || [],
+    cta_variants: miniAudit.copy_suggestions || [],
+    form: {
+      fields: ['name', 'email', 'website', 'budget_range', 'decision_maker'],
+      cta: (preset && preset.default_primary_cta) || 'Get pricing range + next steps'
+    },
+    disclaimer: `This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake.`
+  };
+}
+
+async function processAuditJob(jobId, options = {}) {
+  await logStep(jobId, 'process', 'Starting full audit pipeline (Scraper v2)');
+  await updateJob(jobId, { status: 'scraping', error_message: null });
+
+  try {
+    let job = await loadJob(jobId);
+    
+    // Load preset if assigned
+    let preset = null;
+    if (job.preset_id) {
+      preset = await new Promise((resolve, reject) => {
+        getNichePresetById(job.preset_id, (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        });
+      });
+      
+      // Override niche and city from preset
+      const updates = {};
+      if (preset.slug) {
+        updates.niche = preset.slug;
+      }
+      if (preset.default_city) {
+        updates.city = preset.default_city;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        await updateJob(jobId, updates);
+        job = await loadJob(jobId); // Reload job with updated values
+      }
+    }
+    
+    // Validate required fields
+    if (!job.input_url || job.input_url.trim() === '') {
+      throw new Error('Website URL is required');
+    }
+    if (!job.niche || job.niche.trim() === '') {
+      throw new Error('Niche is required - please select a preset');
+    }
+    if (!job.city || job.city.trim() === '') {
+      job.city = 'Miami'; // Default fallback
+      await updateJob(jobId, { city: 'Miami' });
+    }
+    
+    // Scraper v2/v3 conditional logic
+    let scrapeResult, rawDump, screenshots, evidencePack;
+    
+    if (USE_SCRAPER_V3 && scraperV3) {
+      // Scraper v3: Multi-page crawler
+      await logStep(jobId, 'scrape', 'Using Scraper v3 (multi-page crawler)');
+      
+      const crawledPages = await scraperV3.crawlWebsite(jobId, job.input_url, logStep);
+      
+      // Save crawled pages to database
+      await logStep(jobId, 'scrape', `Saving ${crawledPages.length} crawled pages to database...`);
+      for (const pageData of crawledPages) {
+        await new Promise((resolve, reject) => {
+          insertCrawledPage({ ...pageData, audit_job_id: jobId }, (err, result) => {
+            if (err) return reject(err);
+            // Store the page ID for Lighthouse later
+            pageData.id = result.id;
+            resolve();
+          });
+        });
+      }
+      
+      // Run Lighthouse audits for top pages
+      try {
+        const lighthouseResults = await scraperV3.runLighthouseAudits(jobId, crawledPages, logStep);
+        
+        // Save lighthouse reports to database
+        if (lighthouseResults && lighthouseResults.length > 0) {
+          await logStep(jobId, 'lighthouse', `Saving ${lighthouseResults.length} Lighthouse reports...`);
+          for (const reportData of lighthouseResults) {
+            await new Promise((resolve, reject) => {
+              insertLighthouseReport(reportData, (err) => {
+                if (err) return reject(err);
+                resolve();
+              });
+            });
+          }
+        }
+      } catch (lighthouseErr) {
+        await logStep(jobId, 'lighthouse', `Lighthouse failed: ${lighthouseErr.message}`);
+      }
+      
+      // Use homepage data for v2 compatibility
+      const homepage = crawledPages.find(p => p.page_type === 'home') || crawledPages[0];
+      if (!homepage) {
+        throw new Error('No homepage found in crawled pages');
+      }
+      
+      // Convert v3 data to v2 format for backward compatibility with LLM evaluators
+      scrapeResult = {
+        title: homepage.title,
+        meta_description: homepage.meta_description,
+        og_site_name: homepage.og_site_name || null,
+        h1: homepage.h1_text,
+        h2: homepage.h2_json || [],
+        ctas: (homepage.ctas_json || []).map(cta => cta.text).slice(0, 6),
+        phone: homepage.nap_json ? homepage.nap_json.phone : null,
+        email: null, // Can be extracted from contact info
+        contact_url: crawledPages.find(p => p.page_type === 'contact') ? crawledPages.find(p => p.page_type === 'contact').url : null,
+        trust_signals: (homepage.trust_signals_json || []).map(s => s.type),
+        services_keywords: [], // Can be derived from headings
+        performance_summary: 'See Lighthouse reports',
+        layout_summary: {
+          hero_h1_text: homepage.h1_text || '',
+          hero_subheadline: (homepage.h2_json || [])[0] || '',
+          has_primary_cta_above_fold: (homepage.ctas_above_fold_json || []).length > 0,
+          has_trust_badge_above_fold: (homepage.trust_signals_json || []).length > 0,
+          has_phone_in_header: homepage.has_tel_link,
+          phone_clickable_tel_link: homepage.has_tel_link,
+          contact_page_detected: !!crawledPages.find(p => p.page_type === 'contact'),
+          contact_form_detected: homepage.has_form,
+          primary_cta_text: (homepage.ctas_above_fold_json || [])[0] ? (homepage.ctas_above_fold_json || [])[0].text : '',
+          primary_cta_source: (() => {
+            const first = (homepage.ctas_above_fold_json || [])[0] || null;
+            const href = first && first.href ? String(first.href).toLowerCase() : '';
+            if (href.startsWith('tel:')) return 'tel';
+            return first ? 'hero' : null;
+          })()
+        },
+        contacts: {
+          phones: homepage.nap_json && homepage.nap_json.phone ? [{ value: homepage.nap_json.phone, source: 'nap' }] : [],
+          emails: [],
+          address: homepage.nap_json ? homepage.nap_json.address : null,
+          hours: null,
+          social_links: {}
+        }
+      };
+      
+      // RAW dump v2 (multi-page, high-signal)
+      const selectedPages = (crawledPages || []).slice(0, 8).map((p) => {
+        const ctas = (p.cta_candidates_json || []).slice(0, 30);
+        const internalLinks = ctas.filter(c => c && c.target_type === 'internal' && c.href).slice(0, 20).map(c => ({ text: c.text, href: c.href, intent: c.cta_intent }));
+        const telLinks = ctas.filter(c => c && c.target_type === 'tel' && c.href).slice(0, 10).map(c => ({ text: c.text, href: c.href }));
+        return {
+          page_url: p.url,
+          page_type: p.page_type || 'other',
+          title: p.title || null,
+          meta_description: p.meta_description || null,
+          canonical: p.canonical_url || null,
+          headings: {
+            h1: p.h1_text || null,
+            h2: p.h2_json || [],
+            h3: p.h3_json || [],
+            h6: p.h6_json || []
+          },
+          word_count: p.word_count || 0,
+          text_snippet: p.text_snippet || null,
+          links_summary: {
+            tel_links: telLinks,
+            internal_important_links: internalLinks
+          }
+        };
+      });
+
+      rawDump = {
+        version: 'raw_dump_v2',
+        pages: selectedPages,
+        jsonld_raw: homepage.jsonld_blocks_json || [],
+        jsonld_extracted: homepage.jsonld_extracted_json || null
+      };
+      
+      screenshots = homepage.screenshots_json || {};
+      
+      // Generate Evidence Pack v1 (old format for backward compatibility)
+      evidencePack = generateEvidencePack(job, scrapeResult, rawDump, screenshots);
+      
+      // Generate Evidence Pack v2 (NEW - with strict validation rules)
+      const evidencePackV2 = generateEvidencePackV2(job, crawledPages, screenshots);
+      const warnings = evidencePackV2 ? evidencePackV2.data_quality_warnings : [];
+      
+      // Download and store logo if found
+      let logoInfo = null;
+      if (evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo && evidencePackV2.brand_assets.detected_logo.url) {
+        await logStep(jobId, 'scrape', `Downloading logo: ${evidencePackV2.brand_assets.detected_logo.url}`);
+        logoInfo = await downloadAndStoreLogo(evidencePackV2.brand_assets.detected_logo.url, jobId);
+        if (logoInfo && evidencePackV2.brand_assets.detected_logo) {
+          evidencePackV2.brand_assets.detected_logo.local_path = logoInfo.public_url;
+        }
+      }
+      
+      await logStep(jobId, 'scrape', `Scraper v3 complete: ${crawledPages.length} pages crawled, ${warnings.length} warnings`);
+      
+      // Store both Evidence Packs, warnings, and logo info
+      await updateJob(jobId, {
+        evidence_pack_v2_json: JSON.stringify(evidencePackV2),
+        warnings_json: JSON.stringify(warnings),
+        logo_scraped_url: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.url : null,
+        logo_scraped_source: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.source : null,
+        logo_stored_path: logoInfo ? logoInfo.stored_path : null
+      });
+    } else {
+      // Scraper v2: Extract contacts + raw dump (legacy)
+      await logStep(jobId, 'scrape', 'Using Scraper v2 (single page + contacts)');
+      const v2Result = await scrapeWebsite(job.input_url, jobId);
+      scrapeResult = v2Result.scrapeResult;
+      rawDump = v2Result.rawDump;
+      screenshots = v2Result.screenshots;
+      
+      // Generate Evidence Pack v1
+      evidencePack = generateEvidencePack(job, scrapeResult, rawDump, screenshots);
+
+      // Minimal Evidence Pack v2 for Scraper v2 path (no crawl): build pseudo pages
+      const jsonldBlocks = rawDump.structured_data_jsonld || [];
+      const jsonld_extracted_json = (function normalizeJsonLdFromBlocks(blocks) {
+        const out = { organization: { name: null, logo: null, sameAs: [], contactPoint: {} }, website: { name: null }, localbusiness: { name: null, image: null, telephone: null, address: null, openingHoursSpecification: null, aggregateRating: null, areaServed: [] }, offer_catalog_services: [] };
+        (blocks || []).forEach((b) => {
+          const items = Array.isArray(b) ? b : [b];
+          items.forEach((it) => {
+            const t = it['@type'];
+            if (t === 'Organization') {
+              if (!out.organization.name && it.name) out.organization.name = it.name;
+              if (!out.organization.logo && it.logo) out.organization.logo = (typeof it.logo === 'string') ? it.logo : (it.logo.url || it.logo['@url'] || null);
+              if (it.sameAs) out.organization.sameAs = [...new Set(out.organization.sameAs.concat(Array.isArray(it.sameAs) ? it.sameAs : [it.sameAs]))];
+              if (it.contactPoint) {
+                const cp = Array.isArray(it.contactPoint) ? it.contactPoint[0] : it.contactPoint;
+                if (cp && cp.telephone) out.organization.contactPoint.telephone = cp.telephone;
+              }
+            }
+            if (t === 'WebSite') {
+              if (!out.website.name && it.name) out.website.name = it.name;
+            }
+            if (t === 'LocalBusiness' || (typeof t === 'string' && t.includes('LocalBusiness'))) {
+              if (!out.localbusiness.name && it.name) out.localbusiness.name = it.name;
+              if (!out.localbusiness.image && it.image) out.localbusiness.image = (typeof it.image === 'string') ? it.image : (it.image.url || it.image['@url'] || null);
+              if (!out.localbusiness.telephone && it.telephone) out.localbusiness.telephone = it.telephone;
+              if (!out.localbusiness.address && it.address && typeof it.address === 'object') {
+                out.localbusiness.address = {
+                  streetAddress: it.address.streetAddress || null,
+                  addressLocality: it.address.addressLocality || null,
+                  addressRegion: it.address.addressRegion || null,
+                  postalCode: it.address.postalCode || null,
+                  addressCountry: it.address.addressCountry || null
+                };
+              }
+              if (!out.localbusiness.openingHoursSpecification && it.openingHoursSpecification) out.localbusiness.openingHoursSpecification = it.openingHoursSpecification;
+              if (!out.localbusiness.aggregateRating && it.aggregateRating) out.localbusiness.aggregateRating = it.aggregateRating;
+            }
+          });
+        });
+        return out;
+      })(jsonldBlocks);
+
+      const pseudoPages = [
+        {
+          url: job.input_url,
+          page_type: 'home',
+          title: scrapeResult.title || null,
+          og_site_name: scrapeResult.og_site_name || null,
+          h1_text: scrapeResult.h1 || null,
+          h2_json: scrapeResult.h2 || [],
+          h3_json: [],
+          h6_json: [],
+          text_snippet: (rawDump.homepage_text_snippet || '').slice(0, 4000),
+          forms_detailed_json: [],
+          cta_candidates_json: [],
+          services_extracted_json: {},
+          trust_extracted_json: {},
+          jsonld_extracted_json
+        },
+        rawDump.contact_text_snippet
+          ? { url: scrapeResult.contact_url || `${job.input_url}/contact`, page_type: 'contact', title: null, og_site_name: scrapeResult.og_site_name || null, h1_text: null, h2_json: [], h3_json: [], h6_json: [], text_snippet: rawDump.contact_text_snippet.slice(0, 4000), forms_detailed_json: [], cta_candidates_json: [], services_extracted_json: {}, trust_extracted_json: {}, jsonld_extracted_json }
+          : null
+      ].filter(Boolean);
+
+      const evidencePackV2 = generateEvidencePackV2(job, pseudoPages, screenshots);
+      const warnings = evidencePackV2 ? evidencePackV2.data_quality_warnings : [];
+      await updateJob(jobId, {
+        evidence_pack_v2_json: JSON.stringify(evidencePackV2),
+        warnings_json: JSON.stringify(warnings)
+      });
+      
+      await logStep(jobId, 'scrape', 'Scrape completed (v2: contacts + evidence pack)');
+    }
+    
+    await updateJob(jobId, {
+      scrape_result_json: JSON.stringify(scrapeResult),
+      raw_dump_json: JSON.stringify(rawDump),
+      evidence_pack_json: JSON.stringify(evidencePack),
+      screenshots_json: JSON.stringify(screenshots),
+      status: 'evaluating'
+    });
+
+    // LLM Assistants v1: Run full 6-assistant pipeline
+    await runAssistantsPipeline(jobId, options);
+    
+    // Reload job to get assistant outputs
+    job = await loadJob(jobId);
+    
+    // Build mini_audit_json for backward compatibility with old email/public page generators
+    const assistant_outputs = job.assistant_outputs_json || {};
+    const miniAudit = {
+      // Map UX audit outputs
+      top_3_leaks: assistant_outputs.ux_audit_json?.top_issues || [],
+      seven_day_plan: assistant_outputs.ux_audit_json?.quick_wins || [],
+      // Map offer outputs
+      copy_suggestions: assistant_outputs.offer_copy_json?.offer_package?.deliverables?.map(d => d.item) || [],
+      concept_headline: assistant_outputs.offer_copy_json?.offer_package?.headline || '',
+      concept_subhead: assistant_outputs.offer_copy_json?.offer_package?.value_prop || '',
+      tone: 'evidence-based',
+      // Include all outputs for reference
+      assistant_results: assistant_outputs
+    };
+    
+    await updateJob(jobId, {
+      mini_audit_json: JSON.stringify(miniAudit),
+      llm_config_snapshot: JSON.stringify({
+        pipeline_version: 'assistants_v1',
+        settings: options.settings || {},
+        timestamp: new Date().toISOString()
+      })
+    });
+    
+    await logStep(jobId, 'llm', 'LLM Assistants v1 pipeline completed');
+
+    // Generate email and public page from assistant outputs
+    const emailPackJson = assistant_outputs.email_pack_json;
+    const publicPageJsonFromAssistant = assistant_outputs.public_page_json;
+    
+    // Use email from A5 if available, otherwise fall back to old generator
+    let emailHtml;
+    if (emailPackJson && emailPackJson.email_body_html) {
+      emailHtml = emailPackJson.email_body_html;
+    } else {
+      const emailPolish = await runEmailPolish(job, miniAudit, options);
+      emailHtml = generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset);
+    }
+    
+    // Use public page from A6 if available
+    let publicPageJson;
+    if (publicPageJsonFromAssistant) {
+      publicPageJson = publicPageJsonFromAssistant;
+    } else {
+      const conceptPreview = await generateConceptPreview(job, miniAudit, preset);
+      publicPageJson = generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset);
+    }
+    
+    const publicSlug = generatePublicSlug(job);
+
+    await updateJob(jobId, {
+      email_html: emailHtml,
+      public_page_json: JSON.stringify(publicPageJson),
+      public_page_slug: publicSlug,
+      status: 'ready'
+    });
+    await logStep(jobId, 'outputs', 'Outputs generated');
+  } catch (err) {
+    await updateJob(jobId, { status: 'failed', error_message: err.message });
+    await logStep(jobId, 'error', err.message);
+    throw err;
+  }
+}
+
+async function runLlmOnly(jobId, options = {}) {
+  await logStep(jobId, 'llm', 'Starting LLM-only run (v2)');
+  await updateJob(jobId, { status: 'evaluating', error_message: null });
+
+  try {
+    const job = await loadJob(jobId);
+    const scrapeResult = job.scrape_result_json || {};
+    const screenshots = job.screenshots_json || {};
+    const rawDump = job.raw_dump_json || {};
+    const evidencePack = job.evidence_pack_json || null;
+
+    const { miniAudit, llmSnapshot } = await runLlmEvaluators(job, scrapeResult, screenshots, rawDump, evidencePack, options);
+    await updateJob(jobId, {
+      mini_audit_json: JSON.stringify(miniAudit),
+      llm_config_snapshot: JSON.stringify(llmSnapshot),
+      status: 'ready'
+    });
+    await logStep(jobId, 'llm', 'LLM-only run completed');
+  } catch (err) {
+    await updateJob(jobId, { status: 'failed', error_message: err.message });
+    await logStep(jobId, 'error', err.message);
+    throw err;
+  }
+}
+
+async function regenerateEmail(jobId, options = {}) {
+  await logStep(jobId, 'email', 'Regenerating email');
+  try {
+    const job = await loadJob(jobId);
+    
+    // Load preset if assigned
+    let preset = null;
+    if (job.preset_id) {
+      preset = await new Promise((resolve, reject) => {
+        getNichePresetById(job.preset_id, (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        });
+      });
+    }
+    
+    const miniAudit = job.mini_audit_json || {};
+    const screenshots = job.screenshots_json || {};
+    const emailPolish = await runEmailPolish(job, miniAudit, options);
+    const emailHtml = generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset);
+    await updateJob(jobId, { email_html: emailHtml, status: 'ready' });
+    await logStep(jobId, 'email', 'Email regenerated');
+  } catch (err) {
+    await updateJob(jobId, { status: 'failed', error_message: err.message });
+    await logStep(jobId, 'error', err.message);
+    throw err;
+  }
+}
+
+async function regeneratePublicPage(jobId) {
+  await logStep(jobId, 'public', 'Regenerating public page');
+  try {
+    const job = await loadJob(jobId);
+    
+    // Load preset if assigned
+    let preset = null;
+    if (job.preset_id) {
+      preset = await new Promise((resolve, reject) => {
+        getNichePresetById(job.preset_id, (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        });
+      });
+    }
+    
+    const miniAudit = job.mini_audit_json || {};
+    const screenshots = job.screenshots_json || {};
+    const conceptPreview = await generateConceptPreview(job, miniAudit, preset);
+    const publicPageJson = generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset);
+    await updateJob(jobId, { public_page_json: JSON.stringify(publicPageJson), status: 'ready' });
+    await logStep(jobId, 'public', 'Public page regenerated');
+  } catch (err) {
+    await updateJob(jobId, { status: 'failed', error_message: err.message });
+    await logStep(jobId, 'error', err.message);
+    throw err;
+  }
+}
+
+async function regenerateEvidencePackV2(jobId) {
+  await logStep(jobId, 'evidence_pack_v2', 'Regenerating Evidence Pack v2');
+  try {
+    const job = await loadJob(jobId);
+    
+    // Load crawled pages from database
+    const crawledPages = await new Promise((resolve, reject) => {
+      const db = require('../db').db;
+      db.all('SELECT * FROM crawled_pages WHERE audit_job_id = ? ORDER BY priority_score DESC', [jobId], (err, rows) => {
+        if (err) return reject(err);
+        // Parse JSON fields
+        const parsed = rows.map(row => ({
+          ...row,
+          h2_json: row.h2_json ? JSON.parse(row.h2_json) : [],
+          h3_json: row.h3_json ? JSON.parse(row.h3_json) : [],
+          cta_candidates_json: row.cta_candidates_json ? JSON.parse(row.cta_candidates_json) : [],
+          forms_detailed_json: row.forms_detailed_json ? JSON.parse(row.forms_detailed_json) : [],
+          jsonld_extracted_json: row.jsonld_extracted_json ? JSON.parse(row.jsonld_extracted_json) : null,
+          brand_assets_json: row.brand_assets_json ? JSON.parse(row.brand_assets_json) : null,
+          trust_signals_json: row.trust_signals_json ? JSON.parse(row.trust_signals_json) : [],
+          nap_json: row.nap_json ? JSON.parse(row.nap_json) : null
+        }));
+        resolve(parsed);
+      });
+    });
+    
+    if (crawledPages.length === 0) {
+      throw new Error('No crawled pages found - cannot regenerate Evidence Pack v2');
+    }
+    
+    const screenshots = job.screenshots_json || {};
+    
+    // Generate Evidence Pack v2
+    const evidencePackV2 = generateEvidencePackV2(job, crawledPages, screenshots);
+    const warnings = evidencePackV2 ? evidencePackV2.data_quality_warnings : [];
+    
+    // Download logo if not already downloaded
+    let logoInfo = null;
+    if (evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo && evidencePackV2.brand_assets.detected_logo.url && !job.logo_stored_path) {
+      await logStep(jobId, 'evidence_pack_v2', `Downloading logo: ${evidencePackV2.brand_assets.detected_logo.url}`);
+      logoInfo = await downloadAndStoreLogo(evidencePackV2.brand_assets.detected_logo.url, jobId);
+      if (logoInfo && evidencePackV2.brand_assets.detected_logo) {
+        evidencePackV2.brand_assets.detected_logo.local_path = logoInfo.public_url;
+      }
+    }
+    
+    // Update Evidence Pack v2 and warnings
+    await updateJob(jobId, {
+      evidence_pack_v2_json: JSON.stringify(evidencePackV2),
+      warnings_json: JSON.stringify(warnings),
+      logo_scraped_url: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.url : job.logo_scraped_url,
+      logo_scraped_source: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.source : job.logo_scraped_source,
+      logo_stored_path: logoInfo ? logoInfo.stored_path : job.logo_stored_path,
+      status: 'ready'
+    });
+    
+    await logStep(jobId, 'evidence_pack_v2', `Evidence Pack v2 regenerated with ${warnings.length} warnings`);
+    
+    return { success: true, warnings_count: warnings.length };
+  } catch (err) {
+    await logStep(jobId, 'error', err.message);
+    throw err;
+  }
+}
+
+// ==================== LLM ASSISTANTS V1 PIPELINE ====================
+
+const { sendOpenRouterRequest, retryOnTransientError } = require('./openRouterClient');
+const { validateAssistantOutput } = require('./outputValidator');
+const { buildPayload, checkAssistantDependencies } = require('./payloadBuilders');
+const { 
+  insertAssistantRun, 
+  updateAssistantRun,
+  getAssistantRunsByJobId
+} = require('../db');
+
+function coerceEvidenceNormalizerOutput(output_json, job) {
+  const base =
+    output_json && typeof output_json === 'object' && !Array.isArray(output_json)
+      ? { ...output_json }
+      : {};
+
+  let changed = false;
+
+  // company_profile
+  if (!base.company_profile || typeof base.company_profile !== 'object' || Array.isArray(base.company_profile)) {
+    base.company_profile = {};
+    changed = true;
+  }
+  if (!('name' in base.company_profile)) {
+    base.company_profile.name = job.company_name || job.company || job.input_url || '';
+    changed = true;
+  }
+  if (!Array.isArray(base.company_profile.phones)) {
+    base.company_profile.phones = [];
+    changed = true;
+  }
+  if (!Array.isArray(base.company_profile.emails)) {
+    base.company_profile.emails = [];
+    changed = true;
+  }
+
+  // services
+  if (!base.services || typeof base.services !== 'object' || Array.isArray(base.services)) {
+    base.services = {};
+    changed = true;
+  }
+  if (!Array.isArray(base.services.featured)) {
+    base.services.featured = [];
+    changed = true;
+  }
+  if (!Array.isArray(base.services.other_keywords)) {
+    base.services.other_keywords = [];
+    changed = true;
+  }
+
+  // cta_analysis
+  if (!base.cta_analysis || typeof base.cta_analysis !== 'object' || Array.isArray(base.cta_analysis)) {
+    base.cta_analysis = {};
+    changed = true;
+  }
+  if (!('primary' in base.cta_analysis)) {
+    base.cta_analysis.primary = null;
+    changed = true;
+  }
+  if (!Array.isArray(base.cta_analysis.all_ctas)) {
+    base.cta_analysis.all_ctas = [];
+    changed = true;
+  }
+
+  // other required top-level keys
+  if (!Array.isArray(base.trust_evidence)) {
+    base.trust_evidence = [];
+    changed = true;
+  }
+  if (!Array.isArray(base.contact_friction)) {
+    base.contact_friction = [];
+    changed = true;
+  }
+  if (!Array.isArray(base.quality_warnings)) {
+    base.quality_warnings = [];
+    changed = true;
+  }
+
+  if (changed) {
+    base.quality_warnings.unshift(
+      'Auto-filled missing required keys in Evidence Normalizer output (LLM returned incomplete JSON).'
+    );
+  }
+
+  return base;
+}
+
+/**
+ * Run a single assistant with full validation and error handling
+ * 
+ * @param {number} jobId - Audit job ID
+ * @param {string} assistant_key - Assistant key (e.g., 'evidence_normalizer')
+ * @param {Object} payload_data - Data for building payload (dependencies)
+ * @param {Object} options - Options (model/temp overrides, etc.)
+ * @returns {Promise<Object>} - {status: 'ok'|'failed', output: Object, error: string}
+ */
+async function runSingleAssistant(jobId, assistant_key, payload_data = {}, options = {}) {
+  await logStep(jobId, `assistant_${assistant_key}`, `Starting ${assistant_key}...`);
+  
+  // 1. Get assistant config from DB
+  const assistant = await new Promise((resolve, reject) => {
+    const { getAssistantByKey } = require('../db');
+    getAssistantByKey(assistant_key, (err, data) => {
+      if (err) return reject(err);
+      if (!data) return reject(new Error(`Assistant not found: ${assistant_key}`));
+      resolve(data);
+    });
+  });
+
+  // Apply overrides from options if provided
+  const model = options[`${assistant_key}_model`] || assistant.model;
+  const temperature = Number.isFinite(options[`${assistant_key}_temperature`]) 
+    ? options[`${assistant_key}_temperature`] 
+    : assistant.temperature;
+  const prompt = options[`${assistant_key}_prompt`] || assistant.prompt;
+
+  // 2. Build payload using payloadBuilders
+  let user_content;
+  try {
+    user_content = buildPayload(assistant_key, payload_data);
+  } catch (buildError) {
+    await logStep(jobId, `assistant_${assistant_key}`, `Payload build failed: ${buildError.message}`);
+    return {
+      status: 'failed',
+      error: `Failed to build payload: ${buildError.message}`,
+      output: null
+    };
+  }
+
+  // 3. Create assistant_run record (status='running')
+  const runId = await new Promise((resolve, reject) => {
+    insertAssistantRun({
+      job_id: jobId,
+      assistant_key,
+      model,
+      temperature,
+      prompt_template_id: null, // TODO: Link to prompt_templates if needed
+      status: 'running',
+      started_at: new Date().toISOString()
+    }, (err, result) => {
+      if (err) return reject(err);
+      resolve(result.id);
+    });
+  });
+
+  // 4. Call OpenRouter with retry logic
+  try {
+    const response = await retryOnTransientError(async () => {
+      return await sendOpenRouterRequest({
+        model,
+        temperature,
+        system_prompt: prompt,
+        user_content,
+        metadata: {
+          job_id: jobId,
+          assistant_key,
+          run_id: runId
+        }
+      });
+    }, 1, 2000); // Max 1 retry, 2s delay
+
+    await logStep(jobId, `assistant_${assistant_key}`, `LLM response received (${response.token_usage?.total_tokens || 'unknown'} tokens)`);
+
+    // 5. Validate output
+    let parsed = response.parsed_json;
+    let validation = validateAssistantOutput(assistant, parsed);
+
+    // Evidence Normalizer (A1) is a hard dependency for the whole pipeline.
+    // If the model returns an incomplete JSON object, auto-fill a safe skeleton
+    // (empty arrays/objects) and retry validation so the pipeline can proceed
+    // with explicit quality_warnings instead of hard-failing on missing keys.
+    if (!validation.valid && assistant_key === 'evidence_normalizer') {
+      parsed = coerceEvidenceNormalizerOutput(parsed, payload_data.job || {});
+      validation = validateAssistantOutput(assistant, parsed);
+    }
+
+    if (!validation.valid) {
+      // Mark as failed
+      await new Promise((resolve, reject) => {
+        updateAssistantRun(runId, {
+          status: 'failed',
+          error: validation.errors.join('; '),
+          request_payload_json: response.request_payload,
+          response_text: response.raw_text,
+          response_json: parsed, // Save even if invalid for debugging (may be coerced)
+          token_usage_json: response.token_usage,
+          finished_at: new Date().toISOString()
+        }, (err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+
+      await logStep(jobId, `assistant_${assistant_key}`, `Validation failed: ${validation.errors.join('; ')}`);
+
+      return {
+        status: 'failed',
+        error: validation.errors.join('; '),
+        output: parsed // Return output anyway for debugging (may be coerced)
+      };
+    }
+
+    // 6. Save successful run
+    await new Promise((resolve, reject) => {
+      updateAssistantRun(runId, {
+        status: 'ok',
+        request_payload_json: response.request_payload,
+        response_text: response.raw_text,
+        response_json: parsed,
+        token_usage_json: response.token_usage,
+        finished_at: new Date().toISOString()
+      }, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    await logStep(jobId, `assistant_${assistant_key}`, `Completed successfully`);
+
+    return {
+      status: 'ok',
+      output: parsed,
+      error: null
+    };
+
+  } catch (error) {
+    // Mark run as failed
+    await new Promise((resolve, reject) => {
+      updateAssistantRun(runId, {
+        status: 'failed',
+        error: error.message,
+        finished_at: new Date().toISOString()
+      }, (err) => {
+        if (err) console.error('Failed to update assistant run:', err);
+        resolve(); // Don't fail the whole thing if DB update fails
+      });
+    });
+
+    await logStep(jobId, `assistant_${assistant_key}`, `Failed: ${error.message}`);
+
+    return {
+      status: 'failed',
+      error: error.message,
+      output: null
+    };
+  }
+}
+
+/**
+ * Run full assistants pipeline (all 6 assistants in correct order)
+ * 
+ * Pipeline stages:
+ * 1. A1 Evidence Normalizer (MUST succeed)
+ * 2. A2 UX Auditor + A3 SEO Auditor (parallel)
+ * 3. A4 Offer Strategist (depends on A2+A3)
+ * 4. A5 Email Writer + A6 Public Page (parallel, both depend on A4)
+ * 
+ * @param {number} jobId - Audit job ID
+ * @param {Object} options - Options (model/temp/prompt overrides)
+ * @returns {Promise<void>}
+ */
+async function runAssistantsPipeline(jobId, options = {}) {
+  await logStep(jobId, 'assistants_pipeline', 'Starting LLM Assistants v1 pipeline (6 assistants)');
+
+  const job = await loadJob(jobId);
+
+  // Prepare payload data from job
+  const payload_data = {
+    job,
+    evidence_pack_v2: job.evidence_pack_v2_json || null,
+    raw_dump: job.raw_dump_json || null,
+    screenshots: job.screenshots_json || {}
+  };
+
+  // === STAGE 1: Evidence Normalizer (A1) - MUST SUCCEED ===
+  await logStep(jobId, 'assistants_pipeline', 'Stage 1: Evidence Normalizer (A1)');
+  
+  const a1_result = await runSingleAssistant(jobId, 'evidence_normalizer', payload_data, options);
+
+  if (a1_result.status !== 'ok') {
+    throw new Error(`Evidence Normalizer (A1) failed: ${a1_result.error}. Pipeline cannot continue.`);
+  }
+
+  // Save llm_context_json and quality warnings
+  await updateJob(jobId, {
+    llm_context_json: JSON.stringify(a1_result.output),
+    data_quality_warnings_json: JSON.stringify(a1_result.output.quality_warnings || [])
+  });
+
+  await logStep(jobId, 'assistants_pipeline', `Stage 1 complete. Quality warnings: ${(a1_result.output.quality_warnings || []).length}`);
+
+  // Update payload_data with A1 output
+  payload_data.llm_context = a1_result.output;
+
+  // === STAGE 2: UX + SEO Auditors (A2 + A3) - PARALLEL ===
+  await logStep(jobId, 'assistants_pipeline', 'Stage 2: UX Auditor (A2) + SEO Auditor (A3) - parallel');
+
+  const [a2_result, a3_result] = await Promise.all([
+    runSingleAssistant(jobId, 'ux_conversion_auditor', payload_data, options),
+    runSingleAssistant(jobId, 'local_seo_geo_auditor', payload_data, options)
+  ]);
+
+  // Check if both succeeded (we can continue even if one fails, but log warnings)
+  if (a2_result.status !== 'ok') {
+    await logStep(jobId, 'assistants_pipeline', `WARNING: UX Auditor (A2) failed: ${a2_result.error}`);
+  }
+  if (a3_result.status !== 'ok') {
+    await logStep(jobId, 'assistants_pipeline', `WARNING: SEO Auditor (A3) failed: ${a3_result.error}`);
+  }
+
+  await logStep(jobId, 'assistants_pipeline', `Stage 2 complete. A2: ${a2_result.status}, A3: ${a3_result.status}`);
+
+  // Update payload_data with A2+A3 outputs
+  payload_data.ux_audit_json = a2_result.output;
+  payload_data.local_seo_audit_json = a3_result.output;
+
+  // === STAGE 3: Offer Strategist (A4) - DEPENDS ON A2+A3 ===
+  await logStep(jobId, 'assistants_pipeline', 'Stage 3: Offer Strategist (A4)');
+
+  const a4_result = await runSingleAssistant(jobId, 'offer_strategist', payload_data, options);
+
+  if (a4_result.status !== 'ok') {
+    await logStep(jobId, 'assistants_pipeline', `WARNING: Offer Strategist (A4) failed: ${a4_result.error}`);
+  } else {
+    await logStep(jobId, 'assistants_pipeline', `Stage 3 complete`);
+  }
+
+  // Update payload_data with A4 output
+  payload_data.offer_copy_json = a4_result.output;
+
+  // === STAGE 4: Email Writer + Public Page (A5 + A6) - PARALLEL ===
+  await logStep(jobId, 'assistants_pipeline', 'Stage 4: Email Writer (A5) + Public Page Composer (A6) - parallel');
+
+  // Build links for A5 and A6
+  payload_data.links = {
+    audit_landing_url: job.public_page_slug ? `/${job.public_page_slug}` : '#',
+    questionnaire_url: 'https://maxandjacob.com/questionnaire' // TODO: Make configurable
+  };
+
+  const [a5_result, a6_result] = await Promise.all([
+    runSingleAssistant(jobId, 'outreach_email_writer', payload_data, options),
+    runSingleAssistant(jobId, 'public_audit_page_composer', payload_data, options)
+  ]);
+
+  if (a5_result.status !== 'ok') {
+    await logStep(jobId, 'assistants_pipeline', `WARNING: Email Writer (A5) failed: ${a5_result.error}`);
+  }
+  if (a6_result.status !== 'ok') {
+    await logStep(jobId, 'assistants_pipeline', `WARNING: Public Page Composer (A6) failed: ${a6_result.error}`);
+  }
+
+  await logStep(jobId, 'assistants_pipeline', `Stage 4 complete. A5: ${a5_result.status}, A6: ${a6_result.status}`);
+
+  // === SAVE ALL OUTPUTS ===
+  const assistant_outputs = {
+    ux_audit_json: a2_result.output,
+    local_seo_audit_json: a3_result.output,
+    offer_copy_json: a4_result.output,
+    email_pack_json: a5_result.output,
+    public_page_json: a6_result.output
+  };
+
+  await updateJob(jobId, {
+    assistant_outputs_json: JSON.stringify(assistant_outputs),
+    // For backward compatibility, also update old fields
+    public_page_json: a6_result.output ? JSON.stringify(a6_result.output) : null
+  });
+
+  await logStep(jobId, 'assistants_pipeline', `Pipeline complete. All outputs saved.`);
+
+  // Log summary
+  const results = [a1_result, a2_result, a3_result, a4_result, a5_result, a6_result];
+  const succeeded = results.filter(r => r.status === 'ok').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  
+  await logStep(jobId, 'assistants_pipeline', `Summary: ${succeeded}/6 succeeded, ${failed}/6 failed`);
+}
+
+module.exports = {
+  processAuditJob,
+  runLlmOnly,
+  regenerateEmail,
+  regeneratePublicPage,
+  regenerateEvidencePackV2,
+  generateEvidencePack,
+  generateEvidencePackV2,
+  runSingleAssistant,
+  runAssistantsPipeline
+};
+

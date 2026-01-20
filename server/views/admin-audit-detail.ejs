@@ -1,0 +1,3074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Job #<%= auditJob.id %> - Admin</title>
+    <script>
+        // Global helper: safe base64 → JSON decode.
+        // Must be defined BEFORE any other inline scripts that call parseBase64Json().
+        function parseBase64Json(b64) {
+            const bin = atob(b64);
+            // Prefer TextDecoder (proper UTF-8)
+            if (typeof TextDecoder !== 'undefined') {
+                const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+                return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+            }
+            // Fallback (older browsers): atob gives binary string, convert to UTF-8-ish
+            return JSON.parse(decodeURIComponent(escape(bin)));
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0f0f1a;
+            color: #fff;
+            min-height: 100vh;
+            padding: 30px 40px;
+            overflow-x: hidden;
+            font-size: 15px;
+        }
+
+        .admin-container {
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: #2d2d44;
+            border: 1.5px solid #3d3d54;
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #2d2d44;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #6a82fb, #ff7ee7);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .view-link {
+            color: #6a82fb;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .view-link:hover {
+            color: #ff7ee7;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: linear-gradient(90deg, rgba(255,126,231,0.15), rgba(106,130,251,0.15));
+            border: 1px solid rgba(106,130,251,0.3);
+            color: #a5b4fc;
+        }
+
+        .section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            margin-bottom: 32px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #e0e0f0;
+            border-bottom: 2px solid #2d2d44;
+            padding-bottom: 12px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+        }
+
+        .field-group {
+            margin-bottom: 24px;
+        }
+
+        .field-label {
+            color: #9090b0;
+            font-size: 13px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field-value {
+            color: #e0e0f0;
+            font-size: 15px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            max-width: 100%;
+            background: #181828;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .small {
+            font-size: 0.85rem;
+            color: #b6b6d6;
+        }
+
+        .screenshot {
+            border-radius: 12px;
+            border: 1px solid #2d2d44;
+            max-width: 100%;
+        }
+
+        .screenshot-thumbnail {
+            max-width: 320px;
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #2d2d44;
+            cursor: pointer;
+            transition: opacity 0.2s, border-color 0.2s;
+        }
+
+        .screenshot-thumbnail:hover {
+            opacity: 0.85;
+            border-color: #6a82fb;
+        }
+
+        .screenshot-container {
+            position: relative;
+        }
+
+        .screenshot-error {
+            padding: 12px;
+            background: #2d1f1f;
+            border: 1px solid #5d2d2d;
+            border-radius: 8px;
+            color: #ff9999;
+            font-size: 0.9rem;
+        }
+
+        .screenshot-label {
+            font-size: 0.85rem;
+            color: #b6b6d6;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox-content {
+            position: relative;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow: auto;
+            background: #23233a;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .lightbox-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #2d2d44;
+        }
+
+        .lightbox-title {
+            font-size: 1rem;
+            color: #d1d1e0;
+            font-weight: 500;
+        }
+
+        .lightbox-close {
+            background: #2d2d44;
+            border: none;
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: background 0.2s;
+        }
+
+        .lightbox-close:hover {
+            background: #3d3d54;
+        }
+
+        .lightbox-image {
+            max-width: 100%;
+            border-radius: 8px;
+            display: block;
+        }
+
+        .lightbox-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .logs {
+            background: #0a0a12;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #d0d0e0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .output-preview {
+            background: #0a0a12;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+            padding: 20px;
+            color: #d0d0e0;
+            max-height: 500px;
+            overflow: auto;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .output-preview pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            margin: 0;
+        }
+        
+        table {
+            width: 100%;
+            overflow-x: auto;
+            display: block;
+        }
+        
+        table tbody,
+        table thead {
+            display: table;
+            width: 100%;
+        }
+
+        .actions-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 24px;
+            width: min(720px, 92vw);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: 1px solid #2d2d44;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .config-summary {
+            font-size: 0.85rem;
+            color: #b6b6d6;
+            margin-top: 6px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #2d2d44;
+        }
+
+        .tab-btn {
+            padding: 10px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #b6b6d6;
+            cursor: pointer;
+            font-size: 0.95rem;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            border-bottom-color: #6a82fb;
+        }
+
+        .tab-btn:hover {
+            color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .preset-card {
+            background: #181828;
+            border: 1px solid #2d2d44;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .preset-thumbnail {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid #2d2d44;
+        }
+
+        .preset-info {
+            flex: 1;
+        }
+
+        .preset-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .upload-area {
+            border: 2px dashed #2d2d44;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            background: #181828;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #6a82fb;
+            background: #1a1a2a;
+        }
+
+        .upload-area.dragover {
+            border-color: #ff7ee7;
+            background: #2a1a2a;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 240px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(24, 24, 40, 0.95);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-content {
+            background: #23233a;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(106,130,251,0.2);
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 24px;
+            border: 4px solid #2d2d44;
+            border-top-color: #6a82fb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .loading-status {
+            font-size: 1rem;
+            color: #b6b6d6;
+            margin-bottom: 24px;
+            min-height: 24px;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: #181828;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #6a82fb, #ff7ee7);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .loading-details {
+            font-size: 0.85rem;
+            color: #8888a8;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .admin-container {
+                padding: 0 12px;
+            }
+            
+            body {
+                padding: 20px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="header">
+            <div>
+                <h1>Audit Job #<%= auditJob.id %></h1>
+                <div class="small">Status: <span class="badge"><%= auditJob.status %></span></div>
+            </div>
+            <div class="nav-actions">
+                <button class="btn" type="button" onclick="openLlmModal()">LLM Settings</button>
+                <button class="btn" type="button" onclick="openPresetsModal()">Presets</button>
+                <a href="/admin/audits" class="btn">Back to Audits</a>
+                <a href="/admin" class="btn">Admin Home</a>
+                <a href="/admin/logout" class="btn">Logout</a>
+            </div>
+        </div>
+
+        <!-- A) Input -->
+        <div class="section">
+            <div class="section-title">A) Input</div>
+            <form id="processForm" action="/admin/audits/<%= auditJob.id %>/process" method="POST">
+                <input type="hidden" name="ux_name" id="ux_name_input_process">
+                <input type="hidden" name="ux_model" id="ux_model_input_process">
+                <input type="hidden" name="ux_temperature" id="ux_temperature_input_process">
+                <input type="hidden" name="prompt_ux" id="ux_prompt_input_process">
+                <input type="hidden" name="web_name" id="web_name_input_process">
+                <input type="hidden" name="web_model" id="web_model_input_process">
+                <input type="hidden" name="web_temperature" id="web_temperature_input_process">
+                <input type="hidden" name="prompt_web" id="web_prompt_input_process">
+                <input type="hidden" name="email_name" id="email_name_input_process">
+                <input type="hidden" name="email_model" id="email_model_input_process">
+                <input type="hidden" name="email_temperature" id="email_temperature_input_process">
+                <input type="hidden" name="prompt_email" id="email_prompt_input_process">
+                <div class="field-group" style="margin-bottom: 16px;">
+                    <div class="field-label">Website URL *</div>
+                    <input type="text" name="input_url" value="<%= auditJob.input_url && auditJob.input_url.trim() !== '' ? auditJob.input_url : '' %>" placeholder="https://example.com" required>
+                </div>
+                <div class="field-group" style="margin-bottom: 16px;">
+                    <div class="field-label">Niche Preset *</div>
+                    <select name="preset_id" id="presetDropdown" required>
+                        <option value="">Select a niche preset...</option>
+                    </select>
+                    <div class="small" style="margin-top: 4px;">Preset determines the niche, city, CTA, headline, and concept image</div>
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Brand Logo (optional)</div>
+                    <div class="upload-area" id="logoUploadArea" onclick="document.getElementById('logoFileInput').click()">
+                        <div>📤 Click or drag & drop logo here</div>
+                        <div class="small" style="margin-top: 6px;">PNG, JPG, SVG (max 2MB)</div>
+                    </div>
+                    <input type="file" id="logoFileInput" accept="image/png,image/jpeg,image/jpg,image/svg+xml" style="display: none;" onchange="handleLogoUpload(event)">
+                    <input type="hidden" name="brand_logo_url" id="brand_logo_url_hidden" value="<%= auditJob.brand_logo_url || '' %>">
+                    <div id="logoPreview">
+                        <% if (auditJob.brand_logo_url) { %>
+                            <img src="<%= auditJob.brand_logo_url %>" class="preview-image" alt="Current logo" style="max-width: 200px; margin-top: 12px; border-radius: 8px;">
+                        <% } %>
+                    </div>
+                </div>
+                <div id="presetPreview" style="margin-top: 16px; display: none;">
+                    <div class="field-label">Preset Preview</div>
+                    <div class="card" style="padding: 16px;">
+                        <div id="presetPreviewContent"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button class="btn btn-primary" type="submit">Process</button>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div id="progressContainer" style="display: none; margin-top: 20px; padding: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px;">
+                    <div style="margin-bottom: 8px; color: #b6b6d6; font-weight: 500;" id="progressText">Starting...</div>
+                    <div style="width: 100%; height: 8px; background: #0d0d1a; border-radius: 4px; overflow: hidden;">
+                        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%); transition: width 0.5s ease;"></div>
+                    </div>
+                    <div style="margin-top: 8px; color: #7a7aa0; font-size: 0.9rem;" id="progressDetail"></div>
+                </div>
+            </form>
+        </div>
+
+        <!-- B) Scrape Preview -->
+        <div class="section">
+            <div class="section-title">B) Scrape Preview <span class="badge">v2: Contacts + Evidence Pack</span></div>
+            <% const scrape = auditJob.scrape_result_json || {}; %>
+            <% const contacts = scrape.contacts || {}; %>
+            <% const rawDump = auditJob.raw_dump_json || {}; %>
+            <% const evidencePackV2 = auditJob.evidence_pack_v2_json || null; %>
+            <% const evidencePackV1 = auditJob.evidence_pack_json || null; %>
+            <% const evidencePack = evidencePackV2 || evidencePackV1 || {}; %>
+            
+            <!-- Contacts Section (v2) -->
+            <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div class="field-label" style="font-size: 1.1rem; margin-bottom: 12px; color: #6a82fb;">📞 Contacts (Scraper v2)</div>
+                <div class="grid-2">
+                    <div>
+                        <div class="field-group">
+                            <div class="field-label">Phones</div>
+                            <div class="field-value">
+                                <% if (contacts.phones && contacts.phones.length > 0) { %>
+                                    <ul style="margin: 0; padding-left: 20px;">
+                                        <% contacts.phones.forEach(function(phone) { %>
+                                            <% const phoneObj = typeof phone === 'object' ? phone : { value: phone, source: 'unknown' }; %>
+                                            <li>
+                                                <%= phoneObj.value %>
+                                                <span style="color: #6a82fb; font-size: 0.85rem; margin-left: 8px;">[<%= phoneObj.source %>]</span>
+                                            </li>
+                                        <% }); %>
+                                    </ul>
+                                <% } else { %>
+                                    <span style="color: #ff9999;">None found</span>
+                                    <% const contactsDebug = scrape.contacts_debug || {}; %>
+                                    <% if (contactsDebug.phones) { %>
+                                        <div style="margin-top: 8px; padding: 8px; background: #2d1f1f; border: 1px solid #5d2d2d; border-radius: 6px; font-size: 0.85rem;">
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;"><strong>Debug:</strong></div>
+                                            <div style="color: #999;">Sources checked: <%= (contactsDebug.phones.sources_checked || []).join(', ') %></div>
+                                            <div style="color: #999;">Candidates found: <%= contactsDebug.phones.candidates_found || 0 %></div>
+                                        </div>
+                                    <% } %>
+                                <% } %>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <div class="field-label">Emails</div>
+                            <div class="field-value">
+                                <% if (contacts.emails && contacts.emails.length > 0) { %>
+                                    <ul style="margin: 0; padding-left: 20px;">
+                                        <% contacts.emails.forEach(function(email) { %>
+                                            <% const emailObj = typeof email === 'object' ? email : { value: email, source: 'unknown' }; %>
+                                            <li>
+                                                <%= emailObj.value %>
+                                                <span style="color: #6a82fb; font-size: 0.85rem; margin-left: 8px;">[<%= emailObj.source %>]</span>
+                                            </li>
+                                        <% }); %>
+                                    </ul>
+                                <% } else { %>
+                                    <span style="color: #ff9999;">None found</span>
+                                    <% const contactsDebug = scrape.contacts_debug || {}; %>
+                                    <% if (contactsDebug.emails) { %>
+                                        <div style="margin-top: 8px; padding: 8px; background: #2d1f1f; border: 1px solid #5d2d2d; border-radius: 6px; font-size: 0.85rem;">
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;"><strong>Debug:</strong></div>
+                                            <div style="color: #999;">Sources checked: <%= (contactsDebug.emails.sources_checked || []).join(', ') %></div>
+                                            <div style="color: #999;">Candidates found: <%= contactsDebug.emails.candidates_found || 0 %></div>
+                                        </div>
+                                    <% } %>
+                                <% } %>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <div class="field-label">Address</div>
+                            <% const addressObj = typeof contacts.address === 'object' ? contacts.address : { value: contacts.address, source: 'unknown' }; %>
+                            <% if (addressObj && addressObj.value) { %>
+                                <div class="field-value">
+                                    <%= addressObj.value %>
+                                    <span style="color: #6a82fb; font-size: 0.85rem; margin-left: 8px;">[<%= addressObj.source %>]</span>
+                                </div>
+                            <% } else { %>
+                                <div class="field-value">
+                                    <span style="color: #999;">None found</span>
+                                    <% const contactsDebug = scrape.contacts_debug || {}; %>
+                                    <% if (contactsDebug.address) { %>
+                                        <div style="margin-top: 8px; padding: 8px; background: #2d2d1f; border: 1px solid #4d4d2d; border-radius: 6px; font-size: 0.85rem;">
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;"><strong>Debug:</strong></div>
+                                            <div style="color: #999;">Sources checked: <%= (contactsDebug.address.sources_checked || []).join(', ') %></div>
+                                            <div style="color: #999;">Candidates found: <%= contactsDebug.address.candidates_found || 0 %></div>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            <% } %>
+                        </div>
+                        <div class="field-group">
+                            <div class="field-label">Hours</div>
+                            <% const hoursObj = typeof contacts.hours === 'object' ? contacts.hours : { value: contacts.hours, source: 'unknown' }; %>
+                            <% if (hoursObj && hoursObj.value) { %>
+                                <div class="field-value" style="white-space: pre-wrap; font-size: 0.9rem;">
+                                    <%= hoursObj.value %>
+                                    <span style="color: #6a82fb; font-size: 0.85rem; margin-left: 8px;">[<%= hoursObj.source %>]</span>
+                                </div>
+                            <% } else { %>
+                                <div class="field-value">
+                                    <span style="color: #999;">None found</span>
+                                    <% const contactsDebug = scrape.contacts_debug || {}; %>
+                                    <% if (contactsDebug.hours) { %>
+                                        <div style="margin-top: 8px; padding: 8px; background: #2d2d1f; border: 1px solid #4d4d2d; border-radius: 6px; font-size: 0.85rem;">
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;"><strong>Debug:</strong></div>
+                                            <div style="color: #999;">Sources checked: <%= (contactsDebug.hours.sources_checked || []).join(', ') %></div>
+                                            <div style="color: #999;">Candidates found: <%= contactsDebug.hours.candidates_found || 0 %></div>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="field-group">
+                            <div class="field-label">Social Links</div>
+                            <div class="field-value">
+                                <% const social = contacts.social_links || {}; %>
+                                <% const hasSocial = Object.keys(social).some(key => social[key] && social[key].length > 0); %>
+                                <% if (hasSocial) { %>
+                                    <ul style="margin: 0; padding-left: 20px; list-style: none;">
+                                        <% ['facebook', 'instagram', 'twitter', 'linkedin', 'yelp', 'google_maps', 'google_business'].forEach(function(platform) { %>
+                                            <% if (social[platform] && social[platform].length > 0) { %>
+                                                <li style="margin-bottom: 8px;">
+                                                    <strong style="color: #d1d1e0; text-transform: capitalize;"><%= platform.replace('_', ' ') %>:</strong>
+                                                    <ul style="margin-top: 4px; padding-left: 20px;">
+                                                        <% social[platform].forEach(function(link) { %>
+                                                            <% const linkObj = typeof link === 'object' ? link : { value: link, source: 'unknown' }; %>
+                                                            <li style="font-size: 0.85rem;">
+                                                                <a href="<%= linkObj.value %>" target="_blank" style="color: #6a82fb; text-decoration: none;"><%= linkObj.value.length > 40 ? linkObj.value.slice(0, 40) + '...' : linkObj.value %></a>
+                                                                <span style="color: #6a82fb; font-size: 0.8rem; margin-left: 4px;">[<%= linkObj.source %>]</span>
+                                                            </li>
+                                                        <% }); %>
+                                                    </ul>
+                                                </li>
+                                            <% } %>
+                                        <% }); %>
+                                    </ul>
+                                <% } else { %>
+                                    <span style="color: #999;">None found</span>
+                                    <% const contactsDebug = scrape.contacts_debug || {}; %>
+                                    <% if (contactsDebug.social_links) { %>
+                                        <div style="margin-top: 8px; padding: 8px; background: #2d2d1f; border: 1px solid #4d4d2d; border-radius: 6px; font-size: 0.85rem;">
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;"><strong>Debug:</strong></div>
+                                            <div style="color: #999;">Sources checked: <%= (contactsDebug.social_links.sources_checked || []).join(', ') %></div>
+                                            <div style="color: #999;">Candidates found: <%= contactsDebug.social_links.candidates_found || 0 %></div>
+                                        </div>
+                                    <% } %>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Original Scrape Data -->
+            <div class="grid-2">
+                <div>
+                    <div class="field-group">
+                        <div class="field-label">Title / H1</div>
+                        <div class="field-value"><%= scrape.title || '-' %> / <%= scrape.h1 || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">CTAs</div>
+                        <div class="field-value"><%= (scrape.ctas || []).join(', ') || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Phone / Email (Legacy)</div>
+                        <div class="field-value"><%= scrape.phone || '-' %> / <%= scrape.email || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Contact Page</div>
+                        <div class="field-value"><%= scrape.contact_url || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Trust Signals</div>
+                        <div class="field-value"><%= (scrape.trust_signals || []).join(', ') || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Services Keywords</div>
+                        <div class="field-value"><%= (scrape.services_keywords || []).join(', ') || '-' %></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Performance Summary</div>
+                        <div class="field-value"><%= scrape.performance_summary || '-' %></div>
+                    </div>
+                </div>
+                <div>
+                    <% const screenshots = auditJob.screenshots_json || {}; %>
+                    <div class="field-group">
+                        <div class="field-label">Above-the-fold Screenshot</div>
+                        <% if (screenshots.above_fold) { %>
+                            <div class="screenshot-container">
+                                <img 
+                                    class="screenshot-thumbnail" 
+                                    src="/<%= screenshots.above_fold %>" 
+                                    alt="Above the fold screenshot"
+                                    onclick="openLightbox('/<%= screenshots.above_fold %>', 'Above-the-fold (Job #<%= auditJob.id %>)', false)"
+                                    onerror="this.parentElement.innerHTML='<div class=\\'screenshot-error\\'>Screenshot not available (404)</div>'"
+                                >
+                                <div class="screenshot-label">Click to enlarge</div>
+                            </div>
+                        <% } else { %>
+                            <div class="field-value">Not available</div>
+                        <% } %>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Full Page Screenshot</div>
+                        <% if (screenshots.fullpage) { %>
+                            <div class="screenshot-container">
+                                <img 
+                                    class="screenshot-thumbnail" 
+                                    src="/<%= screenshots.fullpage %>" 
+                                    alt="Full page screenshot"
+                                    onclick="openLightbox('/<%= screenshots.fullpage %>', 'Full page (Job #<%= auditJob.id %>)', true)"
+                                    onerror="this.parentElement.innerHTML='<div class=\\'screenshot-error\\'>Screenshot not available (404)</div>'"
+                                >
+                                <div class="screenshot-label">Click to enlarge (may be very tall)</div>
+                            </div>
+                        <% } else { %>
+                            <div class="field-value">Not available</div>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Raw Dump (Collapsed) -->
+            <details style="margin-top: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                <summary style="cursor: pointer; font-weight: 500; color: #b6b6d6; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🗂️ Raw Dump (collapsed - click to expand)</span>
+                    <button class="btn" style="font-size: 0.8rem; padding: 4px 12px; margin-left: 12px;" onclick="copyRawDump(event)" type="button">Copy</button>
+                </summary>
+                <div style="margin-top: 12px; max-height: 400px; overflow: auto;" id="rawDumpContent">
+                    <div class="field-group">
+                        <div class="field-label">Headings</div>
+                        <div class="output-preview"><pre><%= JSON.stringify((rawDump.headings || []).slice(0, 20), null, 2) %></pre></div>
+                    </div>
+                    <div class="field-group" style="margin-top: 12px;">
+                        <div class="field-label">Nav Items</div>
+                        <div class="output-preview"><pre><%= JSON.stringify(rawDump.nav_items || [], null, 2) %></pre></div>
+                    </div>
+                    <div class="field-group" style="margin-top: 12px;">
+                        <div class="field-label">Structured Data (JSON-LD)</div>
+                        <div class="output-preview"><pre><%= JSON.stringify(rawDump.structured_data_jsonld || [], null, 2) %></pre></div>
+                    </div>
+                    <div class="field-group" style="margin-top: 12px;">
+                        <div class="field-label">Homepage Text Snippet (first 500 chars)</div>
+                        <div class="output-preview"><pre><%= ((rawDump.homepage_text_snippet || '').slice(0, 500)) %></pre></div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Evidence Pack (Collapsed) -->
+            <details style="margin-top: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                <summary style="cursor: pointer; font-weight: 500; color: #b6b6d6; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📦 Evidence Pack (what LLM receives) <span style="color:#6a82fb;">[prefers v2]</span></span>
+                    <button class="btn" style="font-size: 0.8rem; padding: 4px 12px; margin-left: 12px;" onclick="copyEvidencePack(event)" type="button">Copy</button>
+                </summary>
+                <div style="margin-top: 12px;">
+                    <div class="output-preview"><pre><%= JSON.stringify(evidencePack, null, 2) %></pre></div>
+                </div>
+            </details>
+
+            <!-- Legacy Evidence Pack v1 (Collapsed) -->
+            <details style="margin-top: 12px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                <summary style="cursor: pointer; font-weight: 500; color: #b6b6d6; user-select: none;">
+                    <span>📦 Evidence Pack v1 (legacy, may differ)</span>
+                </summary>
+                <div style="margin-top: 12px;">
+                    <div class="output-preview"><pre><%= JSON.stringify(evidencePackV1 || {}, null, 2) %></pre></div>
+                </div>
+            </details>
+        </div>
+
+        <!-- B2) Pages Crawl (Scraper v3) -->
+        <% if (crawledPages && crawledPages.length > 0) { %>
+        <div class="section">
+            <div class="section-title">B2) Pages Crawl (Scraper v3) <span class="badge"><%= crawledPages.length %> pages</span></div>
+            
+            <!-- Summary Stats -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 1.5rem; color: #6a82fb; font-weight: bold;"><%= crawledPages.length %></div>
+                    <div style="font-size: 0.85rem; color: #b6b6d6;">Pages Crawled</div>
+                </div>
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 1.5rem; color: #6a82fb; font-weight: bold;">
+                        <%= crawledPages.filter(p => p.has_tel_link).length %>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #b6b6d6;">Pages with Tel Link</div>
+                </div>
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 1.5rem; color: #6a82fb; font-weight: bold;">
+                        <%= crawledPages.filter(p => p.has_form).length %>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #b6b6d6;">Pages with Forms</div>
+                </div>
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 1.5rem; color: #6a82fb; font-weight: bold;">
+                        <%= crawledPages.reduce((sum, p) => sum + (p.ctas_above_fold_json ? p.ctas_above_fold_json.length : 0), 0) %>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #b6b6d6;">Total CTAs Above Fold</div>
+                </div>
+            </div>
+
+            <!-- Pages Table -->
+            <div style="overflow-x: auto; background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                <table style="width: 100%; border-collapse: collapse; color: #d1d1e0; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #2d2d44;">
+                            <th style="text-align: left; padding: 8px; color: #b6b6d6; font-weight: 600;">#</th>
+                            <th style="text-align: left; padding: 8px; color: #b6b6d6; font-weight: 600;">Type</th>
+                            <th style="text-align: left; padding: 8px; color: #b6b6d6; font-weight: 600; min-width: 250px;">URL</th>
+                            <th style="text-align: left; padding: 8px; color: #b6b6d6; font-weight: 600;">Title</th>
+                            <th style="text-align: center; padding: 8px; color: #b6b6d6; font-weight: 600;">CTAs</th>
+                            <th style="text-align: center; padding: 8px; color: #b6b6d6; font-weight: 600;">Tel</th>
+                            <th style="text-align: center; padding: 8px; color: #b6b6d6; font-weight: 600;">Form</th>
+                            <th style="text-align: center; padding: 8px; color: #b6b6d6; font-weight: 600;">Words</th>
+                            <th style="text-align: left; padding: 8px; color: #b6b6d6; font-weight: 600;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% crawledPages.forEach((page, index) => { %>
+                            <tr style="border-bottom: 1px solid #2d2d44;">
+                                <td style="padding: 8px;"><%= index + 1 %></td>
+                                <td style="padding: 8px;">
+                                    <span style="padding: 2px 8px; border-radius: 4px; background: <%= page.page_type === 'home' ? '#1a4d1a' : page.page_type === 'contact' ? '#4d1a4d' : page.page_type === 'services' ? '#1a3a4d' : '#2d2d44' %>; font-size: 0.8rem;">
+                                        <%= page.page_type || 'other' %>
+                                    </span>
+                                </td>
+                                <td style="padding: 8px; font-size: 0.85rem; word-break: break-all;">
+                                    <a href="<%= page.url %>" target="_blank" style="color: #6a82fb; text-decoration: none;">
+                                        <%= page.url.length > 60 ? page.url.slice(0, 60) + '...' : page.url %>
+                                    </a>
+                                </td>
+                                <td style="padding: 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <%= page.title || '-' %>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <%= (page.ctas_above_fold_json || []).length %>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <span style="color: <%= page.has_tel_link ? '#6aff6a' : '#666' %>;">
+                                        <%= page.has_tel_link ? '✓' : '✗' %>
+                                    </span>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <span style="color: <%= page.has_form ? '#6aff6a' : '#666' %>;">
+                                        <%= page.has_form ? '✓' : '✗' %>
+                                    </span>
+                                </td>
+                                <td style="padding: 8px; text-align: center;">
+                                    <%= page.word_count || 0 %>
+                                </td>
+                                <td style="padding: 8px;">
+                                    <button class="btn" style="font-size: 0.8rem; padding: 4px 8px;" onclick="showPageDetails(<%= page.id %>, <%= index %>)">
+                                        Details
+                                    </button>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Page Details Modal (will be shown when Details button is clicked) -->
+            <div class="modal-backdrop" id="pageDetailsModal" style="display: none;">
+                <div class="modal" style="max-width: 1000px; max-height: 90vh; overflow-y: auto;">
+                    <div class="modal-header">
+                        <div class="modal-title" id="pageDetailsTitle">Page Details</div>
+                        <button class="modal-close" type="button" onclick="closePageDetails()">Close</button>
+                    </div>
+                    <div id="pageDetailsContent" style="padding: 16px; background: #181828; border-radius: 12px; margin-top: 16px;">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lighthouse Reports -->
+            <% if (lighthouseReports && lighthouseReports.length > 0) { %>
+                <div style="margin-top: 24px;">
+                    <div class="field-label" style="font-size: 1.1rem; margin-bottom: 12px;">⚡ Lighthouse Reports (<%= lighthouseReports.length %>)</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                        <% lighthouseReports.forEach((report, index) => { %>
+                            <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                                <div style="font-weight: 600; margin-bottom: 8px; color: #d1d1e0;">
+                                    <%= report.page_type || 'Page ' + (index + 1) %>
+                                </div>
+                                <div style="font-size: 0.85rem; color: #b6b6d6; margin-bottom: 12px; word-break: break-all;">
+                                    <%= report.url.length > 50 ? report.url.slice(0, 50) + '...' : report.url %>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                    <div>
+                                        <div style="font-size: 0.8rem; color: #b6b6d6;">Performance</div>
+                                        <div style="font-size: 1.3rem; font-weight: bold; color: <%= report.performance_score >= 90 ? '#6aff6a' : report.performance_score >= 50 ? '#ffaa6a' : '#ff6a6a' %>;">
+                                            <%= report.performance_score ? Math.round(report.performance_score) : 'N/A' %>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.8rem; color: #b6b6d6;">Accessibility</div>
+                                        <div style="font-size: 1.3rem; font-weight: bold; color: <%= report.accessibility_score >= 90 ? '#6aff6a' : report.accessibility_score >= 50 ? '#ffaa6a' : '#ff6a6a' %>;">
+                                            <%= report.accessibility_score ? Math.round(report.accessibility_score) : 'N/A' %>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.8rem; color: #b6b6d6;">SEO</div>
+                                        <div style="font-size: 1.3rem; font-weight: bold; color: <%= report.seo_score >= 90 ? '#6aff6a' : report.seo_score >= 50 ? '#ffaa6a' : '#ff6a6a' %>;">
+                                            <%= report.seo_score ? Math.round(report.seo_score) : 'N/A' %>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.8rem; color: #b6b6d6;">Best Practices</div>
+                                        <div style="font-size: 1.3rem; font-weight: bold; color: <%= report.best_practices_score >= 90 ? '#6aff6a' : report.best_practices_score >= 50 ? '#ffaa6a' : '#ff6a6a' %>;">
+                                            <%= report.best_practices_score ? Math.round(report.best_practices_score) : 'N/A' %>
+                                        </div>
+                                    </div>
+                                </div>
+                                <% if (report.fcp || report.lcp) { %>
+                                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #2d2d44; font-size: 0.85rem;">
+                                        <% if (report.fcp) { %>
+                                            <div style="color: #b6b6d6; margin-bottom: 4px;">
+                                                FCP: <span style="color: #d1d1e0;"><%= (report.fcp / 1000).toFixed(2) %>s</span>
+                                            </div>
+                                        <% } %>
+                                        <% if (report.lcp) { %>
+                                            <div style="color: #b6b6d6;">
+                                                LCP: <span style="color: #d1d1e0;"><%= (report.lcp / 1000).toFixed(2) %>s</span>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                <% } %>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+            <% } %>
+        </div>
+
+        <script>
+            // Store crawled pages data for modal
+            // IMPORTANT: never inline raw JSON directly into <script> – scraped content may contain `<\/script>`
+            // which would break the entire page JS.
+            function parseBase64Json(b64) {
+                const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+                return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+            }
+
+            const crawledPagesData = parseBase64Json('<%- Buffer.from(JSON.stringify(crawledPages || []), "utf8").toString("base64") %>');
+
+            function showPageDetails(pageId, index) {
+                const page = crawledPagesData[index];
+                if (!page) return;
+
+                const modal = document.getElementById('pageDetailsModal');
+                const title = document.getElementById('pageDetailsTitle');
+                const content = document.getElementById('pageDetailsContent');
+
+                title.textContent = `Page ${index + 1}: ${page.page_type || 'other'}`;
+
+                let html = `
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">URL:</div>
+                        <div style="color: #d1d1e0; word-break: break-all;">
+                            <a href="${page.url}" target="_blank" style="color: #6a82fb;">${page.url}</a>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div>
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">Title:</div>
+                            <div style="color: #d1d1e0;">${page.title || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">H1:</div>
+                            <div style="color: #d1d1e0;">${page.h1_text || 'N/A'}</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">Meta Description:</div>
+                        <div style="color: #d1d1e0;">${page.meta_description || 'N/A'}</div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <div style="font-size: 0.9rem; color: #b6b6d6;">Word Count:</div>
+                            <div style="color: #d1d1e0; font-weight: 600;">${page.word_count || 0}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.9rem; color: #b6b6d6;">Internal Links:</div>
+                            <div style="color: #d1d1e0; font-weight: 600;">${page.internal_links_count || 0}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.9rem; color: #b6b6d6;">Outbound Links:</div>
+                            <div style="color: #d1d1e0; font-weight: 600;">${page.outbound_links_count || 0}</div>
+                        </div>
+                    </div>
+
+                    ${page.h2_json && page.h2_json.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">H2 Headings:</div>
+                            <ul style="margin: 0; padding-left: 20px; color: #d1d1e0;">
+                                ${page.h2_json.slice(0, 5).map(h2 => `<li>${h2}</li>`).join('')}
+                                ${page.h2_json.length > 5 ? `<li style="color: #b6b6d6;"><em>...and ${page.h2_json.length - 5} more</em></li>` : ''}
+                            </ul>
+                        </div>
+                    ` : ''}
+
+                    ${page.ctas_above_fold_json && page.ctas_above_fold_json.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">CTAs Above the Fold (${page.ctas_above_fold_json.length}):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">
+                                ${page.ctas_above_fold_json.slice(0, 10).map(cta => `
+                                    <div style="margin-bottom: 8px; padding: 8px; background: #2d2d44; border-radius: 4px;">
+                                        <div style="color: #d1d1e0; font-weight: 500;">${cta.text}</div>
+                                        ${cta.href ? `<div style="font-size: 0.85rem; color: #b6b6d6; margin-top: 4px;">→ ${cta.href}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${page.forms_summary_json && page.forms_summary_json.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">Forms (${page.forms_count}):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px;">
+                                ${page.forms_summary_json.map((form, i) => `
+                                    <div style="margin-bottom: 8px;">
+                                        <strong>Form ${i + 1}:</strong> ${form.fields_count} fields (${form.required_count} required)
+                                        ${form.action ? `<br><span style="font-size: 0.85rem; color: #b6b6d6;">Action: ${form.action}</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${page.trust_signals_json && page.trust_signals_json.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">Trust Signals (${page.trust_signals_json.length}):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px;">
+                                ${page.trust_signals_json.map(signal => `
+                                    <span style="display: inline-block; padding: 4px 8px; margin: 4px; background: #2d2d44; border-radius: 4px; font-size: 0.85rem;">
+                                        ${signal.type}: ${signal.text}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${page.nap_json && (page.nap_json.name || page.nap_json.address || page.nap_json.phone) ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 4px;">NAP (Name, Address, Phone):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px;">
+                                ${page.nap_json.name ? `<div style="margin-bottom: 4px;"><strong>Name:</strong> ${page.nap_json.name}</div>` : ''}
+                                ${page.nap_json.address ? `<div style="margin-bottom: 4px;"><strong>Address:</strong> ${page.nap_json.address}</div>` : ''}
+                                ${page.nap_json.phone ? `<div><strong>Phone:</strong> ${page.nap_json.phone}</div>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${page.screenshots_json && Object.keys(page.screenshots_json).length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 8px;">Screenshots:</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                                ${page.screenshots_json.desktop_above_fold ? `
+                                    <div>
+                                        <div style="font-size: 0.85rem; color: #b6b6d6; margin-bottom: 4px;">Desktop Above Fold</div>
+                                        <img src="/${page.screenshots_json.desktop_above_fold}" style="width: 100%; border-radius: 8px; border: 1px solid #2d2d44; cursor: pointer;" onclick="window.open('/${page.screenshots_json.desktop_above_fold}', '_blank')">
+                                    </div>
+                                ` : ''}
+                                ${page.screenshots_json.mobile_above_fold ? `
+                                    <div>
+                                        <div style="font-size: 0.85rem; color: #b6b6d6; margin-bottom: 4px;">Mobile Above Fold</div>
+                                        <img src="/${page.screenshots_json.mobile_above_fold}" style="width: 100%; border-radius: 8px; border: 1px solid #2d2d44; cursor: pointer;" onclick="window.open('/${page.screenshots_json.mobile_above_fold}', '_blank')">
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+
+                content.innerHTML = html;
+                modal.style.display = 'flex';
+            }
+
+            function closePageDetails() {
+                document.getElementById('pageDetailsModal').style.display = 'none';
+            }
+
+            // Close modal on ESC key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closePageDetails();
+                }
+            });
+        </script>
+        <% } %>
+
+        <!-- B2) LLM Assistants v1 Pipeline -->
+        <div class="section">
+            <div class="section-title">🤖 LLM Assistants v1 Pipeline <span class="badge">6 Assistants</span></div>
+            
+            <!-- Pipeline Controls -->
+            <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div class="field-label" style="font-size: 1.1rem; margin-bottom: 12px; color: #6a82fb;">Pipeline Controls</div>
+                
+                <form id="runFullPipelineForm" action="/admin/audits/<%= auditJob.id %>/run-full-pipeline" method="POST" style="display: inline-block; margin-right: 12px;">
+                    <button class="btn btn-primary" type="submit">▶️ Run Full Pipeline (All 6)</button>
+                </form>
+                
+                <form id="runSingleAssistantForm" action="/admin/audits/<%= auditJob.id %>/run-assistant" method="POST" style="display: inline-block;">
+                    <select name="assistant_key" class="btn" style="margin-right: 8px;">
+                        <option value="evidence_normalizer">A1: Evidence Normalizer</option>
+                        <option value="ux_conversion_auditor">A2: UX Auditor</option>
+                        <option value="local_seo_geo_auditor">A3: SEO Auditor</option>
+                        <option value="offer_strategist">A4: Offer Strategist</option>
+                        <option value="outreach_email_writer">A5: Email Writer</option>
+                        <option value="public_audit_page_composer">A6: Public Page Composer</option>
+                    </select>
+                    <button class="btn" type="submit">▶️ Run Single Assistant</button>
+                </form>
+
+                <!-- Pipeline Progress Bar (independent from Process section) -->
+                <div id="pipelineProgressContainer" style="display: none; margin-top: 14px; padding: 14px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 12px;">
+                    <div style="margin-bottom: 8px; color: #b6b6d6; font-weight: 500;" id="pipelineProgressText">Starting...</div>
+                    <div style="width: 100%; height: 8px; background: #181828; border-radius: 4px; overflow: hidden;">
+                        <div id="pipelineProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%); transition: width 0.5s ease;"></div>
+                    </div>
+                    <div style="margin-top: 8px; color: #7a7aa0; font-size: 0.9rem;" id="pipelineProgressDetail"></div>
+                </div>
+            </div>
+
+            <!-- Assistant Runs Table -->
+            <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div class="field-label" style="font-size: 1.1rem; margin-bottom: 12px; color: #6a82fb;">📊 Assistant Runs History</div>
+                
+                <% if (assistantRuns && assistantRuns.length > 0) { %>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #2d2d44;">
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Assistant</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Model</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Temp</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Status</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Started</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Duration</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Tokens</th>
+                                <th style="padding: 8px; text-align: left; color: #b6b6d6;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% assistantRuns.forEach(function(run) { %>
+                                <% 
+                                const statusColor = run.status === 'ok' ? '#4ade80' : (run.status === 'failed' ? '#ff4444' : '#fbbf24');
+                                const statusIcon = run.status === 'ok' ? '✓' : (run.status === 'failed' ? '✗' : '⏳');
+                                const duration = run.finished_at && run.started_at ? ((new Date(run.finished_at) - new Date(run.started_at)) / 1000).toFixed(1) + 's' : '-';
+                                const tokens = run.token_usage_json?.total_tokens || '-';
+                                %>
+                                <tr style="border-bottom: 1px solid #1a1a2e;">
+                                    <td style="padding: 8px;">
+                                        <div style="font-weight: 500;"><%= run.assistant_name || run.assistant_key %></div>
+                                        <% if (run.assistant_name && run.assistant_name !== run.assistant_key) { %>
+                                            <div style="font-size: 0.75rem; color: #666; margin-top: 2px;"><%= run.assistant_key %></div>
+                                        <% } %>
+                                        <% if (run.error) { %>
+                                            <div style="font-size: 0.85rem; color: #ff4444; margin-top: 4px;"><%= run.error.slice(0, 100) %>...</div>
+                                        <% } %>
+                                    </td>
+                                    <td style="padding: 8px; font-size: 0.9rem; color: #999;">
+                                        <%= run.assistant_current_model || run.model %>
+                                        <% if (run.assistant_current_model && run.assistant_current_model !== run.model) { %>
+                                            <div style="font-size: 0.7rem; color: #fbbf24; margin-top: 2px;">⚠️ was: <%= run.model %></div>
+                                        <% } %>
+                                    </td>
+                                    <td style="padding: 8px; font-size: 0.9rem; color: #999;">
+                                        <%= run.assistant_current_temp !== undefined ? run.assistant_current_temp : run.temperature %>
+                                        <% if (run.assistant_current_temp !== undefined && Math.abs(run.assistant_current_temp - run.temperature) > 0.001) { %>
+                                            <div style="font-size: 0.7rem; color: #fbbf24; margin-top: 2px;">⚠️ was: <%= run.temperature %></div>
+                                        <% } %>
+                                    </td>
+                                    <td style="padding: 8px;">
+                                        <span style="color: <%= statusColor %>; font-weight: 500;"><%= statusIcon %> <%= run.status %></span>
+                                    </td>
+                                    <td style="padding: 8px; font-size: 0.85rem; color: #999;">
+                                        <%= new Date(run.started_at).toLocaleString() %>
+                                    </td>
+                                    <td style="padding: 8px; font-size: 0.9rem; color: #999;"><%= duration %></td>
+                                    <td style="padding: 8px; font-size: 0.9rem; color: #999;"><%= tokens %></td>
+                                    <td style="padding: 8px;">
+                                        <button class="btn" style="padding: 4px 8px; font-size: 0.85rem;" onclick="viewAssistantRunPayload(<%= run.id %>)">
+                                            👁️ View Payload
+                                        </button>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } else { %>
+                    <div style="padding: 20px; text-align: center; color: #999;">
+                        No assistant runs yet. Click "Run Full Pipeline" above to start.
+                    </div>
+                <% } %>
+            </div>
+
+            <!-- Assistant Outputs -->
+            <% const assistantOutputs = auditJob.assistant_outputs_json || {}; %>
+            <% if (Object.keys(assistantOutputs).length > 0) { %>
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div class="field-label" style="font-size: 1.1rem; margin: 0; color: #6a82fb;">📦 Assistant Outputs</div>
+                        <button class="btn" type="button" onclick="copyAllOutputs()" id="copyAllOutputsBtn" style="padding: 8px 16px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                            <span>Copy Output All</span>
+                            <span id="copyAllCheckmark" style="display: none; color: #10b981;">✓</span>
+                        </button>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                        <% if (assistantOutputs.ux_audit_json) { %>
+                            <div style="background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 500; color: #6a82fb; margin-bottom: 8px;">🎨 UX Audit</div>
+                                <div style="font-size: 0.85rem; color: #999;">
+                                    <%= (assistantOutputs.ux_audit_json.top_issues || []).length %> issues found
+                                </div>
+                            </div>
+                        <% } %>
+                        
+                        <% if (assistantOutputs.local_seo_audit_json) { %>
+                            <div style="background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 500; color: #6a82fb; margin-bottom: 8px;">🌍 SEO Audit</div>
+                                <div style="font-size: 0.85rem; color: #999;">
+                                    GEO Score: <%= assistantOutputs.local_seo_audit_json.geo_ready_score?.score || 'N/A' %>
+                                </div>
+                            </div>
+                        <% } %>
+                        
+                        <% if (assistantOutputs.offer_copy_json) { %>
+                            <div style="background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 500; color: #6a82fb; margin-bottom: 8px;">💼 Offer Package</div>
+                                <div style="font-size: 0.85rem; color: #999;">
+                                    <%= (assistantOutputs.offer_copy_json.offer_package?.deliverables || []).length %> deliverables
+                                </div>
+                            </div>
+                        <% } %>
+                        
+                        <% if (assistantOutputs.email_pack_json) { %>
+                            <div style="background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 500; color: #6a82fb; margin-bottom: 8px;">✉️ Email Pack</div>
+                                <div style="font-size: 0.85rem; color: #999;">
+                                    <%= (assistantOutputs.email_pack_json.subject_lines || []).length %> subject lines
+                                </div>
+                            </div>
+                        <% } %>
+                        
+                        <% if (assistantOutputs.public_page_json) { %>
+                            <div style="background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                                <div style="font-weight: 500; color: #6a82fb; margin-bottom: 8px;">📄 Public Page</div>
+                                <div style="font-size: 0.85rem; color: #999;">
+                                    Ready for landing page
+                                </div>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- C) LLM Control Panel -->
+        <div class="section">
+            <div class="section-title">C) LLM Control Panel</div>
+            <div class="config-summary" id="llm_config_summary" style="margin-bottom: 16px;">Model + temperature + prompt settings are stored in the LLM Settings modal.</div>
+            <form id="runLlmForm" action="/admin/audits/<%= auditJob.id %>/run-llm" method="POST">
+                <input type="hidden" name="ux_name" id="ux_name_input_llm">
+                <input type="hidden" name="ux_model" id="ux_model_input_llm">
+                <input type="hidden" name="ux_temperature" id="ux_temperature_input_llm">
+                <input type="hidden" name="prompt_ux" id="ux_prompt_input_llm">
+                <input type="hidden" name="web_name" id="web_name_input_llm">
+                <input type="hidden" name="web_model" id="web_model_input_llm">
+                <input type="hidden" name="web_temperature" id="web_temperature_input_llm">
+                <input type="hidden" name="prompt_web" id="web_prompt_input_llm">
+                <input type="hidden" name="email_name" id="email_name_input_llm">
+                <input type="hidden" name="email_model" id="email_model_input_llm">
+                <input type="hidden" name="email_temperature" id="email_temperature_input_llm">
+                <input type="hidden" name="prompt_email" id="email_prompt_input_llm">
+
+                <div class="actions-row">
+                    <button class="btn" type="submit" onclick="setLoadingMessage('Running LLM evaluators...')">Run LLM Evaluators</button>
+                    <button class="btn" type="submit" formaction="/admin/audits/<%= auditJob.id %>/regenerate-email" onclick="setLoadingMessage('Regenerating email...')">Regenerate Email</button>
+                    <button class="btn" type="submit" formaction="/admin/audits/<%= auditJob.id %>/regenerate-public" onclick="setLoadingMessage('Regenerating public page...')">Regenerate Public Page</button>
+                </div>
+                <% if (auditJob.llm_config_snapshot) { %>
+                    <div class="field-group" style="margin-top: 12px;">
+                        <div class="field-label">Prompt Version Snapshot (last run)</div>
+                        <div class="output-preview"><pre><%= JSON.stringify(auditJob.llm_config_snapshot, null, 2) %></pre></div>
+                    </div>
+                <% } %>
+            </form>
+        </div>
+
+        <!-- D) Outputs -->
+        <div class="section">
+            <div class="section-title">D) Outputs</div>
+            <div class="grid-2">
+                <div>
+                    <div class="field-group">
+                        <div class="field-label">Mini Audit</div>
+                        <div class="output-preview"><pre><%= JSON.stringify(auditJob.mini_audit_json || {}, null, 2) %></pre></div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Email HTML</div>
+                        <div class="output-preview"><%= auditJob.email_html || '-' %></div>
+                        <% if (auditJob.email_html) { %>
+                            <div class="actions-row">
+                                <button class="btn" type="button" onclick='navigator.clipboard.writeText(<%- JSON.stringify(auditJob.email_html || "") %>)'>Copy HTML</button>
+                                <button class="btn" type="button" onclick='navigator.clipboard.writeText(<%- JSON.stringify(JSON.stringify(auditJob.mini_audit_json || {}, null, 2)) %>)'>Copy text summary</button>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+                <div>
+                    <div class="field-group">
+                        <div class="field-label">Public Landing URL</div>
+                        <% if (publicUrl) { %>
+                            <div class="field-value"><a href="<%= publicUrl %>" class="view-link" target="_blank"><%= publicUrl %></a></div>
+                            <div class="actions-row">
+                                <a class="btn" href="<%= publicUrl %>" target="_blank">Open</a>
+                            </div>
+                        <% } else { %>
+                            <div class="field-value">-</div>
+                        <% } %>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Public Page JSON</div>
+                        <div class="output-preview"><pre><%= JSON.stringify(auditJob.public_page_json || {}, null, 2) %></pre></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Run Log -->
+        <div class="section">
+            <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                <span>Pipeline Log</span>
+                <button class="btn" type="button" id="copyPipelineLogBtn" style="padding: 6px 10px; font-size: 0.9rem;">Copy</button>
+            </div>
+            <div class="logs" id="pipelineLog">
+                <% if (!runLogs || runLogs.length === 0) { %>
+                    No logs yet.
+                <% } else { %>
+                    <% runLogs.forEach(log => { %>
+                        [<%= log.created_at %>] <%= log.step || 'system' %> (<%= log.level || 'info' %>): <%= log.message %>
+                        <br>
+                    <% }) %>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Settings Modal -->
+    <div class="modal-backdrop" id="llmModal">
+        <div class="modal" style="max-width: 1000px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <div class="modal-title">LLM Settings & Prompts</div>
+                <button class="modal-close" type="button" onclick="closeLlmModal()">Close</button>
+            </div>
+            
+            <div id="assistantsContainer"></div>
+
+            <div class="actions-row" style="margin-top: 16px; margin-bottom: 16px; display: flex; gap: 12px;">
+                <button class="btn btn-secondary" type="button" onclick="addNewAssistant()" style="background: #2d2d44; color: #7c7cff;">+ Add New Assistant</button>
+                <button class="btn btn-primary" type="button" onclick="saveAllAssistants()">Save All Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Copy Pipeline Log to clipboard
+        (function () {
+            const btn = document.getElementById('copyPipelineLogBtn');
+            const logEl = document.getElementById('pipelineLog');
+            if (!btn || !logEl) return;
+
+            btn.addEventListener('click', async () => {
+                const text = (logEl.innerText || logEl.textContent || '').trim();
+                if (!text) return;
+
+                const original = btn.textContent;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    btn.textContent = 'Copied!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = original;
+                        btn.style.background = '';
+                    }, 1200);
+                } catch (e) {
+                    // Fallback for older browsers / permission issues
+                    try {
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.position = 'fixed';
+                        ta.style.left = '-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        btn.textContent = 'Copied!';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.textContent = original;
+                            btn.style.background = '';
+                        }, 1200);
+                    } catch (err) {
+                        alert('Copy failed. Please select the log text and copy manually.');
+                    }
+                }
+            });
+        })();
+
+        // Global state for assistants
+        let allAssistants = [];
+        const availableModels = [
+            { value: 'openai/gpt-4.1-mini', label: 'OpenAI GPT-4.1 Mini' },
+            { value: 'openai/gpt-4.1', label: 'OpenAI GPT-4.1' },
+            { value: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
+            { value: 'google/gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+            { value: 'google/gemini-2.5-pro', label: 'Google Gemini 2.5 Pro' },
+            { value: 'google/gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+            { value: 'anthropic/claude-3.7-sonnet', label: 'Anthropic Claude 3.7 Sonnet' }
+        ];
+
+        const defaultNames = {
+            ux: 'UX Specialist',
+            web: 'Web Designer',
+            email: 'Email Polisher'
+        };
+
+        const defaultPrompts = {
+            ux: `You are a UX Specialist auditing a local service business website.
+You MUST work with EVIDENCE ONLY - no guessing, no generic advice.
+
+EVIDENCE PACK v2 STRUCTURE:
+You will receive an "evidence_pack" with these fields:
+- company_profile: {phones[], emails[], address, hours, social_links}
+- service_offers: [top service keywords/headings]
+- trust_snippets: [specific trust signals found]
+- cta_map: {primary, secondary, all_ctas}
+- contact_friction: {phone_in_header, phone_clickable, clicks_to_contact, etc}
+- layout_summary: {hero_h1_text, has_primary_cta_above_fold, etc}
+
+Return ONLY valid JSON with this shape:
+{
+  "top_3_leaks": [
+    { 
+      "problem": "Brief issue (max 100 chars)", 
+      "evidence": "Exact field reference from evidence_pack (e.g. 'contact_friction.phone_clickable: false, clicks_to_contact: 3')", 
+      "fix": "Specific, actionable fix (max 120 chars)", 
+      "why_it_matters": "Local acquisition context (max 120 chars)",
+      "insufficient_signal": false
+    }
+  ],
+  "7_day_plan": ["Quick win 1", "Quick win 2", "Quick win 3"],
+  "tone": "Concise, specific, acquisitional, factual"
+}
+
+STRICT EVIDENCE RULES:
+1. Every issue MUST have concrete evidence from evidence_pack fields
+2. Evidence must reference the exact field name (e.g., "contact_friction.clicks_to_contact: 3")
+3. If contacts are missing (company_profile.phones.length === 0), you MAY note "insufficient signal"
+4. Do NOT create issues without evidence
+5. Maximum 3 issues (top 3 leaks only)
+6. Maximum 3 steps in 7-day plan
+7. Each text must be concise - no long paragraphs
+
+PROHIBITED:
+- Growth percentages or numeric projections
+- Guarantees or promises ("will increase", "guaranteed results")
+- Expressions like "your website is bad" or similar negative generalizations
+- Generic advice not tied to specific evidence
+- Medical or legal claims
+
+STYLE:
+- Concise, specific language
+- Frame findings as opportunities, not attacks
+- Use local context where relevant (check evidence_pack.city)
+- Focus on conversion friction that's observable in the data`,
+            web: `You are a Web Designer proposing quick conversion improvements for a local service business.
+You MUST work with EVIDENCE ONLY - no guessing.
+
+EVIDENCE PACK v2 STRUCTURE:
+You will receive an "evidence_pack" with:
+- cta_map: {primary.text, primary.location, all_ctas[]}
+- layout_summary: {hero_h1_text, hero_subheadline, has_primary_cta_above_fold}
+- trust_snippets: [trust signals found]
+- company_profile: {phones[], emails[], social_links}
+
+Return ONLY valid JSON with this shape:
+{
+  "copy_suggestions": ["CTA option 1 (8-12 words)", "CTA option 2 (8-12 words)", "CTA option 3 (8-12 words)"],
+  "concept_headline": "Strong value prop for local audience (max 140 chars)",
+  "concept_subhead": "Supporting clarity statement (max 140 chars)",
+  "tone": "Concise, action-oriented, local"
+}
+
+EVIDENCE RULES:
+1. Base suggestions on actual findings from evidence_pack
+2. If cta_map.primary.text is unclear or missing, suggest improvements
+3. If trust_snippets is empty or weak, suggest trust-building copy
+4. Keep all suggestions specific and actionable
+
+PROHIBITED:
+- Growth percentages or guarantees
+- Medical or legal claims
+- Generic "best practices" not tied to evidence
+- Expressions like "your website is bad"
+
+STYLE:
+- Short, punchy CTA suggestions
+- Headline should be benefit-focused for local audience (check evidence_pack.city)
+- Subhead clarifies the offer or reduces friction`,
+            email: `You are polishing an outbound email for a Miami local business audit.
+Work with the mini audit evidence - no exaggerations.
+
+Return ONLY valid JSON with this shape:
+{
+  "subject_line": "Clear, specific hook (max 60 chars)",
+  "intro_line": "Friendly opener referencing the city/niche (max 140 chars)"
+}
+
+RULES:
+- Subject line must be curiosity-driven but factual
+- Intro line should acknowledge what was audited (niche + city)
+- No percentages or numeric guarantees
+- No medical or legal claims
+- Do not say "your website is bad" or use negative framing
+- Keep it conversational and professional
+
+STYLE:
+- Miami local, friendly but professional
+- Evidence-based (reference findings from mini audit)
+- Action-oriented`
+        };
+
+        const defaultSettings = {
+            ux: { model: 'openai/gpt-4.1-mini', temperature: '0.3' },
+            web: { model: 'openai/gpt-4.1-mini', temperature: '0.3' },
+            email: { model: 'openai/gpt-4.1-mini', temperature: '0.2' }
+        };
+
+        const snapshot = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.llm_config_snapshot || {}), "utf8").toString("base64") %>');
+        const snapshotPrompts = snapshot && snapshot.prompts ? snapshot.prompts : {};
+        const snapshotSettings = snapshot && snapshot.settings ? snapshot.settings : {};
+
+        // Load assistants from API
+        async function loadAssistants() {
+            try {
+                const response = await fetch('/admin/api/assistants');
+                const data = await response.json();
+                allAssistants = data.assistants || [];
+                renderAssistants();
+            } catch (error) {
+                console.error('Error loading assistants:', error);
+                alert('Failed to load assistants');
+            }
+        }
+
+        function generateKey(name) {
+            return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        }
+
+        function renderAssistants() {
+            const container = document.getElementById('assistantsContainer');
+            container.innerHTML = '';
+
+            allAssistants.forEach((assistant, index) => {
+                const section = document.createElement('div');
+                section.className = 'section';
+                section.style.cssText = 'margin-bottom: 24px; padding: 20px; background: #0f0f1a; border: 1.5px solid #2d2d44; border-radius: 8px; position: relative;';
+                
+                section.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0; color: #7c7cff; font-size: 1.1rem;">Assistant ${index + 1}</h3>
+                        <button type="button" onclick="deleteAssistantById(${assistant.id})" 
+                                style="background: #4a1a1a; color: #ff6b6b; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                    <div class="field-group" style="margin-bottom: 12px;">
+                        <div class="field-label">Assistant Name</div>
+                        <input type="text" 
+                               id="assistant_name_${assistant.id}" 
+                               value="${assistant.name || ''}" 
+                               style="width: 100%; padding: 10px; background: #181828; border: 1.5px solid #2d2d44; border-radius: 8px; color: #d1d1e0; font-size: 1rem;">
+                    </div>
+                    <div class="field-group" style="margin-bottom: 12px;">
+                        <div class="field-label">Key (unique identifier)</div>
+                        <input type="text" 
+                               id="assistant_key_${assistant.id}" 
+                               value="${assistant.key || ''}" 
+                               placeholder="e.g. ux_specialist"
+                               style="width: 100%; padding: 10px; background: #181828; border: 1.5px solid #2d2d44; border-radius: 8px; color: #d1d1e0; font-size: 1rem;">
+                    </div>
+                    <div class="grid-2" style="margin-bottom: 12px;">
+                        <div class="field-group">
+                            <div class="field-label">Model</div>
+                            <select id="assistant_model_${assistant.id}" 
+                                    style="width: 100%; padding: 10px; background: #181828; border: 1.5px solid #2d2d44; border-radius: 8px; color: #d1d1e0; font-size: 1rem;">
+                                ${availableModels.map(model => 
+                                    `<option value="${model.value}" ${model.value === assistant.model ? 'selected' : ''}>${model.label}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <div class="field-label">Temperature (0.0-1.0)</div>
+                            <input type="number" 
+                                   step="0.1" 
+                                   min="0" 
+                                   max="1" 
+                                   id="assistant_temperature_${assistant.id}" 
+                                   value="${assistant.temperature || 0.3}"
+                                   style="width: 100%; padding: 10px; background: #181828; border: 1.5px solid #2d2d44; border-radius: 8px; color: #d1d1e0; font-size: 1rem;">
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">Prompt</div>
+                        <textarea id="assistant_prompt_${assistant.id}" 
+                                  rows="6" 
+                                  style="width: 100%; padding: 12px; background: #181828; border: 1.5px solid #2d2d44; border-radius: 8px; color: #d1d1e0; font-size: 0.9rem; font-family: 'Courier New', monospace; resize: vertical;">${assistant.prompt || ''}</textarea>
+                    </div>
+                `;
+                
+                container.appendChild(section);
+            });
+        }
+
+        async function addNewAssistant() {
+            const name = prompt('Enter assistant name:', 'New Assistant');
+            if (!name) return;
+
+            const key = generateKey(name);
+            const newAssistant = {
+                name: name,
+                key: key,
+                model: 'openai/gpt-4.1-mini',
+                temperature: 0.3,
+                prompt: 'You are an AI assistant. Provide helpful and accurate responses.',
+                sort_order: allAssistants.length + 1
+            };
+
+            try {
+                const response = await fetch('/admin/api/assistants', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newAssistant)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create assistant');
+                }
+
+                await loadAssistants();
+                alert('Assistant created successfully!');
+            } catch (error) {
+                console.error('Error creating assistant:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteAssistantById(id) {
+            if (!confirm('Are you sure you want to delete this assistant?')) return;
+
+            try {
+                const response = await fetch(`/admin/api/assistants/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete assistant');
+                }
+
+                await loadAssistants();
+                alert('Assistant deleted successfully!');
+            } catch (error) {
+                console.error('Error deleting assistant:', error);
+                alert('Failed to delete assistant');
+            }
+        }
+
+        async function saveAllAssistants() {
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const assistant of allAssistants) {
+                const name = document.getElementById(`assistant_name_${assistant.id}`).value;
+                const key = document.getElementById(`assistant_key_${assistant.id}`).value;
+                const model = document.getElementById(`assistant_model_${assistant.id}`).value;
+                const temperature = parseFloat(document.getElementById(`assistant_temperature_${assistant.id}`).value);
+                const prompt = document.getElementById(`assistant_prompt_${assistant.id}`).value;
+
+                if (!name || !key || !model || !prompt) {
+                    alert(`Please fill all fields for ${assistant.name}`);
+                    errorCount++;
+                    continue;
+                }
+
+                try {
+                    const response = await fetch(`/admin/api/assistants/${assistant.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            key,
+                            model,
+                            temperature,
+                            prompt,
+                            sort_order: assistant.sort_order
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to update');
+                    }
+
+                    successCount++;
+                } catch (error) {
+                    console.error(`Error saving assistant ${assistant.name}:`, error);
+                    errorCount++;
+                }
+            }
+
+            if (errorCount === 0) {
+                alert(`All ${successCount} assistants saved successfully!`);
+                closeLlmModal();
+            } else {
+                alert(`Saved ${successCount} assistants, ${errorCount} failed.`);
+            }
+            
+            await loadAssistants();
+        }
+
+        async function openLlmModal() {
+            await loadAssistants();
+            document.getElementById('llmModal').style.display = 'flex';
+        }
+
+        function closeLlmModal() {
+            document.getElementById('llmModal').style.display = 'none';
+        }
+
+        // Initialization
+        loadAssistants();
+
+        // Lightbox functionality for screenshots
+        function openLightbox(imageSrc, title, isFullpage) {
+            const lightbox = document.getElementById('screenshotLightbox');
+            const lightboxImage = document.getElementById('lightboxImage');
+            const lightboxTitle = document.getElementById('lightboxTitle');
+            const openNewTabBtn = document.getElementById('openNewTabBtn');
+
+            lightboxImage.src = imageSrc;
+            lightboxTitle.textContent = title;
+            openNewTabBtn.onclick = () => window.open(imageSrc, '_blank');
+            
+            lightbox.classList.add('active');
+        }
+
+        function closeLightbox() {
+            const lightbox = document.getElementById('screenshotLightbox');
+            lightbox.classList.remove('active');
+        }
+
+        // Close lightbox on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeLightbox();
+            }
+        });
+
+        // Close lightbox on backdrop click
+        // Some audit jobs may not have screenshots/lightbox rendered; guard to avoid killing all JS.
+        const screenshotLightboxEl = document.getElementById('screenshotLightbox');
+        if (screenshotLightboxEl) {
+            screenshotLightboxEl.addEventListener('click', (e) => {
+                if (e.target && e.target.id === 'screenshotLightbox') {
+                    closeLightbox();
+                }
+            });
+        }
+
+        // Loading overlay and status polling
+        let statusPollInterval = null;
+        let customLoadingMessage = null;
+        const jobId = <%= auditJob.id %>;
+
+        const statusMessages = {
+            'draft': { text: 'Preparing...', progress: 5 },
+            'scraping': { text: 'Scraping website (extracting content & layout signals)...', progress: 30 },
+            'evaluating': { text: 'Running LLM evaluators (analyzing UX & design)...', progress: 65 },
+            'ready': { text: 'Complete!', progress: 100 },
+            'failed': { text: 'Error occurred', progress: 100 }
+        };
+
+        function setLoadingMessage(message) {
+            customLoadingMessage = message;
+        }
+
+        function showLoading(initialStatus = 'Starting...') {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.add('active');
+            const message = customLoadingMessage || initialStatus;
+            updateLoadingStatus(message, 5);
+            startStatusPolling();
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('active');
+            stopStatusPolling();
+        }
+
+        function updateLoadingStatus(status, progress) {
+            document.getElementById('loadingStatus').textContent = status;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        function startStatusPolling() {
+            stopStatusPolling(); // Clear any existing interval
+            
+            statusPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/admin/audits/${jobId}/status`);
+                    if (!response.ok) {
+                        console.error('Failed to fetch status');
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    const statusInfo = statusMessages[data.status] || { text: data.status, progress: 50 };
+                    
+                    updateLoadingStatus(statusInfo.text, statusInfo.progress);
+                    
+                    // If job is done (ready or failed), reload page
+                    if (data.status === 'ready' || data.status === 'failed') {
+                        hideLoading();
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                    }
+                } catch (err) {
+                    console.error('Status poll error:', err);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        function stopStatusPolling() {
+            if (statusPollInterval) {
+                clearInterval(statusPollInterval);
+                statusPollInterval = null;
+            }
+        }
+
+        // Intercept form submissions for process/run-llm actions
+        const processForm = document.getElementById('processForm');
+        const runLlmForm = document.getElementById('runLlmForm');
+
+        if (processForm) {
+            processForm.addEventListener('submit', (e) => {
+                e.preventDefault(); // Stop the immediate submit
+                showLoading('Starting full audit process...');
+                // Submit after a short delay to ensure overlay is visible
+                setTimeout(() => {
+                    // Create a hidden form to avoid re-triggering event listener
+                    const formData = new FormData(processForm);
+                    const hiddenForm = document.createElement('form');
+                    hiddenForm.method = 'POST';
+                    hiddenForm.action = processForm.action;
+                    hiddenForm.style.display = 'none';
+                    
+                    for (let [key, value] of formData.entries()) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value;
+                        hiddenForm.appendChild(input);
+                    }
+                    
+                    document.body.appendChild(hiddenForm);
+                    hiddenForm.submit();
+                }, 300);
+            });
+        }
+
+        if (runLlmForm) {
+            runLlmForm.addEventListener('submit', (e) => {
+                e.preventDefault(); // Stop the immediate submit
+                showLoading(customLoadingMessage || 'Starting LLM evaluators...');
+                // Submit after a short delay to ensure overlay is visible
+                setTimeout(() => {
+                    // Need to bypass the event listener when programmatically submitting
+                    const formData = new FormData(runLlmForm);
+                    const submitUrl = e.submitter ? e.submitter.formAction || runLlmForm.action : runLlmForm.action;
+                    
+                    // Create a hidden form to submit (avoids re-triggering event listener)
+                    const hiddenForm = document.createElement('form');
+                    hiddenForm.method = 'POST';
+                    hiddenForm.action = submitUrl;
+                    hiddenForm.style.display = 'none';
+                    
+                    for (let [key, value] of formData.entries()) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value;
+                        hiddenForm.appendChild(input);
+                    }
+                    
+                    document.body.appendChild(hiddenForm);
+                    hiddenForm.submit();
+                }, 300);
+            });
+        }
+
+        // Check current status on page load
+        const currentStatus = '<%= auditJob.status %>';
+        if (currentStatus === 'scraping' || currentStatus === 'evaluating') {
+            showLoading(statusMessages[currentStatus].text);
+        }
+    </script>
+
+    <!-- Screenshot Lightbox Modal -->
+    <div class="lightbox" id="screenshotLightbox">
+        <div class="lightbox-content">
+            <div class="lightbox-header">
+                <div class="lightbox-title" id="lightboxTitle">Screenshot</div>
+                <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+            </div>
+            <img class="lightbox-image" id="lightboxImage" src="" alt="Screenshot preview">
+            <div class="lightbox-actions">
+                <button class="btn" id="openNewTabBtn">Open in new tab</button>
+                <button class="btn" onclick="closeLightbox()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-title">Processing Audit...</div>
+            <div class="loading-status" id="loadingStatus">Starting...</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="loading-details" id="loadingDetails">This may take 30-60 seconds</div>
+        </div>
+    </div>
+
+    <!-- Presets Modal -->
+    <div class="modal-backdrop" id="presetsModal">
+        <div class="modal" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <div class="modal-title">Manage Niche Presets</div>
+                <button class="modal-close" type="button" onclick="closePresetsModal()">Close</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchPresetTab('list')">Presets List</button>
+                <button class="tab-btn" onclick="switchPresetTab('form')">Create / Edit Preset</button>
+            </div>
+
+            <!-- Tab 1: Presets List -->
+            <div class="tab-content active" id="presetListTab">
+                <div id="presetsList">
+                    <div style="color: #b6b6d6; text-align: center; padding: 20px;">Loading presets...</div>
+                </div>
+                <button class="btn btn-primary" type="button" onclick="createNewPreset()" style="margin-top: 12px;">Create New Preset</button>
+            </div>
+
+            <!-- Tab 2: Create/Edit Form -->
+            <div class="tab-content" id="presetFormTab">
+                <form id="presetForm" onsubmit="return false;">
+                    <input type="hidden" id="presetId" value="">
+                    
+                    <div class="field-group">
+                        <div class="field-label">Display Name *</div>
+                        <input type="text" id="presetDisplayName" placeholder="e.g. Plumbing" required>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Slug * (unique identifier)</div>
+                        <input type="text" id="presetSlug" placeholder="e.g. plumbing" required>
+                        <div class="small" style="margin-top: 4px;">Auto-generated from name, but editable</div>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Concept Image</div>
+                        <div class="upload-area" id="uploadArea" onclick="document.getElementById('conceptImageInput').click()">
+                            <div>📤 Click or drag & drop to upload</div>
+                            <div class="small" style="margin-top: 6px;">PNG, JPG, WEBP (max 5MB)</div>
+                        </div>
+                        <input type="file" id="conceptImageInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;" onchange="handleImageSelect(event)">
+                        <div id="imagePreview"></div>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Default Headline</div>
+                        <input type="text" id="presetHeadline" placeholder="e.g. More calls from your Miami plumbing website">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Primary CTA</div>
+                        <input type="text" id="presetPrimaryCta" placeholder="e.g. Get a Quote">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Secondary CTA</div>
+                        <input type="text" id="presetSecondaryCta" placeholder="e.g. Call Now">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Default City (optional)</div>
+                        <input type="text" id="presetCity" placeholder="e.g. Miami">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Benefits Bullets (max 3)</div>
+                        <input type="text" id="presetBullet1" placeholder="Bullet 1" style="margin-bottom: 8px;">
+                        <input type="text" id="presetBullet2" placeholder="Bullet 2" style="margin-bottom: 8px;">
+                        <input type="text" id="presetBullet3" placeholder="Bullet 3">
+                    </div>
+
+                    <div class="actions-row" style="margin-top: 16px;">
+                        <button class="btn btn-primary" type="button" onclick="savePreset()">Save Preset</button>
+                        <button class="btn" type="button" onclick="cancelPresetEdit()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Raw Dump and Evidence Pack data for copying
+        // IMPORTANT: never inline raw JSON directly into <script> – scraped content may contain `<\/script>`
+        // which would break the entire page JS (dropdown + presets modal). We embed as base64 instead.
+        function parseBase64Json(b64) {
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+        }
+
+        const rawDumpData = parseBase64Json('<%- Buffer.from(JSON.stringify(rawDump || {}), "utf8").toString("base64") %>');
+        const evidencePackData = parseBase64Json('<%- Buffer.from(JSON.stringify(evidencePack || {}), "utf8").toString("base64") %>');
+        
+        // Presets (re-implemented cleanly; no fragile template literals, null-safe DOM wiring)
+        (function presetsModule() {
+            // If you don't see this log, the browser is NOT running the updated template JS.
+            console.log('[admin-audit-detail] presetsModule loaded (2026-01-15 presets-fix)');
+            const state = {
+                allPresets: [],
+                currentPresets: [],
+                editingPresetId: null,
+                initialized: false
+            };
+
+            function $(id) { return document.getElementById(id); }
+
+            async function fetchPresets() {
+                const response = await fetch('/api/presets', { credentials: 'include' });
+                const data = await response.json();
+                return data.presets || [];
+            }
+
+            function populatePresetDropdown() {
+                const dropdown = $('presetDropdown');
+                if (!dropdown) return;
+
+                const currentPresetId = <%= auditJob.preset_id || 'null' %>;
+                let html = '<option value="">No preset</option>';
+                for (const preset of state.allPresets) {
+                    const selected = (preset.id === currentPresetId) ? ' selected' : '';
+                    html += '<option value="' + preset.id + '"' + selected + '>' + (preset.display_name || '') + '</option>';
+                }
+                dropdown.innerHTML = html;
+
+                if (currentPresetId) {
+                    showPresetPreview(currentPresetId);
+                }
+            }
+
+            function showPresetPreview(presetId) {
+                const preview = $('presetPreview');
+                const content = $('presetPreviewContent');
+                if (!preview || !content) return;
+
+                const idNum = parseInt(presetId, 10);
+                const preset = state.allPresets.find((p) => p.id === idNum);
+                if (!preset) {
+                    preview.style.display = 'none';
+                    return;
+                }
+
+                let html = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;"><div>';
+                if (preset.concept_image_url) {
+                    html += '<img src="/' + preset.concept_image_url + '" style="width:100%; border-radius:8px; border:1px solid #2d2d44;">';
+                } else {
+                    html += '<div style="background:#2d2d44; padding:20px; border-radius:8px; text-align:center; color:#666;">No concept image</div>';
+                }
+                html += '</div><div>';
+                html += '<div style="margin-bottom:8px;"><strong>Headline:</strong> ' + (preset.default_headline || 'N/A') + '</div>';
+                html += '<div style="margin-bottom:8px;"><strong>Primary CTA:</strong> ' + (preset.default_primary_cta || 'N/A') + '</div>';
+                html += '<div style="margin-bottom:8px;"><strong>Secondary CTA:</strong> ' + (preset.default_secondary_cta || 'N/A') + '</div>';
+
+                const bullets = preset.default_bullets_json || [];
+                if (bullets.length) {
+                    html += '<div><strong>Bullets:</strong></div><ul style="margin-left:20px; margin-top:4px;">';
+                    for (const b of bullets) html += '<li>' + b + '</li>';
+                    html += '</ul>';
+                }
+                html += '</div></div>';
+                content.innerHTML = html;
+                preview.style.display = 'block';
+            }
+
+            async function loadPresetsForDropdown() {
+                try {
+                    state.allPresets = await fetchPresets();
+                    populatePresetDropdown();
+                } catch (e) {
+                    console.error('Error loading presets for dropdown:', e);
+                }
+            }
+
+            async function loadPresetsList() {
+                const list = $('presetsList');
+                if (!list) return;
+                try {
+                    state.currentPresets = await fetchPresets();
+                    renderPresetsList();
+                } catch (e) {
+                    console.error('Error loading presets:', e);
+                    list.innerHTML = '<div style="color:#ff9999; padding:20px; text-align:center;">Error loading presets</div>';
+                }
+            }
+
+            function renderPresetsList() {
+                const container = $('presetsList');
+                if (!container) return;
+
+                if (!state.currentPresets.length) {
+                    container.innerHTML = '<div style="color:#b6b6d6; text-align:center; padding:20px;">No presets yet. Create your first one!</div>';
+                    return;
+                }
+
+                let html = '';
+                for (const preset of state.currentPresets) {
+                    const hasImage = !!preset.concept_image_url;
+                    const imageSrc = hasImage ? '/' + preset.concept_image_url : '';
+                    const displayName = preset.display_name || '';
+                    const displayNameAttr = displayName.replace(/"/g, '&quot;');
+                    const nameEscaped = displayName.replace(/'/g, "\\'");
+
+                    html += '<div class="preset-card">';
+                    if (hasImage) {
+                        html += '<img src="' + imageSrc + '" class="preset-thumbnail" alt="' + displayNameAttr + '">';
+                    } else {
+                        html += '<div class="preset-thumbnail" style="background:#2d2d44; display:flex; align-items:center; justify-content:center; color:#666;">No image</div>';
+                    }
+                    html += '<div class="preset-info">';
+                    html += '<div style="font-weight:600; margin-bottom:4px;">' + displayName + '</div>';
+                    html += '<div class="small">Slug: ' + (preset.slug || '') + '</div>';
+                    if (preset.default_headline) html += '<div class="small" style="margin-top:4px;">' + preset.default_headline + '</div>';
+                    html += '</div>';
+                    html += '<div class="preset-actions">';
+                    html += '<button class="btn" onclick="editPreset(' + preset.id + ')">Edit</button>';
+                    html += '<button class="btn" onclick="deletePreset(' + preset.id + ', \'' + nameEscaped + '\')">Delete</button>';
+                    html += '</div></div>';
+                }
+                container.innerHTML = html;
+            }
+
+            function resetPresetForm() {
+                state.editingPresetId = null;
+                const form = $('presetForm');
+                if (form) form.reset();
+                const presetId = $('presetId');
+                if (presetId) presetId.value = '';
+                const imagePreview = $('imagePreview');
+                if (imagePreview) imagePreview.innerHTML = '';
+                const imageInput = $('conceptImageInput');
+                if (imageInput) imageInput.value = '';
+            }
+
+            function switchPresetTab(tab) {
+                document.querySelectorAll('#presetsModal .tab-btn').forEach((btn) => btn.classList.remove('active'));
+                const tabButtons = document.querySelectorAll('#presetsModal .tab-btn');
+                if (tab === 'list' && tabButtons[0]) tabButtons[0].classList.add('active');
+                if (tab === 'form' && tabButtons[1]) tabButtons[1].classList.add('active');
+
+                document.querySelectorAll('#presetsModal .tab-content').forEach((c) => c.classList.remove('active'));
+                const listTab = $('presetListTab');
+                const formTab = $('presetFormTab');
+                if (tab === 'list' && listTab) listTab.classList.add('active');
+                if (tab === 'form' && formTab) formTab.classList.add('active');
+            }
+
+            function buildSlugFromName(name) {
+                return String(name || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, '');
+            }
+
+            function fillPresetForm(preset) {
+                if (!preset) return;
+                state.editingPresetId = preset.id;
+
+                const presetId = $('presetId');
+                if (presetId) presetId.value = String(preset.id);
+
+                const dn = $('presetDisplayName');
+                if (dn) dn.value = preset.display_name || '';
+
+                const slug = $('presetSlug');
+                if (slug) slug.value = preset.slug || buildSlugFromName(preset.display_name || '');
+
+                const headline = $('presetHeadline');
+                if (headline) headline.value = preset.default_headline || '';
+
+                const primary = $('presetPrimaryCta');
+                if (primary) primary.value = preset.default_primary_cta || '';
+
+                const secondary = $('presetSecondaryCta');
+                if (secondary) secondary.value = preset.default_secondary_cta || '';
+
+                const city = $('presetCity');
+                if (city) city.value = preset.default_city || '';
+
+                const bullets = Array.isArray(preset.default_bullets_json) ? preset.default_bullets_json : [];
+                const b1 = $('presetBullet1'); if (b1) b1.value = bullets[0] || '';
+                const b2 = $('presetBullet2'); if (b2) b2.value = bullets[1] || '';
+                const b3 = $('presetBullet3'); if (b3) b3.value = bullets[2] || '';
+
+                const imagePreview = $('imagePreview');
+                if (imagePreview) {
+                    if (preset.concept_image_url) {
+                        imagePreview.innerHTML = '<img src="/' + preset.concept_image_url + '" class="preview-image" alt="Preset image preview">';
+                    } else {
+                        imagePreview.innerHTML = '';
+                    }
+                }
+            }
+
+            function handleImageSelect(event) {
+                const input = event && event.target ? event.target : null;
+                const file = input && input.files && input.files[0] ? input.files[0] : null;
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const preview = $('imagePreview');
+                    if (preview) preview.innerHTML = '<img src="' + e.target.result + '" class="preview-image" alt="Preview">';
+                };
+                reader.readAsDataURL(file);
+            }
+
+            async function savePreset() {
+                const displayName = ($('presetDisplayName') && $('presetDisplayName').value ? $('presetDisplayName').value : '').trim();
+                const slug = ($('presetSlug') && $('presetSlug').value ? $('presetSlug').value : '').trim();
+
+                if (!displayName || !slug) {
+                    alert('Display name and slug are required');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('display_name', displayName);
+                formData.append('slug', slug);
+                formData.append('default_headline', ($('presetHeadline') && $('presetHeadline').value ? $('presetHeadline').value : '').trim());
+                formData.append('default_primary_cta', ($('presetPrimaryCta') && $('presetPrimaryCta').value ? $('presetPrimaryCta').value : '').trim());
+                formData.append('default_secondary_cta', ($('presetSecondaryCta') && $('presetSecondaryCta').value ? $('presetSecondaryCta').value : '').trim());
+                formData.append('default_city', ($('presetCity') && $('presetCity').value ? $('presetCity').value : '').trim());
+
+                const bullets = [
+                    ($('presetBullet1') && $('presetBullet1').value ? $('presetBullet1').value : '').trim(),
+                    ($('presetBullet2') && $('presetBullet2').value ? $('presetBullet2').value : '').trim(),
+                    ($('presetBullet3') && $('presetBullet3').value ? $('presetBullet3').value : '').trim()
+                ].filter((b) => b);
+                formData.append('default_bullets_json', JSON.stringify(bullets));
+
+                const imageInput = $('conceptImageInput');
+                if (imageInput && imageInput.files && imageInput.files.length > 0) {
+                    formData.append('concept_image', imageInput.files[0]);
+                }
+
+                const url = state.editingPresetId ? ('/api/presets/' + state.editingPresetId) : '/api/presets';
+                const method = state.editingPresetId ? 'PUT' : 'POST';
+
+                try {
+                    const response = await fetch(url, { method, body: formData, credentials: 'include' });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error((data && data.error) ? data.error : ('Failed to save preset (HTTP ' + response.status + ')'));
+                    }
+
+                    alert(state.editingPresetId ? 'Preset updated successfully' : 'Preset created successfully');
+                    resetPresetForm();
+                    await loadPresetsList();
+                    await loadPresetsForDropdown();
+                    switchPresetTab('list');
+                } catch (err) {
+                    console.error('Error saving preset:', err);
+                    alert('Error saving preset: ' + err.message);
+                }
+            }
+
+            async function deletePreset(id, name) {
+                const display = name || ('Preset #' + id);
+                if (!confirm('Delete "' + display + '"? This cannot be undone.')) return;
+
+                try {
+                    const response = await fetch('/api/presets/' + id, { method: 'DELETE', credentials: 'include' });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error((data && data.error) ? data.error : ('Failed to delete preset (HTTP ' + response.status + ')'));
+                    }
+                    await loadPresetsList();
+                    await loadPresetsForDropdown();
+                } catch (err) {
+                    console.error('Error deleting preset:', err);
+                    alert('Error deleting preset: ' + err.message);
+                }
+            }
+
+            async function editPreset(id) {
+                // Ensure we have the latest list to edit from
+                if (!state.currentPresets || !state.currentPresets.length) {
+                    await loadPresetsList();
+                }
+                const preset = (state.currentPresets || []).find((p) => p && p.id === id);
+                if (!preset) {
+                    alert('Preset not found');
+                    return;
+                }
+                fillPresetForm(preset);
+                switchPresetTab('form');
+            }
+
+            // Expose minimal globals for existing onclick handlers
+            window.openPresetsModal = function openPresetsModal() {
+                const modal = $('presetsModal');
+                if (modal) modal.style.display = 'flex';
+                loadPresetsList();
+            };
+            window.closePresetsModal = function closePresetsModal() {
+                const modal = $('presetsModal');
+                if (modal) modal.style.display = 'none';
+                resetPresetForm();
+            };
+            window.switchPresetTab = function (tab) { switchPresetTab(tab); };
+            window.cancelPresetEdit = function () { resetPresetForm(); switchPresetTab('list'); };
+            window.createNewPreset = function () { resetPresetForm(); switchPresetTab('form'); };
+            window.savePreset = function () { return savePreset(); };
+            window.editPreset = function (id) { return editPreset(id); };
+            window.deletePreset = function (id, name) { return deletePreset(id, name); };
+            window.handleImageSelect = function (event) { return handleImageSelect(event); };
+
+            // Keep existing implementations of savePreset/editPreset/deletePreset below if present; we only ensure UI wiring is stable.
+
+            function init() {
+                if (state.initialized) return;
+                state.initialized = true;
+
+                const dropdown = $('presetDropdown');
+                if (dropdown) {
+                    dropdown.addEventListener('change', function () {
+                        const presetId = dropdown.value;
+                        if (presetId) showPresetPreview(presetId);
+                        else {
+                            const preview = $('presetPreview');
+                            if (preview) preview.style.display = 'none';
+                        }
+                    });
+                }
+
+                const displayNameInput = $('presetDisplayName');
+                const slugInput = $('presetSlug');
+                if (displayNameInput && slugInput) {
+                    displayNameInput.addEventListener('input', function () {
+                        // Only auto-generate while creating (not editing)
+                        if (!state.editingPresetId) {
+                            slugInput.value = buildSlugFromName(displayNameInput.value);
+                        }
+                    });
+                }
+
+                const uploadArea = $('uploadArea');
+                const conceptInput = $('conceptImageInput');
+                if (uploadArea && conceptInput) {
+                    uploadArea.addEventListener('dragover', function (e) {
+                        e.preventDefault();
+                        uploadArea.classList.add('dragover');
+                    });
+                    uploadArea.addEventListener('dragleave', function (e) {
+                        e.preventDefault();
+                        uploadArea.classList.remove('dragover');
+                    });
+                    uploadArea.addEventListener('drop', function (e) {
+                        e.preventDefault();
+                        uploadArea.classList.remove('dragover');
+                        const files = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : null;
+                        if (files && files.length > 0) {
+                            conceptInput.files = files;
+                            handleImageSelect({ target: { files: files } });
+                        }
+                    });
+                }
+                loadPresetsForDropdown();
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+
+        // Logo Upload Handling
+        function handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file size (max 2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                alert('File is too large. Maximum size is 2MB.');
+                return;
+            }
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('logoPreview').innerHTML = '<img src="' + e.target.result + '" class="preview-image" alt="Logo preview" style="max-width: 200px; margin-top: 12px; border-radius: 8px;">';
+                // Store base64 in hidden input for now (or upload to server)
+                document.getElementById('brand_logo_url_hidden').value = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Logo Drag & Drop
+        const logoUploadArea = document.getElementById('logoUploadArea');
+        
+        if (logoUploadArea) {
+            logoUploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+
+            logoUploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+
+            logoUploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const logoFileInput = document.getElementById('logoFileInput');
+                    if (logoFileInput) {
+                        logoFileInput.files = files;
+                        handleLogoUpload({ target: { files: files } });
+                    }
+                }
+            });
+        }
+
+        // Progress Bar Handling
+        let progressInterval = null;
+        
+        function updateProgress(status, step = '') {
+            // Prefer the main process progress bar if present; otherwise fall back to pipeline progress bar
+            let progressContainer = document.getElementById('progressContainer');
+            let progressBar = document.getElementById('progressBar');
+            let progressText = document.getElementById('progressText');
+            let progressDetail = document.getElementById('progressDetail');
+
+            if (!progressContainer) {
+                progressContainer = document.getElementById('pipelineProgressContainer');
+                progressBar = document.getElementById('pipelineProgressBar');
+                progressText = document.getElementById('pipelineProgressText');
+                progressDetail = document.getElementById('pipelineProgressDetail');
+            }
+
+            if (!progressContainer || !progressBar || !progressText || !progressDetail) {
+                // No progress UI available; avoid throwing which would break button handlers
+                return;
+            }
+            
+            progressContainer.style.display = 'block';
+            
+            switch(status) {
+                case 'scraping':
+                    progressBar.style.width = '25%';
+                    progressText.textContent = '🔍 Scraping website...';
+                    progressDetail.textContent = 'Extracting content, taking screenshots, analyzing structure';
+                    break;
+                case 'evaluating':
+                    // When used by assistants pipeline, caller can override width separately
+                    progressBar.style.width = '60%';
+                    progressText.textContent = '🤖 Analyzing with AI...';
+                    progressDetail.textContent = step || 'Processing data, generating insights, evaluating UX';
+                    break;
+                case 'generating':
+                    progressBar.style.width = '85%';
+                    progressText.textContent = '📊 Generating report...';
+                    progressDetail.textContent = 'Creating audit report and recommendations';
+                    break;
+                case 'completed':
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '✅ Complete!';
+                    progressDetail.textContent = 'Audit finished successfully. Reloading page...';
+                    clearInterval(progressInterval);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    break;
+                case 'error':
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = '#ff4444';
+                    progressText.textContent = '❌ Error occurred';
+                    progressDetail.textContent = step || 'Please check the logs';
+                    clearInterval(progressInterval);
+                    break;
+                default:
+                    progressBar.style.width = '10%';
+                    progressText.textContent = '⏳ Starting...';
+                    progressDetail.textContent = 'Initializing audit process';
+            }
+        }
+        
+        async function checkJobStatus() {
+            try {
+                // Reload the page HTML to get current status
+                const response = await fetch(window.location.href);
+                const text = await response.text();
+                
+                // Parse status from the badge element
+                const statusMatch = text.match(/Status:\s*<span[^>]*class="badge"[^>]*>([^<]+)<\/span>/i);
+                if (statusMatch) {
+                    const status = statusMatch[1].toLowerCase().trim();
+                    console.log('Current status:', status);
+                    updateProgress(status);
+                }
+            } catch (err) {
+                console.error('Error checking status:', err);
+            }
+        }
+        
+        // Intercept form submission (progress polling)
+        // NOTE: `processForm` is already declared in an earlier <script> block on this page.
+        // Using a different variable name avoids "Identifier 'processForm' has already been declared".
+        const processFormProgress = document.getElementById('processForm');
+        if (processFormProgress) {
+            processFormProgress.addEventListener('submit', function(e) {
+                // Show progress immediately
+                updateProgress('starting');
+                
+                // Start polling for status
+                progressInterval = setInterval(checkJobStatus, 2000);
+                
+                // Let form submit normally
+            });
+        }
+
+        // ---- LLM Assistants v1: start actions via AJAX + show loader + poll assistant runs ----
+        async function readJsonOrText(resp) {
+            const ct = (resp.headers && resp.headers.get && resp.headers.get('content-type')) ? resp.headers.get('content-type') : '';
+            if (ct && ct.includes('application/json')) {
+                try { return await resp.json(); } catch (e) { /* fall through */ }
+            }
+            try {
+                const text = await resp.text();
+                return { _nonJson: true, text };
+            } catch (e) {
+                return { _nonJson: true, text: '' };
+            }
+        }
+
+        async function pollAssistantRunsAndUpdateProgress() {
+            try {
+                const resp = await fetch(`/admin/audits/<%= auditJob.id %>/assistant-runs`, {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin'
+                });
+                const data = await readJsonOrText(resp);
+
+                if (resp.status === 401) {
+                    updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : 'Admin session expired. Please log in again.');
+                    clearInterval(progressInterval);
+                    return;
+                }
+                if (!resp.ok) {
+                    updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : `Failed to poll assistant runs (HTTP ${resp.status})`);
+                    clearInterval(progressInterval);
+                    return;
+                }
+                if (data && data._nonJson) {
+                    updateProgress('error', 'Unexpected response while polling (not JSON). Try reloading the page.');
+                    clearInterval(progressInterval);
+                    return;
+                }
+                const runs = data.runs || [];
+
+                const keys = ['evidence_normalizer','ux_conversion_auditor','local_seo_geo_auditor','offer_strategist','outreach_email_writer','public_audit_page_composer'];
+                const latestByKey = {};
+                for (const run of runs) {
+                    if (!latestByKey[run.assistant_key]) latestByKey[run.assistant_key] = run;
+                }
+
+                let completed = 0;
+                let lastLine = '';
+                for (const k of keys) {
+                    const r = latestByKey[k];
+                    if (r && r.status === 'ok') completed += 1;
+                    if (!lastLine && r) lastLine = `${r.assistant_key}: ${r.status}${r.error ? ' — ' + r.error : ''}`;
+                }
+                const pct = Math.min(100, Math.round((completed / keys.length) * 100));
+
+                updateProgress('evaluating', lastLine || `Assistants completed: ${completed}/${keys.length}`);
+                const progressBarMain = document.getElementById('progressBar');
+                const progressBarPipeline = document.getElementById('pipelineProgressBar');
+                if (progressBarMain) progressBarMain.style.width = `${Math.max(10, pct)}%`;
+                if (progressBarPipeline) progressBarPipeline.style.width = `${Math.max(10, pct)}%`;
+
+                if (completed === keys.length) {
+                    clearInterval(progressInterval);
+                    setTimeout(() => window.location.reload(), 800);
+                }
+            } catch (e) {
+                // ignore transient polling errors
+            }
+        }
+
+        const runFullPipelineForm = document.getElementById('runFullPipelineForm');
+        if (runFullPipelineForm) {
+            runFullPipelineForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                updateProgress('evaluating', 'Starting assistants pipeline...');
+                clearInterval(progressInterval);
+                progressInterval = setInterval(pollAssistantRunsAndUpdateProgress, 2000);
+                try {
+                    const resp = await fetch(runFullPipelineForm.action, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const data = await readJsonOrText(resp);
+                    if (resp.status === 401) {
+                        updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : 'Admin session expired. Please log in again.');
+                        clearInterval(progressInterval);
+                        return;
+                    }
+                    if (!resp.ok) {
+                        updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : `Failed to start pipeline (HTTP ${resp.status})`);
+                        clearInterval(progressInterval);
+                        return;
+                    }
+                    setTimeout(pollAssistantRunsAndUpdateProgress, 300);
+                } catch (err) {
+                    updateProgress('error', 'Failed to start pipeline');
+                    clearInterval(progressInterval);
+                }
+            });
+        }
+
+        const runSingleAssistantForm = document.getElementById('runSingleAssistantForm');
+        if (runSingleAssistantForm) {
+            runSingleAssistantForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const fd = new FormData(runSingleAssistantForm);
+                const key = fd.get('assistant_key');
+                updateProgress('evaluating', `Starting assistant: ${key}`);
+                clearInterval(progressInterval);
+                progressInterval = setInterval(pollAssistantRunsAndUpdateProgress, 2000);
+                try {
+                    const resp = await fetch(runSingleAssistantForm.action, {
+                        method: 'POST',
+                        body: fd,
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const data = await readJsonOrText(resp);
+                    if (resp.status === 401) {
+                        updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : 'Admin session expired. Please log in again.');
+                        clearInterval(progressInterval);
+                        return;
+                    }
+                    if (!resp.ok) {
+                        updateProgress('error', (data && (data.message || data.error)) ? (data.message || data.error) : `Failed to start assistant (HTTP ${resp.status})`);
+                        clearInterval(progressInterval);
+                        return;
+                    }
+                    setTimeout(pollAssistantRunsAndUpdateProgress, 300);
+                } catch (err) {
+                    updateProgress('error', 'Failed to start assistant');
+                    clearInterval(progressInterval);
+                }
+            });
+        }
+        
+        // Check if job is currently processing on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            // Get current status from the page
+            const currentStatus = '<%= auditJob.status %>'.toLowerCase();
+            console.log('Page loaded with status:', currentStatus);
+            
+            if (currentStatus === 'scraping' || currentStatus === 'evaluating') {
+                updateProgress(currentStatus);
+                progressInterval = setInterval(checkJobStatus, 2000);
+            }
+        });
+        
+        // Copy functions for Raw Dump and Evidence Pack
+        function copyRawDump(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const button = event.target;
+            const text = JSON.stringify(rawDumpData, null, 2);
+            
+            try {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = '✓ Copied!';
+                    button.style.background = '#28a745';
+                    
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = '';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard');
+                });
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            }
+        }
+        
+        function copyEvidencePack(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const button = event.target;
+            const text = JSON.stringify(evidencePackData, null, 2);
+            
+            try {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = '✓ Copied!';
+                    button.style.background = '#28a745';
+                    
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = '';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard');
+                });
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            }
+        }
+        
+        // Copy all assistant outputs
+        function copyAllOutputs() {
+            const assistantOutputs = <%- JSON.stringify(auditJob.assistant_outputs_json || {}) %>;
+            
+            // Extract only the output text from each assistant
+            const outputs = {};
+            const keys = ['evidence_normalizer', 'ux_conversion_auditor', 'local_seo_geo_auditor', 'offer_strategist', 'outreach_email_writer', 'public_audit_page_composer'];
+            const labels = {
+                'evidence_normalizer': 'Evidence Normalizer',
+                'ux_conversion_auditor': 'UX Conversion Auditor',
+                'local_seo_geo_auditor': 'Local SEO & GEO Auditor',
+                'offer_strategist': 'Offer Strategist',
+                'outreach_email_writer': 'Outreach Email Writer',
+                'public_audit_page_composer': 'Public Audit Page Composer'
+            };
+            
+            keys.forEach(key => {
+                const keyMapping = {
+                    'evidence_normalizer': 'evidence_json',
+                    'ux_conversion_auditor': 'ux_audit_json',
+                    'local_seo_geo_auditor': 'local_seo_audit_json',
+                    'offer_strategist': 'offer_copy_json',
+                    'outreach_email_writer': 'email_pack_json',
+                    'public_audit_page_composer': 'public_page_json'
+                };
+                
+                const dataKey = keyMapping[key];
+                if (assistantOutputs[dataKey]) {
+                    outputs[labels[key]] = assistantOutputs[dataKey];
+                }
+            });
+            
+            const text = JSON.stringify(outputs, null, 2);
+            
+            try {
+                navigator.clipboard.writeText(text).then(() => {
+                    const checkmark = document.getElementById('copyAllCheckmark');
+                    checkmark.style.display = 'inline';
+                    
+                    setTimeout(() => {
+                        checkmark.style.display = 'none';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard');
+                });
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            }
+        }
+        
+        // View assistant run payload
+        async function viewAssistantRunPayload(runId) {
+            try {
+                const response = await fetch(`/admin/audits/<%= auditJob.id %>/assistant-run/${runId}/payload`);
+                const data = await response.json();
+                
+                const modalContent = `
+                    <div style="max-width: 900px; max-height: 80vh; overflow: auto; padding: 20px; background: #181828; color: #fff;">
+                        <h2 style="color: #6a82fb; margin-bottom: 16px;">Assistant Run #${data.run_id} - ${data.assistant_key}</h2>
+                        
+                        <div style="margin-bottom: 16px; padding: 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px;">
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                <div><strong>Model:</strong> ${data.model}</div>
+                                <div><strong>Temperature:</strong> ${data.temperature}</div>
+                                <div><strong>Status:</strong> <span style="color: ${data.status === 'ok' ? '#4ade80' : '#ff4444'};">${data.status}</span></div>
+                                <div><strong>Duration:</strong> ${data.finished_at && data.started_at ? ((new Date(data.finished_at) - new Date(data.started_at)) / 1000).toFixed(1) + 's' : 'N/A'}</div>
+                            </div>
+                            ${data.error ? '<div style="margin-top: 12px; color: #ff4444;"><strong>Error:</strong> ' + data.error + '</div>' : ''}
+                        </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <h3 style="color: #ff7ee7; margin-bottom: 8px;">Request Payload</h3>
+                            <div style="display:flex; gap: 8px; margin-bottom: 8px;">
+                                <button onclick="copyTextFromModal('req_${data.run_id}')" style="padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d66; border-radius: 8px; color: #fff; cursor: pointer;">Copy Request</button>
+                                <button onclick="copyTextFromModal('user_${data.run_id}')" style="padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d66; border-radius: 8px; color: #fff; cursor: pointer;">Copy User JSON</button>
+                            </div>
+                            <pre id="req_${data.run_id}" style="display:none;">${JSON.stringify(data.request_payload, null, 2)}</pre>
+                            <pre id="user_${data.run_id}" style="display:none;">${(data.request_payload && data.request_payload.messages && data.request_payload.messages[1] && data.request_payload.messages[1].content) ? data.request_payload.messages[1].content : ''}</pre>
+                            <pre style="background: #0d0d1a; padding: 12px; border-radius: 8px; overflow: auto; max-height: 300px; font-size: 0.85rem;">${JSON.stringify(data.request_payload, null, 2)}</pre>
+                        </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <h3 style="color: #4ade80; margin-bottom: 8px;">Response (Parsed JSON)</h3>
+                            <div style="display:flex; gap: 8px; margin-bottom: 8px;">
+                                <button onclick="copyTextFromModal('resp_json_${data.run_id}')" style="padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d66; border-radius: 8px; color: #fff; cursor: pointer;">Copy Parsed JSON</button>
+                                <button onclick="copyTextFromModal('resp_raw_${data.run_id}')" style="padding: 6px 10px; background: #2d2d44; border: 1px solid #3d3d66; border-radius: 8px; color: #fff; cursor: pointer;">Copy Raw Text</button>
+                            </div>
+                            <pre id="resp_json_${data.run_id}" style="display:none;">${JSON.stringify(data.response, null, 2)}</pre>
+                            <pre id="resp_raw_${data.run_id}" style="display:none;">${data.response_text ? data.response_text : ''}</pre>
+                            <pre style="background: #0d0d1a; padding: 12px; border-radius: 8px; overflow: auto; max-height: 300px; font-size: 0.85rem;">${JSON.stringify(data.response, null, 2)}</pre>
+                        </div>
+
+                        ${data.response_text ? `
+                        <div style="margin-bottom: 16px;">
+                            <h3 style="color: #9ca3af; margin-bottom: 8px;">Raw Response Text</h3>
+                            <pre style="background: #0d0d1a; padding: 12px; border-radius: 8px; overflow: auto; max-height: 300px; font-size: 0.85rem;">${String(data.response_text).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+                        </div>
+                        ` : ''}
+                        
+                        ${data.token_usage ? '<div><h3 style="color: #fbbf24; margin-bottom: 8px;">Token Usage</h3><pre style="background: #0d0d1a; padding: 12px; border-radius: 8px; font-size: 0.85rem;">' + JSON.stringify(data.token_usage, null, 2) + '</pre></div>' : ''}
+                        
+                        <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 16px; padding: 10px 20px; background: #6a82fb; border: none; border-radius: 8px; color: #fff; cursor: pointer;">Close</button>
+                    </div>
+                `;
+                
+                // Create modal overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10000;';
+                overlay.innerHTML = modalContent;
+                overlay.onclick = (e) => {
+                    if (e.target === overlay) overlay.remove();
+                };
+                document.body.appendChild(overlay);
+            } catch (err) {
+                console.error('Failed to load payload:', err);
+                alert('Failed to load assistant run payload');
+            }
+        }
+
+        function copyTextFromModal(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.textContent || '';
+            navigator.clipboard.writeText(text).catch(() => {});
+        }
+
+    </script>
+</body>
+</html>
+

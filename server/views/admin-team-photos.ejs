@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Photos | Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #1e293b;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #60a5fa;
+        }
+
+        .back-link {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .team-card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 30px;
+            border: 1px solid #334155;
+        }
+
+        .team-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #60a5fa;
+        }
+
+        .photo-preview {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #0f172a;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 2px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-preview.empty {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 12px;
+            font-weight: 600;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: #2563eb;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .current-url {
+            margin-top: 10px;
+            padding: 10px;
+            background: #0f172a;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            word-break: break-all;
+        }
+
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .info-box {
+            background: #1e40af;
+            color: #dbeafe;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .info-box strong {
+            color: #93c5fd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👥 Team Photos</h1>
+            <a href="/admin" class="back-link">← Back to Admin</a>
+        </header>
+
+        <div id="successMessage" class="success-message"></div>
+        <div id="errorMessage" class="error-message"></div>
+
+        <div class="info-box">
+            <strong>📸 Jak to funguje:</strong><br>
+            Nahrajte fotky Maxe a Jacoba. Fotky se zobrazí v sekci "Meet the Brothers" na všech audit stránkách.
+            Doporučená velikost: čtvercové fotky (např. 500x500px) pro nejlepší vzhled.
+        </div>
+
+        <div class="team-grid">
+            <!-- Jacob -->
+            <div class="team-card">
+                <h2>Jacob</h2>
+                <div class="photo-preview" id="jacobPreview">
+                    <% if (settings.team_jacob_photo) { %>
+                        <img src="<%= settings.team_jacob_photo %>" alt="Jacob">
+                    <% } else { %>
+                        <span class="empty">No photo uploaded</span>
+                    <% } %>
+                </div>
+                <form id="jacobForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="jacobPhoto">Upload Jacob's Photo</label>
+                        <input type="file" id="jacobPhoto" name="photo" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload Jacob's Photo</button>
+                </form>
+                <% if (settings.team_jacob_photo) { %>
+                <div class="current-url">
+                    Current: <%= settings.team_jacob_photo %>
+                </div>
+                <% } %>
+            </div>
+
+            <!-- Max -->
+            <div class="team-card">
+                <h2>Max</h2>
+                <div class="photo-preview" id="maxPreview">
+                    <% if (settings.team_max_photo) { %>
+                        <img src="<%= settings.team_max_photo %>" alt="Max">
+                    <% } else { %>
+                        <span class="empty">No photo uploaded</span>
+                    <% } %>
+                </div>
+                <form id="maxForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="maxPhoto">Upload Max's Photo</label>
+                        <input type="file" id="maxPhoto" name="photo" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload Max's Photo</button>
+                </form>
+                <% if (settings.team_max_photo) { %>
+                <div class="current-url">
+                    Current: <%= settings.team_max_photo %>
+                </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Preview image before upload
+        document.getElementById('jacobPhoto').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    document.getElementById('jacobPreview').innerHTML = `<img src="${event.target.result}" alt="Jacob">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('maxPhoto').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    document.getElementById('maxPreview').innerHTML = `<img src="${event.target.result}" alt="Max">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Handle Jacob form submission
+        document.getElementById('jacobForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('photo', document.getElementById('jacobPhoto').files[0]);
+            formData.append('member', 'jacob');
+            
+            await uploadPhoto(formData, 'Jacob');
+        });
+
+        // Handle Max form submission
+        document.getElementById('maxForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('photo', document.getElementById('maxPhoto').files[0]);
+            formData.append('member', 'max');
+            
+            await uploadPhoto(formData, 'Max');
+        });
+
+        async function uploadPhoto(formData, memberName) {
+            const successMsg = document.getElementById('successMessage');
+            const errorMsg = document.getElementById('errorMessage');
+            
+            successMsg.classList.remove('show');
+            errorMsg.classList.remove('show');
+
+            try {
+                const response = await fetch('/admin/team-photos/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    successMsg.textContent = `✅ ${memberName}'s photo uploaded successfully!`;
+                    successMsg.classList.add('show');
+                    
+                    // Reload page after 1 second
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    errorMsg.textContent = `❌ Error: ${result.error || 'Upload failed'}`;
+                    errorMsg.classList.add('show');
+                }
+            } catch (error) {
+                errorMsg.textContent = `❌ Error: ${error.message}`;
+                errorMsg.classList.add('show');
+            }
+        }
+    </script>
+</body>
+</html>

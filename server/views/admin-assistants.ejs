@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Assistants Configuration - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181828;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 8px;
+            background: #181828;
+            border: 1.5px solid #2d2d44;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #2d2d44;
+        }
+
+        .btn-primary {
+            background: linear-gradient(90deg, #6a82fb, #ff7ee7);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .assistant-card {
+            background: #181828;
+            border: 1px solid #2d2d44;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .assistant-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .assistant-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #6a82fb;
+        }
+
+        .assistant-key {
+            font-size: 0.9rem;
+            color: #999;
+            margin-left: 12px;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-active {
+            background: #1e3a2e;
+            color: #4ade80;
+        }
+
+        .badge-inactive {
+            background: #3a1e1e;
+            color: #ff4444;
+        }
+
+        .field-group {
+            margin-bottom: 16px;
+        }
+
+        .field-label {
+            font-size: 0.9rem;
+            color: #b6b6d6;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .field-input, .field-select, .field-textarea {
+            width: 100%;
+            padding: 10px;
+            background: #0d0d1a;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .field-textarea {
+            min-height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .success-message {
+            background: #1e3a2e;
+            border: 1px solid #4ade80;
+            color: #4ade80;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="header">
+            <h1>🤖 LLM Assistants Configuration</h1>
+            <a href="/admin/audits" class="btn">← Back to Audits</a>
+        </div>
+
+        <div id="successMessage" class="success-message"></div>
+
+        <% assistants.forEach(function(assistant) { %>
+            <div class="assistant-card">
+                <div class="assistant-header">
+                    <div>
+                        <span class="assistant-name"><%= assistant.name %></span>
+                        <span class="assistant-key"><%= assistant.key %></span>
+                    </div>
+                    <div>
+                        <span class="badge <%= assistant.is_active ? 'badge-active' : 'badge-inactive' %>">
+                            <%= assistant.is_active ? 'Active' : 'Inactive' %>
+                        </span>
+                        <% if (assistant.requires_evidence_refs) { %>
+                            <span class="badge" style="background: #3a2e1e; color: #fbbf24; margin-left: 8px;">
+                                ⚠️ Requires Evidence
+                            </span>
+                        <% } %>
+                    </div>
+                </div>
+
+                <form onsubmit="saveAssistant(event, <%= assistant.id %>)">
+                    <div class="grid-2">
+                        <div class="field-group">
+                            <label class="field-label">Model</label>
+                            <select class="field-select" name="model" id="model_<%= assistant.id %>">
+                                <option value="openai/gpt-4.1" <%= assistant.model === 'openai/gpt-4.1' ? 'selected' : '' %>>OpenAI GPT-4.1</option>
+                                <option value="openai/gpt-4.1-mini" <%= assistant.model === 'openai/gpt-4.1-mini' ? 'selected' : '' %>>OpenAI GPT-4.1 Mini</option>
+                                <option value="google/gemini-2.5-pro" <%= assistant.model === 'google/gemini-2.5-pro' ? 'selected' : '' %>>Google Gemini 2.5 Pro</option>
+                                <option value="anthropic/claude-3.7-sonnet" <%= assistant.model === 'anthropic/claude-3.7-sonnet' ? 'selected' : '' %>>Anthropic Claude 3.7 Sonnet</option>
+                                <option value="anthropic/claude-3.5-sonnet" <%= assistant.model === 'anthropic/claude-3.5-sonnet' ? 'selected' : '' %>>Anthropic Claude 3.5 Sonnet</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label">Temperature (<span id="temp_display_<%= assistant.id %>"><%= assistant.temperature %></span>)</label>
+                            <input 
+                                type="range" 
+                                class="field-input" 
+                                name="temperature" 
+                                id="temperature_<%= assistant.id %>"
+                                min="0" 
+                                max="1" 
+                                step="0.05" 
+                                value="<%= assistant.temperature %>"
+                                oninput="document.getElementById('temp_display_<%= assistant.id %>').textContent = this.value"
+                                style="padding: 0;"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label class="field-label">System Prompt</label>
+                        <textarea class="field-textarea" name="prompt" id="prompt_<%= assistant.id %>"><%= assistant.prompt %></textarea>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+                        <button type="button" class="btn" onclick="resetAssistant(<%= assistant.id %>)">🔄 Reset to Default</button>
+                    </div>
+                </form>
+            </div>
+        <% }); %>
+    </div>
+
+    <script>
+        function saveAssistant(event, assistantId) {
+            event.preventDefault();
+            
+            const model = document.getElementById(`model_${assistantId}`).value;
+            const temperature = parseFloat(document.getElementById(`temperature_${assistantId}`).value);
+            const prompt = document.getElementById(`prompt_${assistantId}`).value;
+            
+            fetch(`/admin/api/assistants/${assistantId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model,
+                    temperature,
+                    prompt
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    showSuccess('Assistant configuration saved successfully!');
+                }
+            })
+            .catch(err => {
+                console.error('Save error:', err);
+                alert('Failed to save assistant configuration');
+            });
+        }
+        
+        function resetAssistant(assistantId) {
+            if (!confirm('Reset this assistant to default configuration? This will reload the page.')) {
+                return;
+            }
+            
+            // Reload page to get defaults
+            window.location.reload();
+        }
+        
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            successEl.textContent = message;
+            successEl.style.display = 'block';
+            
+            setTimeout(() => {
+                successEl.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+
