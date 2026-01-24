@@ -29,6 +29,7 @@ const {
   setSiteSetting
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
+const { collectDiagnostics } = require('../services/diagnostics');
 const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
 
@@ -182,6 +183,28 @@ router.get('/', requireAdmin, (req, res) => {
       });
     });
   });
+});
+
+// GET /admin/diagnostics - runtime parity diagnostics (copy JSON and diff local vs prod)
+router.get('/diagnostics', requireAdmin, async (req, res) => {
+  try {
+    const diag = await collectDiagnostics();
+    res.render('admin-diagnostics', { diag });
+  } catch (err) {
+    console.error('[DIAGNOSTICS] Failed to collect diagnostics:', err);
+    return res.status(500).send('Failed to collect diagnostics');
+  }
+});
+
+// GET /admin/api/diagnostics - JSON diagnostics for automation
+router.get('/api/diagnostics', requireAdmin, async (req, res) => {
+  try {
+    const diag = await collectDiagnostics();
+    return res.json(diag);
+  } catch (err) {
+    console.error('[DIAGNOSTICS] Failed to collect diagnostics:', err);
+    return res.status(500).json({ error: 'diagnostics_failed', message: err.message });
+  }
 });
 
 // GET /admin/audits - seznam audit jobs

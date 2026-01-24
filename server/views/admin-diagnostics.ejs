@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Diagnostics</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #0f172a;
+        --muted: rgba(255, 255, 255, 0.72);
+        --border: rgba(255, 255, 255, 0.10);
+        --btn: rgba(255, 255, 255, 0.10);
+        --btnHover: rgba(255, 255, 255, 0.18);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      body {
+        font-family: var(--sans);
+        margin: 24px;
+        background: var(--bg);
+        color: #e5e7eb;
+      }
+      a { color: #93c5fd; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .muted { color: var(--muted); }
+      .btn {
+        border: 1px solid var(--border);
+        background: var(--btn);
+        color: #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .btn:hover { background: var(--btnHover); }
+      pre {
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.45;
+        background: rgba(0,0,0,0.25);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        overflow: auto;
+        max-height: 70vh;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .note {
+        margin-top: 12px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <div style="font-size: 20px; font-weight: 800;">Admin Diagnostics</div>
+        <div class="muted" style="margin-top: 4px;">
+          Copy this JSON from <b>localhost</b> and from <b>production</b> and run a diff.
+        </div>
+      </div>
+      <div style="display:flex; gap: 8px;">
+        <button class="btn" id="copyBtn">Copy JSON</button>
+        <a class="btn" href="/admin" style="display:inline-flex; align-items:center;">Back</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <pre id="diag"><%= JSON.stringify(diag, null, 2) %></pre>
+      <div class="note muted">
+        Tip: paste both dumps to local files and run <span style="font-family: var(--mono);">diff -u local.json prod.json</span>.
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const btn = document.getElementById('copyBtn');
+        const pre = document.getElementById('diag');
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(pre.innerText);
+            btn.textContent = 'Copied';
+            setTimeout(() => (btn.textContent = 'Copy JSON'), 1200);
+          } catch (e) {
+            alert('Copy failed. Please select the JSON and copy manually.');
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
+
