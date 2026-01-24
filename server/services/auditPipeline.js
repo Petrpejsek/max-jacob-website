@@ -2864,19 +2864,25 @@ async function processAuditJob(jobId, options = {}) {
               ? String(homepage.cities_json[0]).trim()
               : null;
 
-      if (!detectedCity) {
-        await logStep(jobId, 'scrape', `❌ ERROR: No city detected from scraped data (v3).`);
-        throw new Error('City detection failed (v3) - no city detected from NAP or page text. Cannot proceed without location data.');
-      }
-
+      // City detection - use detected or fallback to prefilled, warn if neither
       const prevCity = (job.city || '').toString().trim();
-      job.city = detectedCity;
-      await updateJob(jobId, { city: job.city });
-      if (prevCity && prevCity.toLowerCase() !== job.city.toLowerCase()) {
-        await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCity}" with scraped city "${job.city}"`);
+      if (!detectedCity) {
+        if (prevCity) {
+          await logStep(jobId, 'scrape', `⚠ No city detected from scraped data (v3), using prefilled city: ${prevCity}`);
+          job.city = prevCity;
+        } else {
+          await logStep(jobId, 'scrape', `⚠ No city detected from scraped data (v3), continuing without city`);
+          job.city = '';
+        }
       } else {
-        await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+        job.city = detectedCity;
+        if (prevCity && prevCity.toLowerCase() !== job.city.toLowerCase()) {
+          await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCity}" with scraped city "${job.city}"`);
+        } else {
+          await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+        }
       }
+      await updateJob(jobId, { city: job.city });
       
       // Convert v3 data to v2 format for backward compatibility with LLM evaluators
       // IMPORTANT: v3 extracts email into page.nap_json + Evidence Pack v2,
@@ -3160,19 +3166,25 @@ async function processAuditJob(jobId, options = {}) {
             ? extractCityFromUsAddressString(v2AddressValue)
             : null;
 
-      if (!v2DetectedCity) {
-        await logStep(jobId, 'scrape', `❌ ERROR: No city detected from scraped data (v2).`);
-        throw new Error('City detection failed (v2) - no addressLocality and unable to parse city from scraped address string.');
-      }
-
+      // City detection - use detected or fallback to prefilled, warn if neither
       const prevCityV2 = (job.city || '').toString().trim();
-      job.city = v2DetectedCity;
-      await updateJob(jobId, { city: job.city });
-      if (prevCityV2 && prevCityV2.toLowerCase() !== job.city.toLowerCase()) {
-        await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCityV2}" with scraped city "${job.city}"`);
+      if (!v2DetectedCity) {
+        if (prevCityV2) {
+          await logStep(jobId, 'scrape', `⚠ No city detected from scraped data (v2), using prefilled city: ${prevCityV2}`);
+          job.city = prevCityV2;
+        } else {
+          await logStep(jobId, 'scrape', `⚠ No city detected from scraped data (v2), continuing without city`);
+          job.city = '';
+        }
       } else {
-        await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+        job.city = v2DetectedCity;
+        if (prevCityV2 && prevCityV2.toLowerCase() !== job.city.toLowerCase()) {
+          await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCityV2}" with scraped city "${job.city}"`);
+        } else {
+          await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+        }
       }
+      await updateJob(jobId, { city: job.city });
       
       await updateJob(jobId, {
         evidence_pack_v2_json: JSON.stringify(evidencePackV2),
