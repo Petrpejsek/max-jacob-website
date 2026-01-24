@@ -335,6 +335,11 @@ router.post('/audits', requireAdmin, (req, res) => {
 // POST /admin/audits/:id/process - full pipeline (rate-limited, responds immediately)
 router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, res) => {
   const id = req.params.id;
+  const accept = (req.headers.accept || '').toLowerCase();
+  const wantsJson =
+    accept.includes('application/json') ||
+    req.xhr ||
+    (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest';
   
   console.log('[AUDIT PROCESS] Starting for job', id);
   console.log('[AUDIT PROCESS] Body:', {
@@ -364,6 +369,9 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
   updateAuditJob(id, inputUpdate, (err) => {
     if (err) {
       console.error('[AUDIT PROCESS] Error updating audit input:', err);
+      if (wantsJson) {
+        return res.status(500).json({ error: 'update_failed', message: err.message });
+      }
       return res.status(500).send('Error updating audit job: ' + err.message);
     }
     
@@ -374,7 +382,12 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
     updateAuditJob(id, { status: 'scraping', error_message: null }, (statusErr) => {
       if (statusErr) {
         console.error('[AUDIT PROCESS] Failed to set status=scraping for job', id, statusErr);
-        // continue anyway
+        if (wantsJson) {
+          return res.status(500).json({
+            error: 'status_update_failed',
+            message: statusErr.message || String(statusErr)
+          });
+        }
       }
 
       console.log('[AUDIT PROCESS] Queueing pipeline for job', id);
@@ -414,7 +427,11 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
           );
         });
 
-      // Redirect immediately; page will show loader because status is scraping
+      // Respond immediately (job runs in background)
+      if (wantsJson) {
+        return res.status(202).json({ ok: true, jobId: Number(id), queued: true });
+      }
+      // Redirect for classic form submits
       res.redirect(`/admin/audits/${id}`);
     });
   });

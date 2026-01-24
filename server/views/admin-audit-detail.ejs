@@ -2261,26 +2261,42 @@ STYLE:
             processForm.addEventListener('submit', (e) => {
                 e.preventDefault(); // Stop the immediate submit
                 showLoading('Starting full audit process...');
-                // Submit after a short delay to ensure overlay is visible
-                setTimeout(() => {
-                    // Create a hidden form to avoid re-triggering event listener
-                    const formData = new FormData(processForm);
-                    const hiddenForm = document.createElement('form');
-                    hiddenForm.method = 'POST';
-                    hiddenForm.action = processForm.action;
-                    hiddenForm.style.display = 'none';
-                    
-                    for (let [key, value] of formData.entries()) {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = key;
-                        input.value = value;
-                        hiddenForm.appendChild(input);
+                // Start via AJAX so we can show server errors and avoid a full page reload
+                setTimeout(async () => {
+                    try {
+                        const fd = new FormData(processForm);
+                        const body = new URLSearchParams();
+                        for (const [k, v] of fd.entries()) {
+                            body.append(k, String(v));
+                        }
+
+                        const resp = await fetch(processForm.action, {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json' },
+                            body,
+                            credentials: 'same-origin'
+                        });
+
+                        // If session expired, redirect to login
+                        if (resp.status === 401) {
+                            hideLoading();
+                            window.location.href = '/admin/login';
+                            return;
+                        }
+
+                        if (!resp.ok) {
+                            const text = await resp.text().catch(() => '');
+                            hideLoading();
+                            alert('Process failed (HTTP ' + resp.status + '): ' + (text || 'Unknown error'));
+                            return;
+                        }
+
+                        // Success: keep loader + polling. The status should become 'scraping' shortly.
+                    } catch (err) {
+                        hideLoading();
+                        alert('Process failed: ' + (err && err.message ? err.message : String(err)));
                     }
-                    
-                    document.body.appendChild(hiddenForm);
-                    hiddenForm.submit();
-                }, 300);
+                }, 150);
             });
         }
 
