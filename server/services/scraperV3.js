@@ -351,7 +351,9 @@ async function extractNavSeedUrls(page, baseUrl) {
  * Extract page data
  */
 async function extractPageData(page, url) {
-  const data = await page.evaluate(() => {
+  let data;
+  try {
+    data = await page.evaluate(() => {
     // Title and meta
     const title = document.title || '';
     const metaDesc = document.querySelector('meta[name="description"]');
@@ -975,6 +977,42 @@ async function extractPageData(page, url) {
       }
     };
   });
+  } catch (evalErr) {
+    console.error(`[SCRAPER V3] page.evaluate() failed for ${url}:`, evalErr.message);
+    // Return minimal valid data to prevent complete pipeline failure
+    data = {
+      title: '',
+      metaDescription: '',
+      ogSiteName: '',
+      canonicalUrl: '',
+      h1Text: '',
+      h2: [],
+      h3: [],
+      h6: [],
+      wordCount: 0,
+      primary_nav_tree: [],
+      footer_nav_links: [],
+      content_text: '',
+      content_outline_json: { root: 'body', sections: [] },
+      images_json: [],
+      internalLinksCount: 0,
+      outboundLinksCount: 0,
+      topOutboundDomains: [],
+      formsCount: 0,
+      formsSummary: [],
+      forms_detailed: [],
+      ctas: [],
+      cta_candidates: [],
+      hasTelLink: false,
+      hasMailtoLink: false,
+      hasForm: false,
+      jsonldBlocks: [],
+      bodyText: '',
+      text_snippet: '',
+      services_extracted: { featured: [], other_services: [] },
+      trust_extracted: { years_in_business_snippet: null, review_snippets: [] }
+    };
+  }
 
   return data;
 }
@@ -1796,6 +1834,8 @@ async function crawlWebsite(jobId, startUrl, logFn) {
     try {
       const page = await context.newPage();
       await page.goto(current.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      // Wait for page to stabilize before extracting (prevents navigation errors)
+      await page.waitForTimeout(1000);
       
       // Extract page data
       const pageData = await extractPageData(page, current.url);

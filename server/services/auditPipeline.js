@@ -701,8 +701,12 @@ async function scrapeWebsite(url, jobId) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  // Wait for page to stabilize (prevents "execution context destroyed" if page navigates)
+  await page.waitForTimeout(1500);
 
-  const extracted = await page.evaluate(() => {
+  let extracted;
+  try {
+    extracted = await page.evaluate(() => {
     // Utility functions for contact extraction (browser context) - v2 with source tracking
     function normalizePhoneToUS(phone) {
       const digits = phone.replace(/\D/g, '');
@@ -1242,6 +1246,11 @@ async function scrapeWebsite(url, jobId) {
       }
     };
   });
+  } catch (evalErr) {
+    console.error('[SCRAPER] page.evaluate() failed:', evalErr.message);
+    await browser.close();
+    throw new Error(`Failed to extract page data: ${evalErr.message}. This usually happens if the page redirects during scraping.`);
+  }
 
   // Parse JSON-LD for additional contact info
   const jsonLdContacts = parseJsonLdContacts(extracted.rawDump.structured_data_jsonld || []);
