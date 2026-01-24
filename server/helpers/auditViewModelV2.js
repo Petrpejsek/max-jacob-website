@@ -1775,8 +1775,8 @@ function buildCtaConfig(job, offer_copy) {
  */
 function buildFormConfig(job, public_page) {
   return {
-    action: '/web-project-form.html',
-    method: 'GET',
+    action: '/api/contact-submissions',
+    method: 'POST',
     headline: 'Get pricing range + next steps',
     subheadline: 'Fill in 30 seconds. We will complete the rest later.',
     prefill: {

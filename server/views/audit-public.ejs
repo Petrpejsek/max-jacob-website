@@ -190,7 +190,23 @@
         <div class="section">
             <h2>Get a pricing range + next steps</h2>
             <p class="subhead" style="margin: 8px 0 16px;">Short form first — we’ll prefill the longer form after this.</p>
-            <form action="/web-project-form.html" method="GET">
+            <!-- Success Message (hidden by default) -->
+            <div id="v1-form-success" style="display: none; text-align: center; padding: 40px 20px;">
+                <div style="width: 80px; height: 80px; background: #dcfce7; color: #059669; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 40px;">✓</div>
+                <h2>Thank You!</h2>
+                <p class="subhead" style="margin: 12px 0;">We've received your information.</p>
+                <p style="color: #b6b6d6;">We'll contact you via email within 12-24 hours with your personalized plan.</p>
+            </div>
+
+            <!-- Error Message (hidden by default) -->
+            <div id="v1-form-error" style="display: none; padding: 12px; background: #7f1d1d; border: 1px solid #991b1b; border-radius: 8px; margin-bottom: 16px;">
+                <p style="color: #fecaca; font-weight: 600; text-align: center; margin: 0;">
+                    <span id="v1-error-text">Something went wrong. Please try again.</span>
+                </p>
+            </div>
+
+            <div id="v1-form-container">
+            <form id="v1-contact-form" action="/api/contact-submissions" method="POST">
                 <div class="form-grid">
                     <input type="text" name="name" placeholder="Name" required>
                     <input type="email" name="email" placeholder="Email" required>
@@ -202,11 +218,78 @@
                         <option value="no">No</option>
                     </select>
                 </div>
-                <button type="submit" style="margin-top: 16px;"><%= page.form && page.form.cta ? page.form.cta : 'Get pricing range + next steps' %></button>
+                <button type="submit" id="v1-submit-btn" style="margin-top: 16px;"><%= page.form && page.form.cta ? page.form.cta : 'Get pricing range + next steps' %></button>
                 <div class="cta-note"><%= page.disclaimer || 'No guarantees or performance promises. Concept preview only.' %></div>
             </form>
+            </div>
         </div>
     </div>
+
+    <script>
+        // V1 form submission handler
+        (function() {
+            const form = document.getElementById('v1-contact-form');
+            const formContainer = document.getElementById('v1-form-container');
+            const successMessage = document.getElementById('v1-form-success');
+            const errorMessage = document.getElementById('v1-form-error');
+            const errorText = document.getElementById('v1-error-text');
+            const submitBtn = document.getElementById('v1-submit-btn');
+
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    // Hide error message if visible
+                    errorMessage.style.display = 'none';
+
+                    // Disable submit button
+                    submitBtn.disabled = true;
+                    const originalText = submitBtn.textContent;
+                    submitBtn.textContent = 'Sending...';
+
+                    // Get form data
+                    const formData = new FormData(form);
+                    const payload = {
+                        name: formData.get('name'),
+                        email: formData.get('email'),
+                        website: formData.get('website'),
+                        message: 'Audit V1 form submission - Budget: ' + (formData.get('budget_range') || 'Not specified') + ', Decision maker: ' + (formData.get('decision_maker') || 'Not specified')
+                    };
+
+                    try {
+                        const response = await fetch('/api/contact-submissions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            // Success! Hide form and show thank you message
+                            formContainer.style.display = 'none';
+                            successMessage.style.display = 'block';
+                        } else {
+                            // Error from server
+                            errorText.textContent = result.error || 'Something went wrong. Please try again.';
+                            errorMessage.style.display = 'block';
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                        }
+                    } catch (error) {
+                        // Network error
+                        console.error('Submission error:', error);
+                        errorText.textContent = 'Network error. Please check your connection and try again.';
+                        errorMessage.style.display = 'block';
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    }
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 

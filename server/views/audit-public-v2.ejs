@@ -981,56 +981,78 @@
     <!-- FORM SECTION -->
     <section class="py-24 px-6 max-w-4xl mx-auto" id="form">
         <div class="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-100">
-            <div class="text-center mb-12">
-                <h2 class="text-4xl font-black mb-4"><%= vm.form_config.headline %></h2>
-                <p class="text-slate-500 text-lg"><%= vm.form_config.subheadline %></p>
-            </div>
-
-            <form action="<%= vm.form_config.action %>" method="<%= vm.form_config.method %>">
-                <div class="grid md:grid-cols-2 gap-6 mb-6">
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Name *</label>
-                        <input type="text" name="name" required placeholder="Your name" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Email *</label>
-                        <input type="email" name="email" required placeholder="your@email.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Website</label>
-                        <input type="text" name="website" value="<%= vm.form_config.prefill.website %>" placeholder="www.yoursite.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Budget Range</label>
-                        <input
-                            type="text"
-                            name="budget_range"
-                            placeholder="Optional (e.g. $1k–$10k)"
-                            class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
-                        >
-                    </div>
-
-                    <div class="flex flex-col md:col-span-2">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Are you the decision maker?</label>
-                        <select name="decision_maker" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                            <option value="">Select</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                        </select>
+            <!-- Success Message (hidden by default) -->
+            <div id="audit-form-success" class="hidden text-center">
+                <div class="mb-6">
+                    <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
                     </div>
                 </div>
+                <h2 class="text-4xl font-black mb-4 text-slate-900">Thank You!</h2>
+                <p class="text-slate-600 text-lg mb-2">We've received your information.</p>
+                <p class="text-slate-500 text-base">We'll contact you via email within 12-24 hours with your personalized plan.</p>
+            </div>
 
-                <button type="submit" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
-                    <%= vm.form_config.cta_button_text %>
-                </button>
-
-                <p class="text-center text-slate-400 text-sm mt-6">
-                    <%= vm.form_config.disclaimer %>
+            <!-- Error Message (hidden by default) -->
+            <div id="audit-form-error" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p class="text-red-600 font-semibold text-sm text-center">
+                    <span id="audit-error-text">Something went wrong. Please try again.</span>
                 </p>
-            </form>
+            </div>
+
+            <!-- Form (visible by default) -->
+            <div id="audit-form-container">
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl font-black mb-4"><%= vm.form_config.headline %></h2>
+                    <p class="text-slate-500 text-lg"><%= vm.form_config.subheadline %></p>
+                </div>
+
+                <form id="audit-contact-form" action="<%= vm.form_config.action %>" method="<%= vm.form_config.method %>">
+                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Name *</label>
+                            <input type="text" name="name" required placeholder="Your name" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Email *</label>
+                            <input type="email" name="email" required placeholder="your@email.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Website</label>
+                            <input type="text" name="website" value="<%= vm.form_config.prefill.website %>" placeholder="www.yoursite.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Budget Range</label>
+                            <input
+                                type="text"
+                                name="budget_range"
+                                placeholder="Optional (e.g. $1k–$10k)"
+                                class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                            >
+                        </div>
+
+                        <div class="flex flex-col md:col-span-2">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Are you the decision maker?</label>
+                            <select name="decision_maker" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                                <option value="">Select</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="audit-submit-btn" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
+                        <%= vm.form_config.cta_button_text %>
+                    </button>
+
+                    <p class="text-center text-slate-400 text-sm mt-6">
+                        <%= vm.form_config.disclaimer %>
+                    </p>
+                </form>
+            </div>
         </div>
     </section>
 
@@ -1208,6 +1230,72 @@
             }
             setTimeout(resizeProposalIframe, 200);
             setTimeout(resizeProposalIframe, 800);
+        });
+
+        // Audit form submission handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('audit-contact-form');
+            const formContainer = document.getElementById('audit-form-container');
+            const successMessage = document.getElementById('audit-form-success');
+            const errorMessage = document.getElementById('audit-form-error');
+            const errorText = document.getElementById('audit-error-text');
+            const submitBtn = document.getElementById('audit-submit-btn');
+
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    // Hide error message if visible
+                    errorMessage.classList.add('hidden');
+
+                    // Disable submit button
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Sending...';
+
+                    // Get form data
+                    const formData = new FormData(form);
+                    const payload = {
+                        name: formData.get('name'),
+                        email: formData.get('email'),
+                        website: formData.get('website'),
+                        message: 'Audit form submission - Budget: ' + (formData.get('budget_range') || 'Not specified') + ', Decision maker: ' + (formData.get('decision_maker') || 'Not specified')
+                    };
+
+                    try {
+                        const response = await fetch('/api/contact-submissions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            // Success! Hide form and show thank you message
+                            formContainer.classList.add('hidden');
+                            successMessage.classList.remove('hidden');
+                            
+                            // Smooth scroll to success message
+                            successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } else {
+                            // Error from server
+                            errorText.textContent = result.error || 'Something went wrong. Please try again.';
+                            errorMessage.classList.remove('hidden');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = '<%= vm.form_config.cta_button_text %>';
+                        }
+                    } catch (error) {
+                        // Network error
+                        console.error('Submission error:', error);
+                        errorText.textContent = 'Network error. Please check your connection and try again.';
+                        errorMessage.classList.remove('hidden');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '<%= vm.form_config.cta_button_text %>';
+                    }
+                });
+            }
         });
     </script>
 </body>
