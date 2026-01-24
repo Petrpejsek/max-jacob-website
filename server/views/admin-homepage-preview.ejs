@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homepage Proposal - Job #<%= job.id %> | Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .annotation-card {
+            transition: all 0.2s ease;
+        }
+        .annotation-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .iframe-container {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        #preview-iframe {
+            border: none;
+            width: 100%;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <% const proposalWarnings = (proposalData && Array.isArray(proposalData.warnings)) ? proposalData.warnings : []; %>
+    
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-[1800px] mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <a href="/admin/audits/<%= job.id %>" class="text-gray-600 hover:text-gray-900 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                    </a>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-900">Homepage Proposal</h1>
+                        <p class="text-sm text-gray-500">Job #<%= job.id %> - <%= job.input_url %></p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <% if (proposalData) { %>
+                        <div class="text-sm text-gray-600">
+                            <%= proposalWarnings.length > 0 ? `⚠️ ${proposalWarnings.length} warnings` : '✅ All data found' %>
+                        </div>
+                    <% } %>
+                    
+                    <form method="POST" action="/admin/audits/<%= job.id %>/regenerate-homepage" class="inline">
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
+                            🔄 Regenerate
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="max-w-[1800px] mx-auto px-6 py-6">
+        
+        <!-- Warning Banner -->
+        <% if (proposalWarnings.length > 0) { %>
+            <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 text-yellow-600 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h3 class="font-semibold text-yellow-900 mb-1">Data Quality Warnings</h3>
+                        <ul class="text-sm text-yellow-800 space-y-1">
+                            <% proposalWarnings.forEach(warning => { %>
+                                <li>• <%= warning %></li>
+                            <% }); %>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        <% } %>
+
+        <!-- Disclaimer Banner -->
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-start">
+                <svg class="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                <div>
+                    <h3 class="font-semibold text-blue-900 mb-1">Sample Homepage Preview</h3>
+                    <p class="text-sm text-blue-800">
+                        This is a <strong>sample design</strong> using their actual scraped content (company name, menu, services, contact info). 
+                        All images are template placeholders and reviews are examples. Everything is customizable based on client feedback. 
+                        This preview will NOT be published anywhere - it's for demonstration purposes only.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full-length preview (no internal scroll). -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold text-gray-900">🖥️ Homepage Preview</h2>
+                <a class="text-xs font-medium text-blue-600 hover:text-blue-700" href="/admin/audits/<%= job.id %>/homepage-proposal.html" target="_blank" rel="noopener noreferrer">
+                    Open in new tab
+                </a>
+            </div>
+
+            <div id="iframe-wrapper" class="iframe-container bg-white" style="transition: all 0.3s ease;">
+                <iframe 
+                    id="preview-iframe" 
+                    src="/admin/audits/<%= job.id %>/homepage-proposal.html"
+                    title="Homepage Proposal Preview"
+                    sandbox="allow-same-origin allow-scripts"
+                    scrolling="no"
+                    style="height: 1200px;"
+                ></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-fit iframe height (no internal scroll)
+        function resizePreviewIframe() {
+            const iframe = document.getElementById('preview-iframe');
+            if (!iframe) return;
+            try {
+                const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                if (!doc) return;
+                const height = Math.max(
+                    doc.body ? doc.body.scrollHeight : 0,
+                    doc.documentElement ? doc.documentElement.scrollHeight : 0
+                );
+                if (height && Number.isFinite(height)) {
+                    iframe.style.height = `${Math.ceil(height)}px`;
+                }
+            } catch (e) {
+                // iframe not ready yet
+            }
+        }
+
+        window.addEventListener('resize', () => setTimeout(resizePreviewIframe, 200));
+        window.addEventListener('load', () => {
+            const iframe = document.getElementById('preview-iframe');
+            if (iframe) {
+                iframe.addEventListener('load', () => {
+                    resizePreviewIframe();
+                    setTimeout(resizePreviewIframe, 250);
+                    setTimeout(resizePreviewIframe, 900);
+                });
+            }
+            setTimeout(resizePreviewIframe, 250);
+            setTimeout(resizePreviewIframe, 900);
+        });
+    </script>
+</body>
+</html>

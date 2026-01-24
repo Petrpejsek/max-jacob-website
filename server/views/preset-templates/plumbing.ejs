@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <%
+      // This template is often fed a "company_name" derived from a domain (no spaces).
+      // Normalize it so it never overflows in the hero/header and doesn't duplicate "Plumbing".
+      const SERVICE_LABEL = 'Plumbing';
+
+      function escapeRegExp(str) {
+        return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+
+      function titleCaseIfAllCapsOrLower(str) {
+        const s = String(str || '').trim();
+        if (!s) return s;
+        if (s !== s.toLowerCase() && s !== s.toUpperCase()) return s;
+        return s
+          .split(' ')
+          .filter(Boolean)
+          .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+          .join(' ');
+      }
+
+      function normalizeCompanyName(raw, { nicheHint, cityHint } = {}) {
+        let s = String(raw || '').trim();
+        if (!s) return 'Your Company';
+
+        // Strip URL -> host -> base label (bestplumbingorlando.com -> bestplumbingorlando)
+        s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '').trim();
+        s = s.split(/[/?#]/)[0];
+        s = s.replace(/:\d+$/, '');
+        if (!/\s/.test(s) && s.includes('.')) s = s.split('.')[0];
+
+        // Normalize separators and camelCase
+        s = s.replace(/[_-]+/g, ' ');
+        s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+        // Insert spaces around likely word boundaries (niche + city)
+        const hintTokens = []
+          .concat(String(nicheHint || '').split(/\s+/))
+          .concat(String(cityHint || '').split(/\s+/))
+          .map((t) => String(t).replace(/[^a-z0-9]/gi, ''))
+          .filter((t) => t.length >= 3);
+
+        hintTokens.forEach((token) => {
+          const re = new RegExp(escapeRegExp(token), 'ig');
+          s = s.replace(re, (m) => ` ${m} `);
+        });
+
+        s = s.replace(/\s+/g, ' ').trim();
+        s = titleCaseIfAllCapsOrLower(s);
+        return s || 'Your Company';
+      }
+
+      const RAW_NAME_INPUT =
+        (branding && (branding.company_name || branding.domain || branding.website)) ||
+        (job && job.website) ||
+        'Your Company';
+      const NICHE_HINT = (job && job.niche) ? String(job.niche) : SERVICE_LABEL;
+      const CITY_HINT = (nap && nap.city) ? String(nap.city) : ((job && job.city) ? String(job.city) : '');
+
+      const BUSINESS_NAME = normalizeCompanyName(RAW_NAME_INPUT, { nicheHint: NICHE_HINT, cityHint: CITY_HINT });
+      const BUSINESS_WORDS = BUSINESS_NAME.split(/\s+/).filter(Boolean);
+      const BUSINESS_INCLUDES_SERVICE = BUSINESS_NAME.toLowerCase().includes(SERVICE_LABEL.toLowerCase());
+    %>
+
+    <title><%= BUSINESS_NAME %> | Licensed & Trusted Plumbing</title>
+    <meta name="description" content="Trusted plumbing service offering expert repairs, leak detection, drain cleaning, water heaters & emergency service. Call <%= BUSINESS_NAME %> today!">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body class="bg-white text-slate-900 antialiased overflow-x-hidden" style="font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';">
+    <%
+      const FALLBACK_PHONE = '(555) 555-0123';
+      const FALLBACK_EMAIL = 'hello@example.com';
+      const FALLBACK_HOURS = 'Mon–Fri 8am–6pm';
+      const FALLBACK_ADDRESS = `123 Main St, ${(nap.city || job.city || 'Your City')}, ST 00000`;
+
+      // Never render an "incomplete" preview — use safe placeholders when scrape data is missing.
+      const PRIMARY_PHONE = (nap.phone && String(nap.phone).trim()) ? nap.phone : FALLBACK_PHONE;
+      const TEXT_PHONE = (nap.text_phone && String(nap.text_phone).trim()) ? nap.text_phone : PRIMARY_PHONE;
+      const EMAIL = (nap.email && String(nap.email).trim()) ? nap.email : FALLBACK_EMAIL;
+      const ADDRESS = (nap.address && String(nap.address).trim()) ? nap.address : FALLBACK_ADDRESS;
+      const HOURS = (nap.hours && String(nap.hours).trim()) ? nap.hours : FALLBACK_HOURS;
+      const LICENSE = trust.license || (Array.isArray(trust.certifications) && trust.certifications[0]) || '';
+      const displayCity = nap.city || job.city || 'your area';
+
+      // Brand display name (prevents long/garbage scraped names in the UI)
+      function toWordTokens(str) {
+        const normalized = String(str || '').replace(/[’‘]/g, "'"); // normalize curly apostrophes
+        const m = normalized.match(/[A-Za-z0-9']+/g);
+        return (m || []).map((t) => String(t).trim()).filter(Boolean);
+      }
+
+      function makePossessive(city) {
+        const c = titleCaseIfAllCapsOrLower(String(city || '').trim());
+        if (!c) return '';
+        return /s$/i.test(c) ? `${c}'` : `${c}'s`;
+      }
+
+      function buildBrandDisplayName(businessName, cityHint, serviceLabel) {
+        const service = String(serviceLabel || '').trim() || 'Service';
+        const city = titleCaseIfAllCapsOrLower(String(cityHint || '').trim());
+        const possessiveCity = makePossessive(city);
+
+        const tokens = toWordTokens(businessName);
+        const cityTokens = toWordTokens(city).map((t) => t.toLowerCase());
+
+        const serviceTokens = new Set([
+          service.toLowerCase(),
+          `${service.toLowerCase()}s`,
+          // Plumbing template synonyms
+          'plumbing',
+          'plumber',
+          'plumbers',
+          'plumbingservice',
+          'plumbingservices',
+        ]);
+
+        const stop = new Set([
+          // filler
+          'the', 'and', 'of', 'a', 'an',
+          // legal / suffixes
+          'llc', 'inc', 'co', 'company', 'corp', 'corporation', 'ltd', 'limited', 'group',
+          // marketing noise
+          'best', 'top', 'rated', 'affordable', 'cheap', 'local', 'near', 'me', 'same', 'day',
+          'pro', 'pros', 'expert', 'experts', 'specialist', 'specialists', 'solutions', 'support', 'services', 'service',
+        ]);
+
+        const norm = (t) => String(t || '').toLowerCase().replace(/^'+|'+$/g, '');
+
+        // If the business name already contains a possessive city form (Orlando's / Orlandos),
+        // lock to "City's Plumbing" and ignore other marketing words.
+        if (city) {
+          const cityLower = city.toLowerCase().replace(/[’‘]/g, "'").trim();
+          const possA = `${cityLower}'s`;
+          const possB = `${cityLower.replace(/'/g, '')}s`;
+          const hasCityPossessiveToken = tokens.some((t) => {
+            const n = norm(t);
+            return n === possA || n === possB;
+          });
+          if (hasCityPossessiveToken && possessiveCity) return `${possessiveCity} ${service}`;
+        }
+
+        let cleaned = tokens.filter((t) => {
+          const n = norm(t);
+          if (!n) return false;
+          if (stop.has(n)) return false;
+          if (serviceTokens.has(n)) return false;
+
+          // Remove city tokens (Orlando / Miami / North / etc)
+          const nCityStripped = n.replace(/'s$/i, '');
+          if (cityTokens.includes(nCityStripped)) return false;
+          return true;
+        });
+
+        // De-dupe
+        const seen = new Set();
+        cleaned = cleaned.filter((t) => {
+          const n = norm(t);
+          if (seen.has(n)) return false;
+          seen.add(n);
+          return true;
+        });
+
+        const brand = titleCaseIfAllCapsOrLower(cleaned.slice(0, 2).join(' ').trim());
+        const full = brand ? `${brand} ${service}` : '';
+
+        // Fallback if brand missing or too long
+        if (!brand || brand.length < 2 || full.length > 28) {
+          if (possessiveCity) return `${possessiveCity} ${service}`;
+          return service;
+        }
+
+        return full;
+      }
+
+      const BRAND_NAME = buildBrandDisplayName(BUSINESS_NAME, (job && job.city) ? String(job.city) : displayCity, SERVICE_LABEL);
+      const BRAND_WORDS = BRAND_NAME.split(/\s+/).filter(Boolean);
+
+      // UI-safe phone formatting:
+      // - prevents ugly breaks at hyphens (use non‑breaking hyphen)
+      // - adds spaces at sane wrap points for narrow screens
+      function formatPhoneForUi(raw) {
+        const original = String(raw || '').trim();
+        if (!original) return original;
+        const digits = original.replace(/\D/g, '');
+        const NBH = '‑'; // non-breaking hyphen (U+2011)
+
+        // US/CA formatting (10 digits) or +1 (11 digits starting with 1)
+        if (digits.length === 11 && digits.startsWith('1')) {
+          const area = digits.slice(1, 4);
+          const prefix = digits.slice(4, 7);
+          const line = digits.slice(7, 11);
+          return `+1 (${area}) ${prefix}${NBH}${line}`;
+        }
+        if (digits.length === 10) {
+          const area = digits.slice(0, 3);
+          const prefix = digits.slice(3, 6);
+          const line = digits.slice(6, 10);
+          return `(${area}) ${prefix}${NBH}${line}`;
+        }
+
+        // Fallback: normalize whitespace and prevent hyphen-wrapping
+        return original.replace(/\s+/g, ' ').replace(/-/g, NBH);
+      }
+
+      const PRIMARY_PHONE_UI = formatPhoneForUi(PRIMARY_PHONE);
+      const TEXT_PHONE_UI = formatPhoneForUi(TEXT_PHONE);
+      
+      // Clean nav links - remove duplicates, long text, and company name
+      const cleanNavLinks = (menu && menu.length) ? menu.slice(0, 8)
+        .map((m) => {
+          const text = String(m.text || '').trim();
+          // Skip if empty, too long, or contains company name
+          if (!text || text.length > 20 || text.toLowerCase().includes(BRAND_NAME.toLowerCase().split(' ')[0])) {
+            return null;
+          }
+          return { name: text, href: m.url || '#' };
+        })
+        .filter(Boolean)
+        .filter((link, index, self) => 
+          // Remove duplicates by name
+          index === self.findIndex(l => l.name.toLowerCase() === link.name.toLowerCase())
+        )
+        .slice(0, 5) : [];
+      
+      const navLinks = cleanNavLinks.length >= 3 ? cleanNavLinks : [
+        { name: 'Services', href: '#services' },
+        { name: 'Emergency', href: '#emergency' },
+        { name: 'Reviews', href: '#reviews' },
+        { name: 'Service Area', href: '#service-area' },
+        { name: 'Contact', href: '#contact' },
+      ];
+
+      // Service area headline prefers "County" (truth from JSON-LD) if available
+      const areaHeadline = serviceArea && serviceArea.primary_area ? serviceArea.primary_area : displayCity;
+      const areaSecondary = serviceArea && serviceArea.secondary_area ? serviceArea.secondary_area : null;
+
+      // Plumbing-specific fallback services (if scraped services are generic/missing)
+      const plumbingFallbackServices = [
+        { title: 'Water Heater Repair', description: 'Fast diagnosis and repair of all water heater types. Same-day service available.' },
+        { title: 'Drain Cleaning', description: 'Professional drain cleaning and clog removal. Camera inspection available.' },
+        { title: 'Leak Detection', description: 'Advanced leak detection technology to find hidden leaks and prevent damage.' },
+        { title: 'Sewer Line Repair', description: 'Sewer line inspection, repair, and replacement. Trenchless options available.' },
+        { title: 'Fixture Installation', description: 'Expert installation of faucets, toilets, sinks, and all plumbing fixtures.' },
+        { title: '24/7 Emergency Service', description: 'Round-the-clock emergency plumbing response for urgent issues.' }
+      ];
+      
+      // Use scraped services if they look real, otherwise use plumbing-specific fallback
+      const isGenericService = (s) => {
+        const generic = ['professional service', 'expert solutions', 'reliable support', 'local specialists'];
+        return generic.some(g => (s.title || '').toLowerCase().includes(g));
+      };
+      const hasRealServices = services && services.length > 0 && !isGenericService(services[0]);
+      const finalServices = hasRealServices ? services : plumbingFallbackServices;
+
+      // Review examples (template-only). We keep them as examples but tailor city/company/service variables.
+      const reviewCityFallbacks = (serviceArea && Array.isArray(serviceArea.cities) && serviceArea.cities.length)
+        ? serviceArea.cities
+        : [displayCity];
+      const reviewService = (finalServices && finalServices[0] && finalServices[0].title) ? finalServices[0].title : (job.niche || 'plumbing');
+      const reviews = [
+        { id: '1', name: "Jordan P.", city: reviewCityFallbacks[0] || displayCity, text: `Fast response in ${reviewCityFallbacks[0] || displayCity}. Texted a photo of my issue and ${BRAND_NAME} helped fast. Lifesavers!`, source: 'Google' },
+        { id: '2', name: "Sarah L.", city: reviewCityFallbacks[1] || displayCity, text: `Honest pricing and clear communication. Highly recommend ${BRAND_NAME} for anyone in ${reviewCityFallbacks[1] || displayCity}.`, source: 'Yelp' },
+        { id: '3', name: "Mike D.", city: reviewCityFallbacks[2] || displayCity, text: `Professional and clean. They handled my ${reviewService.toLowerCase()} quickly and respectfully.`, source: 'Google' },
+        { id: '4', name: "David K.", city: reviewCityFallbacks[3] || displayCity, text: `Smooth process from start to finish. Great communication and quality work.`, source: 'Google' },
+        { id: '5', name: "Linda R.", city: reviewCityFallbacks[4] || displayCity, text: `Emergency issue and they responded immediately. Best service experience I've had.`, source: 'Yelp' },
+        { id: '6', name: "Robert S.", city: reviewCityFallbacks[5] || displayCity, text: `Fair price and great work. They kept me updated the whole time.`, source: 'Google' },
+      ];
+    %>
+    
+    <!-- NAVBAR (1:1 layout from provided template) -->
+    <nav id="header" class="sticky top-0 z-50 bg-white shadow-md border-b border-slate-100">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-[80px] md:h-[96px]">
+          <!-- Logo -->
+          <div class="flex-shrink-0 flex items-center">
+            <a href="#" class="flex items-center gap-3">
+              <div class="leading-none">
+                <span class="text-xl md:text-2xl font-black tracking-tight text-blue-700 whitespace-nowrap max-w-[360px] truncate" title="<%= BRAND_NAME %>"><%= BRAND_NAME.toUpperCase() %></span>
+              </div>
+            </a>
+          </div>
+
+          <!-- Desktop Nav & CTAs -->
+          <div class="hidden lg:flex items-center space-x-8">
+            <div class="flex space-x-6">
+              <% navLinks.forEach((link) => { %>
+                <a href="<%= link.href %>" class="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">
+                  <%= link.name %>
+                </a>
+              <% }); %>
+            </div>
+            <div class="flex items-center space-x-3">
+              <% if (TEXT_PHONE) { %>
+                <a href="sms:<%= TEXT_PHONE %>" class="flex items-center space-x-2 bg-slate-100 text-slate-900 px-4 py-2 rounded-full text-sm font-bold hover:bg-slate-200 transition-all border border-slate-200">
+                  <span class="text-blue-600 font-black">✉</span>
+                  <span>Text</span>
+                </a>
+              <% } %>
+              <% if (PRIMARY_PHONE) { %>
+                <a href="tel:<%= PRIMARY_PHONE %>" class="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 whitespace-nowrap">
+                  <span class="font-black">☎</span>
+                  <span class="leading-tight">Call <%= PRIMARY_PHONE_UI %></span>
+                </a>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Mobile CTAs & Menu Toggle -->
+          <div class="flex lg:hidden items-center space-x-2">
+            <% if (PRIMARY_PHONE) { %>
+              <a href="tel:<%= PRIMARY_PHONE %>" class="flex items-center justify-center bg-blue-600 text-white px-4 py-2.5 rounded-full text-sm font-bold shadow-lg" aria-label="Call Now">
+                <span class="font-black">☎</span>
+                <span class="ml-2">Call</span>
+              </a>
+            <% } %>
+            <button id="mobileMenuBtn" type="button" class="p-2 rounded-md text-slate-600 hover:text-blue-600 hover:bg-slate-50 focus:outline-none" aria-expanded="false">
+              <span class="text-2xl leading-none">☰</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Menu -->
+      <div id="mobileMenu" class="lg:hidden hidden bg-white border-t border-slate-100 py-4 px-4 space-y-3">
+        <div class="grid grid-cols-2 gap-3 mb-6">
+          <% if (PRIMARY_PHONE) { %>
+            <a href="tel:<%= PRIMARY_PHONE %>" class="flex flex-col items-center justify-center bg-blue-600 text-white p-4 rounded-2xl shadow-sm text-center">
+              <span class="text-2xl mb-2">☎</span>
+              <span class="text-xs font-bold uppercase tracking-wider">Call Now</span>
+            </a>
+          <% } %>
+          <% if (TEXT_PHONE) { %>
+            <a href="sms:<%= TEXT_PHONE %>" class="flex flex-col items-center justify-center bg-slate-100 text-slate-900 p-4 rounded-2xl border border-slate-200 text-center">
+              <span class="text-2xl mb-2">✉</span>
+              <span class="text-xs font-bold uppercase tracking-wider">Text Now</span>
+            </a>
+          <% } %>
+        </div>
+        <% navLinks.forEach((link) => { %>
+          <a href="<%= link.href %>" class="block px-4 py-3 text-lg font-bold text-slate-800 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors mobile-link">
+            <%= link.name %>
+          </a>
+        <% }); %>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <div class="relative bg-white overflow-hidden lg:min-h-[700px] flex items-center">
+      <div class="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-blue-50 rounded-full blur-3xl opacity-60"></div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10 py-12 lg:py-20">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div class="text-center lg:text-left space-y-8 max-w-2xl mx-auto lg:mx-0">
+            <div class="space-y-3">
+              <div class="flex items-center justify-center lg:justify-start space-x-1">
+                <% for (let i = 0; i < 5; i++) { %>
+                  <svg class="w-6 h-6 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                <% } %>
+                <span class="ml-2 text-slate-900 font-black text-xl tracking-tight uppercase">5-Star Trusted</span>
+              </div>
+              <p class="text-blue-600 font-black text-lg tracking-widest uppercase">Local Plumbing Service</p>
+            </div>
+
+            <div class="space-y-4">
+              <h1 class="text-5xl sm:text-6xl lg:text-8xl font-black text-slate-900 tracking-tight leading-none">
+                Expert <br />
+                <span class="text-blue-600">Plumbing</span>
+              </h1>
+              <p class="text-xl lg:text-2xl font-bold text-slate-700 max-w-lg mx-auto lg:mx-0">
+                Licensed Plumbers Serving <%= areaHeadline %>
+              </p>
+              <div class="h-1.5 w-24 bg-blue-600 rounded-full mx-auto lg:mx-0"></div>
+              <p class="text-lg text-slate-600 leading-relaxed font-medium">
+                Licensed, family-owned plumbing experts. From repairs and remodels to service calls and emergencies — we deliver fast, clean, and reliable service in <%= displayCity %>.
+              </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+              <% if (PRIMARY_PHONE) { %>
+                <a href="tel:<%= PRIMARY_PHONE %>" class="w-full sm:w-auto flex items-center justify-center space-x-3 bg-blue-600 text-white px-10 py-5 rounded-2xl text-xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 hover:-translate-y-1 active:scale-95">
+                  <span class="text-2xl">☎</span>
+                  <span class="leading-tight">Call <span class="break-normal"><%= PRIMARY_PHONE_UI %></span></span>
+                </a>
+              <% } %>
+              <button type="button" onclick="scrollToBookOnline('Residential')" class="w-full sm:w-auto flex items-center justify-center space-x-3 bg-white text-slate-900 px-10 py-5 rounded-2xl text-xl font-black hover:bg-slate-50 transition-all border-2 border-slate-100 shadow-lg hover:-translate-y-1 active:scale-95">
+                <span class="text-2xl">📅</span>
+                <span>Book Online</span>
+              </button>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center lg:justify-start gap-y-2 gap-x-6 pt-2">
+              <% [ LICENSE ? `Licensed ${LICENSE}` : 'Licensed', 'Local Experts', 'Fast Response' ].forEach((chip) => { %>
+                <div class="flex items-center space-x-2 text-slate-800 font-black text-sm uppercase tracking-wider">
+                  <span class="text-blue-600 font-black">✓</span>
+                  <span><%= chip %></span>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Image -->
+      <div class="hidden lg:block absolute top-0 right-0 bottom-0 w-1/2 overflow-hidden bg-slate-100">
+        <div class="relative h-full w-full">
+          <img src="https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?auto=format&fit=crop&q=80&w=1200" alt="" class="h-full w-full object-cover" />
+          <div class="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent opacity-40"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICES -->
+    <section id="services">
+      <!-- Core Expertise cards -->
+      <div class="bg-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16 max-w-3xl mx-auto space-y-4">
+            <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight">Our Core Expertise</h2>
+            <p class="text-lg text-slate-600 font-medium">
+              Tailored solutions for every plumbing need. We combine local experience with modern techniques.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="group relative bg-white rounded-[2.5rem] p-10 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 text-center md:text-left">
+              <div class="mb-8 flex w-fit mx-auto p-5 rounded-2xl bg-blue-50 border border-blue-100">
+                <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+              </div>
+              <h3 class="text-2xl font-black text-slate-900 mb-4">Residential Plumbing</h3>
+              <p class="text-slate-600 font-medium leading-relaxed mb-8">Full-service home plumbing. Repairs, upgrades, and peace of mind for local homeowners.</p>
+              <button type="button" onclick="scrollToBookOnline('Residential')" class="flex items-center space-x-2 font-black text-blue-600 group-hover:text-blue-700 transition-colors justify-center md:justify-start">
+                <span>Book Residential Service</span>
+                <span class="text-lg">→</span>
+              </button>
+            </div>
+
+            <div class="group relative bg-white rounded-[2.5rem] p-10 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 text-center md:text-left">
+              <div class="mb-8 flex w-fit mx-auto p-5 rounded-2xl bg-blue-50 border border-blue-100">
+                <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                </svg>
+              </div>
+              <h3 class="text-2xl font-black text-slate-900 mb-4">Commercial Experts</h3>
+              <p class="text-slate-600 font-medium leading-relaxed mb-8">Reliable solutions for businesses. Maintenance, compliance, and complex facility repairs.</p>
+              <button type="button" onclick="scrollToBookOnline('Commercial')" class="flex items-center space-x-2 font-black text-blue-600 group-hover:text-blue-700 transition-colors justify-center md:justify-start">
+                <span>Book Commercial Service</span>
+                <span class="text-lg">→</span>
+              </button>
+            </div>
+
+            <div class="group relative bg-white rounded-[2.5rem] p-10 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 text-center md:text-left">
+              <div class="mb-8 flex w-fit mx-auto p-5 rounded-2xl bg-blue-50 border border-blue-100">
+                <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+              </div>
+              <h3 class="text-2xl font-black text-slate-900 mb-4">24/7 Emergency</h3>
+              <p class="text-slate-600 font-medium leading-relaxed mb-8">Immediate response for burst pipes, flooding, or major backups. Any time, any day.</p>
+              <button type="button" onclick="scrollToBookOnline('Emergency')" class="flex items-center space-x-2 font-black text-blue-600 group-hover:text-blue-700 transition-colors justify-center md:justify-start">
+                <span>Book Emergency Service</span>
+                <span class="text-lg">→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Service list + why box -->
+      <div class="bg-slate-50 py-20 border-y border-slate-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            <div class="lg:col-span-2">
+              <h3 class="text-3xl font-black text-slate-900 mb-10 text-center lg:text-left">All Plumbing Services</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-10">
+                <% finalServices.slice(0, 6).forEach((s) => { %>
+                  <div class="space-y-2">
+                    <div class="flex items-center space-x-3 justify-center sm:justify-start">
+                      <div class="bg-blue-600 rounded-full p-1">
+                        <span class="w-3 h-3 text-white block leading-none text-center">✓</span>
+                      </div>
+                      <h4 class="text-xl font-bold text-slate-900"><%= s.title %></h4>
+                    </div>
+                    <p class="text-slate-600 pl-0 sm:pl-8 leading-relaxed font-medium text-sm text-center sm:text-left">
+                      <%= s.description || 'Professional service delivered with expertise and care.' %>
+                    </p>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-[2rem] p-8 shadow-lg border border-slate-200 self-start lg:sticky lg:top-24">
+              <h3 class="text-2xl font-black text-slate-900 mb-6 text-center">Why Choose Us?</h3>
+              <div class="space-y-6">
+                <div class="flex space-x-4">
+                  <div class="bg-slate-100 p-3 rounded-xl"><span class="text-blue-600 font-black">$</span></div>
+                  <div>
+                    <h5 class="font-bold text-slate-900">Upfront Pricing</h5>
+                    <p class="text-sm text-slate-600 font-medium">Clear estimates, no hidden surprises.</p>
+                  </div>
+                </div>
+                <div class="flex space-x-4">
+                  <div class="bg-slate-100 p-3 rounded-xl"><span class="text-blue-600 font-black">🛡</span></div>
+                  <div>
+                    <h5 class="font-bold text-slate-900">Clean Work</h5>
+                    <p class="text-sm text-slate-600 font-medium">We treat your space with respect.</p>
+                  </div>
+                </div>
+                <div class="flex space-x-4">
+                  <div class="bg-slate-100 p-3 rounded-xl"><span class="text-blue-600 font-black">⏱</span></div>
+                  <div>
+                    <h5 class="font-bold text-slate-900">Fast Response</h5>
+                    <p class="text-sm text-slate-600 font-medium">Minimizing downtime and damage.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-8 pt-8 border-t border-slate-100">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Fully Licensed & Insured</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EMERGENCY -->
+    <section id="emergency">
+      <div class="bg-slate-900 py-24 relative overflow-hidden">
+        <div class="absolute inset-0 opacity-10 pointer-events-none">
+          <img src="https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&q=60&w=1200" alt="Water texture" class="w-full h-full object-cover mix-blend-overlay" />
+        </div>
+        <div class="absolute top-0 right-0 w-1/2 h-full bg-red-600/10 skew-x-12 transform translate-x-1/2"></div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div class="max-w-4xl mx-auto text-center space-y-8">
+            <div class="inline-flex items-center space-x-3 bg-red-600 text-white px-8 py-3 rounded-full font-black text-base uppercase tracking-wider animate-pulse shadow-lg shadow-red-900/20">
+              <span class="text-xl">⚡</span>
+              <span>24/7 Emergency Response</span>
+            </div>
+
+            <h2 class="text-4xl md:text-6xl font-black text-white tracking-tight leading-tight">
+              Broken Pipe? Sewage Backup? <br class="hidden md:block" />
+              <span class="text-red-500">Don’t Wait.</span>
+            </h2>
+
+            <p class="text-xl text-slate-300 font-medium max-w-2xl mx-auto leading-relaxed">
+              Urgent leaks, burst pipes, or clogged drains can't wait. We respond fast in <%= displayCity %>. Text us a photo now for quick help.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
+              <% if (TEXT_PHONE) { %>
+                <a href="sms:<%= TEXT_PHONE %>" class="group flex items-center justify-center space-x-4 bg-white text-slate-900 p-8 rounded-[2rem] text-xl font-black hover:bg-slate-100 transition-all shadow-xl active:scale-95">
+                  <div class="bg-blue-100 p-3 rounded-2xl group-hover:scale-110 transition-transform"><span class="text-2xl">✉</span></div>
+                  <div class="text-left">
+                    <p class="text-xs uppercase tracking-widest text-slate-500 mb-1 font-bold">Instant Action</p>
+                    <p>Text a Plumber Now</p>
+                  </div>
+                </a>
+              <% } %>
+
+              <button type="button" onclick="scrollToBookOnline('Emergency')" class="group flex items-center justify-center space-x-4 bg-red-600 text-white p-8 rounded-[2rem] text-xl font-black hover:bg-red-700 transition-all shadow-xl active:scale-95 shadow-red-900/30">
+                <div class="bg-white/20 p-3 rounded-2xl group-hover:scale-110 transition-transform"><span class="text-2xl">📅</span></div>
+                <div class="text-left">
+                  <p class="text-xs uppercase tracking-widest text-red-200 mb-1 font-bold">Priority Booking</p>
+                  <p>Emergency Schedule</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REVIEWS -->
+    <section id="reviews">
+      <div class="bg-white py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex flex-col items-center md:flex-row md:items-end justify-between mb-16 gap-8">
+            <div class="space-y-4 max-w-2xl text-center md:text-left mx-auto md:mx-0">
+              <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight">Our 5-Star Reputation</h2>
+              <p class="text-lg text-slate-600 font-medium leading-relaxed">
+                These are <strong>example reviews</strong> for layout only. We’ll replace them with your real reviews.
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-4 justify-center md:justify-end w-full md:w-auto">
+              <% if (footer && footer.links) { %>
+                <a href="#" class="inline-flex items-center space-x-2 bg-slate-50 border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold hover:bg-slate-100 transition-all text-sm">
+                  <span>Read on Google</span>
+                  <span class="text-xs">↗</span>
+                </a>
+                <a href="#" class="inline-flex items-center space-x-2 bg-slate-50 border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold hover:bg-slate-100 transition-all text-sm">
+                  <span>See us on Yelp</span>
+                  <span class="text-xs">↗</span>
+                </a>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <% reviews.forEach((r) => { %>
+              <div class="bg-slate-50 border border-slate-100 p-8 rounded-[2rem] flex flex-col justify-between hover:shadow-lg transition-shadow">
+                <div>
+                  <div class="flex mb-4">
+                    <% for (let i = 0; i < 5; i++) { %>
+                      <svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                    <% } %>
+                  </div>
+                  <p class="text-slate-700 italic font-medium leading-relaxed mb-6">"<%= r.text %>"</p>
+                </div>
+                <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+                  <div>
+                    <p class="font-black text-slate-900"><%= r.name %></p>
+                    <p class="text-sm text-slate-500 font-bold"><%= r.city %></p>
+                  </div>
+                  <div class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest <%= r.source === 'Google' ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600' %>">
+                    Verified <%= r.source %>
+                  </div>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICE AREA -->
+    <section id="service-area">
+      <div class="bg-slate-50 py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div class="space-y-8">
+              <div class="space-y-4">
+                <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight text-center lg:text-left">
+                  Proudly Serving <br />
+                  <span class="text-blue-600"><%= areaHeadline %></span>
+                </h2>
+                <p class="text-lg text-slate-600 font-medium leading-relaxed">
+                  We provide top-tier plumbing services to homes and businesses across the area. We are your local, trusted experts.
+                </p>
+                <% if (areaSecondary) { %>
+                  <div class="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center space-x-3">
+                    <span class="text-blue-600 text-xl">📍</span>
+                    <p class="font-bold text-blue-800">Also serving <%= areaSecondary %></p>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-[2.5rem] p-10 shadow-lg border border-slate-100">
+              <h3 class="text-xl font-black text-slate-900 mb-6 flex items-center space-x-2">
+                <span class="w-8 h-1 bg-blue-600 rounded-full"></span>
+                <span>Our Service Cities</span>
+              </h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
+                <% (serviceArea.cities || []).slice(0, 24).forEach((c) => { %>
+                  <div class="flex items-center space-x-2 text-sm text-slate-600 font-bold hover:text-blue-600 transition-colors cursor-default">
+                    <div class="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                    <span><%= c %></span>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact">
+      <div class="bg-white py-24 scroll-mt-20" id="book-online">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16 space-y-4">
+            <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight">Request an Appointment</h2>
+            <p class="text-lg text-slate-600 font-medium">Quick, professional, and reliable. Let us know how we can help.</p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-12">
+            <div class="lg:col-span-2 space-y-6">
+              <div class="bg-slate-900 text-white p-10 rounded-[2.5rem] shadow-xl space-y-8">
+                <h3 class="text-2xl font-black italic">Get in touch directly</h3>
+
+                <div class="space-y-6">
+                  <% if (PRIMARY_PHONE) { %>
+                    <a href="tel:<%= PRIMARY_PHONE %>" class="flex items-start space-x-4 group">
+                      <div class="bg-white/10 p-3 rounded-2xl group-hover:bg-blue-600 transition-colors"><span class="text-xl">☎</span></div>
+                      <div>
+                        <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Call Us</p>
+                        <p class="text-xl font-bold break-normal"><%= PRIMARY_PHONE_UI %></p>
+                      </div>
+                    </a>
+                  <% } %>
+
+                  <% if (TEXT_PHONE) { %>
+                    <a href="sms:<%= TEXT_PHONE %>" class="flex items-start space-x-4 group">
+                      <div class="bg-white/10 p-3 rounded-2xl group-hover:bg-blue-600 transition-colors"><span class="text-xl">✉</span></div>
+                      <div>
+                        <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Text Photo</p>
+                        <p class="text-xl font-bold break-normal"><%= TEXT_PHONE_UI %></p>
+                      </div>
+                    </a>
+                  <% } %>
+
+                  <% if (EMAIL) { %>
+                    <a href="mailto:<%= EMAIL %>" class="flex items-start space-x-4 group">
+                      <div class="bg-white/10 p-3 rounded-2xl group-hover:bg-blue-600 transition-colors"><span class="text-xl">✉</span></div>
+                      <div>
+                        <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Email Us</p>
+                        <p class="text-lg font-bold break-all"><%= EMAIL %></p>
+                      </div>
+                    </a>
+                  <% } %>
+
+                  <% if (ADDRESS) { %>
+                    <div class="flex items-start space-x-4">
+                      <div class="bg-white/10 p-3 rounded-2xl"><span class="text-xl">📍</span></div>
+                      <div>
+                        <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Location</p>
+                        <p class="text-sm font-bold opacity-80 leading-relaxed"><%= ADDRESS %></p>
+                      </div>
+                    </div>
+                  <% } %>
+
+                  <% if (HOURS) { %>
+                    <div class="flex items-start space-x-4">
+                      <div class="bg-white/10 p-3 rounded-2xl"><span class="text-xl">⏱</span></div>
+                      <div>
+                        <p class="text-xs uppercase tracking-widest text-slate-400 font-bold mb-1">Hours</p>
+                        <p class="text-lg font-bold"><%= HOURS %></p>
+                      </div>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+
+            <div class="lg:col-span-3">
+              <div id="submittedState" class="hidden h-full flex flex-col items-center justify-center text-center p-12 bg-green-50 rounded-[2.5rem] border-2 border-green-100">
+                <div class="bg-white p-6 rounded-full shadow-lg shadow-green-200 mb-6"><span class="text-5xl">✅</span></div>
+                <h3 class="text-3xl font-black text-slate-900 mb-4">Message Sent!</h3>
+                <p class="text-lg text-slate-600 font-medium max-w-sm mb-8">We've received your request and will contact you shortly.</p>
+                <% if (PRIMARY_PHONE) { %>
+                  <div class="bg-white p-6 rounded-2xl border border-green-100 shadow-sm">
+                    <p class="font-bold text-slate-900 mb-2">Need immediate help?</p>
+                    <a href="tel:<%= PRIMARY_PHONE %>" class="text-2xl font-black text-blue-600 hover:text-blue-700 break-normal"><%= PRIMARY_PHONE_UI %></a>
+                  </div>
+                <% } %>
+              </div>
+
+              <form id="contactForm" class="bg-slate-50 p-10 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="space-y-2">
+                    <label for="name" class="text-sm font-bold text-slate-700 ml-1">Full Name *</label>
+                    <input type="text" id="name" required placeholder="Your name" class="w-full px-6 py-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium">
+                  </div>
+                  <div class="space-y-2">
+                    <label for="phone" class="text-sm font-bold text-slate-700 ml-1">Phone Number *</label>
+                    <input type="tel" id="phone" required placeholder="(555) 555-0123" class="w-full px-6 py-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="space-y-2">
+                    <label for="email" class="text-sm font-bold text-slate-700 ml-1">Email Address</label>
+                    <input type="email" id="email" placeholder="your@email.com" class="w-full px-6 py-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium">
+                  </div>
+                  <div class="space-y-2">
+                    <label for="serviceType" class="text-sm font-bold text-slate-700 ml-1">Service Needed</label>
+                    <select id="serviceType" class="w-full px-6 py-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold bg-white">
+                      <option value="Residential">Residential Service</option>
+                      <option value="Commercial">Commercial Service</option>
+                      <option value="Emergency">Emergency Service</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label for="message" class="text-sm font-bold text-slate-700 ml-1">How can we help? *</label>
+                  <textarea id="message" required rows="4" placeholder="Describe your plumbing issue..." class="w-full px-6 py-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"></textarea>
+                </div>
+
+                <button type="submit" class="w-full flex items-center justify-center space-x-3 bg-blue-600 text-white py-5 rounded-2xl text-xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 hover:-translate-y-1 active:scale-95">
+                  <span class="text-2xl">➤</span>
+                  <span>Request Appointment</span>
+                </button>
+                <p class="text-center text-xs text-slate-500 font-medium">
+                  By clicking "Request Appointment", you agree to be contacted via phone, text, or email regarding your service request.
+                </p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="bg-gradient-to-br from-slate-50 via-white to-slate-50 py-20 scroll-mt-20">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12 space-y-3">
+          <div class="inline-block bg-blue-100 px-4 py-1.5 rounded-full mb-2">
+            <span class="text-blue-800 text-xs font-black uppercase tracking-widest">FAQ</span>
+          </div>
+          <h2 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight">Common Questions</h2>
+          <p class="text-lg text-slate-600 font-medium max-w-2xl mx-auto">
+            Quick answers about pricing, service, and guarantees
+          </p>
+        </div>
+
+        <div class="space-y-2.5">
+          <%
+            const faqQuestions = [
+              "What are your rates for plumbing service?",
+              "Do you offer 24/7 emergency plumbing service?",
+              "Are you licensed and insured?",
+              "What areas do you serve?",
+              "Do you guarantee your work?",
+              "How quickly can you respond?",
+              "What payment methods do you accept?",
+              "Do I need to be home during the service?"
+            ];
+          %>
+
+          <% faqQuestions.forEach((question, idx) => { %>
+            <div class="bg-white border border-slate-200 rounded-xl px-6 py-4 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200">
+              <div class="flex items-start gap-4">
+                <div class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 font-black text-sm">
+                  <%= idx + 1 %>
+                </div>
+                <p class="text-slate-900 font-bold text-base leading-snug flex-1 pt-0.5">
+                  <%= question %>
+                </p>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+
+        <div class="mt-10 text-center">
+          <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6 max-w-2xl mx-auto">
+            <p class="text-slate-900 font-black text-lg mb-2">Still have questions?</p>
+            <p class="text-slate-600 font-medium text-base">
+              Call us at 
+              <% if (PRIMARY_PHONE) { %>
+                <a href="tel:<%= PRIMARY_PHONE %>" class="text-blue-600 font-black hover:text-blue-700 break-normal"><%= PRIMARY_PHONE_UI %></a>
+              <% } else { %>
+                <span class="text-blue-600 font-black">the number above</span>
+              <% } %>
+               — we're happy to help!
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer id="footer" class="bg-slate-900 text-white pt-20 pb-10 overflow-hidden relative">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+          <div class="space-y-6">
+            <a href="#" class="flex flex-col">
+              <span class="text-2xl font-black tracking-tight text-white break-words" style="overflow-wrap:anywhere;"><%= (BRAND_WORDS[0] || BRAND_NAME).toUpperCase() %></span>
+              <%
+                const footerLine2 = (BRAND_WORDS.slice(1).join(' ').trim() || SERVICE_LABEL).toUpperCase();
+              %>
+              <% if (footerLine2) { %>
+                <span class="text-sm font-bold tracking-widest text-blue-400 break-words" style="overflow-wrap:anywhere;"><%= footerLine2 %></span>
+              <% } %>
+            </a>
+            <p class="text-slate-400 font-medium leading-relaxed">
+              <%= BRAND_NAME %> – Fast, fair & reliable plumbing. Family-owned and dedicated to quality.
+            </p>
+          </div>
+
+          <div>
+            <h4 class="text-lg font-black mb-6 flex items-center">
+              <span class="w-6 h-1 bg-blue-600 mr-2 rounded-full"></span>
+              Contact Info
+            </h4>
+            <ul class="space-y-4">
+              <% if (PRIMARY_PHONE) { %><li><a href="tel:<%= PRIMARY_PHONE %>" class="text-slate-400 hover:text-white transition-colors font-medium break-normal"><%= PRIMARY_PHONE_UI %></a></li><% } %>
+              <% if (EMAIL) { %><li><a href="mailto:<%= EMAIL %>" class="text-slate-400 hover:text-white transition-colors font-medium break-all"><%= EMAIL %></a></li><% } %>
+              <% if (ADDRESS) { %><li class="text-slate-400 font-medium"><%= ADDRESS %></li><% } %>
+            </ul>
+          </div>
+
+          <div>
+            <h4 class="text-lg font-black mb-6 flex items-center">
+              <span class="w-6 h-1 bg-blue-600 mr-2 rounded-full"></span>
+              Quick Links
+            </h4>
+            <ul class="space-y-3">
+              <% ['Services', 'Emergency', 'Reviews', 'Service Area', 'Contact'].forEach((link) => { %>
+                <li><a href="#<%= link.toLowerCase().replace(' ', '-') %>" class="text-slate-400 hover:text-white transition-colors font-bold text-sm uppercase tracking-widest"><%= link %></a></li>
+              <% }); %>
+            </ul>
+          </div>
+
+          <div>
+            <div class="bg-white/5 p-6 rounded-[2rem] border border-white/10 text-center">
+              <p class="text-blue-400 font-black text-xs uppercase tracking-widest mb-2">Proudly Licensed</p>
+              <p class="font-bold text-sm mb-4"><%= LICENSE || 'Licensed & Insured' %></p>
+              <div class="h-px bg-white/10 mb-4"></div>
+              <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
+                Licensed • Bonded • Insured <br />
+                Local Service Provider
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+          <p class="text-slate-500 text-sm font-bold">&copy; <%= new Date().getFullYear() %> <%= BRAND_NAME %>. All Rights Reserved.</p>
+          <div class="flex space-x-6 text-xs font-bold text-slate-600 uppercase tracking-widest">
+            <a href="#" class="hover:text-slate-400">Privacy Policy</a>
+            <a href="#" class="hover:text-slate-400">Terms of Service</a>
+          </div>
+        </div>
+      </div>
+      <div class="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
+    </footer>
+
+    <script>
+      // IMPORTANT: This is a PREVIEW template - block all clicks ALWAYS (in iframe AND standalone)
+      (function () {
+        // Block all clicks and navigation
+        document.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }, true); // capture phase to intercept before any other listeners
+        
+        // Block form submissions
+        document.addEventListener('submit', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }, true);
+        
+        // Block all anchor link navigation
+        document.addEventListener('mousedown', function (e) {
+          if (e.target.tagName === 'A' || e.target.closest('a')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+          }
+        }, true);
+        
+        console.log('[Preview Template] All clicks and navigation disabled. Hover animations remain active.');
+      })();
+
+      // mobile menu toggle
+      (function () {
+        const btn = document.getElementById('mobileMenuBtn');
+        const menu = document.getElementById('mobileMenu');
+        if (btn && menu) {
+          btn.addEventListener('click', () => {
+            const isOpen = !menu.classList.contains('hidden');
+            if (isOpen) {
+              menu.classList.add('hidden');
+              btn.setAttribute('aria-expanded', 'false');
+            } else {
+              menu.classList.remove('hidden');
+              btn.setAttribute('aria-expanded', 'true');
+            }
+          });
+          menu.querySelectorAll('a.mobile-link').forEach((a) => {
+            a.addEventListener('click', () => {
+              menu.classList.add('hidden');
+              btn.setAttribute('aria-expanded', 'false');
+            });
+          });
+        }
+      })();
+
+      // scroll + set service type
+      function scrollToBookOnline(type) {
+        try {
+          const sel = document.getElementById('serviceType');
+          if (sel && type) sel.value = type;
+        } catch (e) {}
+        const el = document.getElementById('book-online');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // fake submit success state (for preview only)
+      (function () {
+        const form = document.getElementById('contactForm');
+        const submitted = document.getElementById('submittedState');
+        if (!form || !submitted) return;
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          form.classList.add('hidden');
+          submitted.classList.remove('hidden');
+          setTimeout(() => {
+            submitted.classList.add('hidden');
+            form.classList.remove('hidden');
+          }, 8000);
+        });
+      })();
+
+      // smooth scroll for anchor links
+      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+          const href = this.getAttribute('href');
+          if (!href || href === '#') return;
+          const target = document.querySelector(href);
+          if (target) {
+            e.preventDefault();
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+    </script>
+</body>
+</html>

@@ -2,13 +2,18 @@ services:
   - type: web
     name: max-jacob-website
     env: node
-    buildCommand: npm install
+    # Install deps + ensure Playwright Chromium exists in production
+    buildCommand: npm install && npx playwright install --with-deps chromium
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: ADMIN_PASSWORD
-        value: Benalmadena1979
+      # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
+      # never committed to git.
+      # Required:
+      # - ADMIN_PASSWORD
+      # - SESSION_SECRET
+      # - OPENROUTER_API_KEY (for audits)
       # PORT je automaticky nastavený Renderem, nepotřebujeme ho explicitně nastavovat
     healthCheckPath: /health
     autoDeploy: true

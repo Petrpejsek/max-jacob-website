@@ -86,7 +86,7 @@ STYLE:
 - Subhead clarifies the offer or reduces friction
 `,
   email_copy: `
-You are polishing an outbound email for a Miami local business audit.
+You are polishing an outbound email for a local business audit.
 Work with the mini audit evidence - no exaggerations.
 
 Return ONLY valid JSON with this shape:
@@ -104,7 +104,7 @@ RULES:
 - Keep it conversational and professional
 
 STYLE:
-- Miami local, friendly but professional
+- Local context, friendly but professional (use the city from evidence_pack.city)
 - Evidence-based (reference findings from mini audit)
 - Action-oriented
 `

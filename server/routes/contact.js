@@ -13,13 +13,13 @@ router.get('/test', (req, res) => {
 
 // POST /api/contact-submissions
 router.post('/contact-submissions', (req, res) => {
-  const { email, name, company, website, zip_code, needs_help_with, industry, budget_range, timeline, message, has_attachment, selected_package } = req.body;
+  const { email, name, phone, website, industry, timeline, message, selected_package, selected_week } = req.body;
 
   // Validace required polí
-  if (!email || !message) {
+  if (!name || !email || !message) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: email and message are required'
+      error: 'Missing required fields: name, email and message are required'
     });
   }
 
@@ -36,17 +36,14 @@ router.post('/contact-submissions', (req, res) => {
   const submissionData = {
     email,
     name,
-    company,
+    phone,
     website,
-    zip_code,
-    needs_help_with,
     industry,
-    budget_range,
     timeline,
     message,
-    has_attachment: has_attachment || false,
     ip_address: req.ip,
-    selected_package
+    selected_package,
+    selected_week
   };
 
   // Uložení do databáze

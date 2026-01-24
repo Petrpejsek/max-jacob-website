@@ -13,45 +13,121 @@
  */
 const ASSISTANT_SCHEMAS = {
   evidence_normalizer: {
-    // Matches the OUTPUT JSON SCHEMA stored in DB prompts (llm_context + quality_warnings)
-    required_keys: ['llm_context', 'quality_warnings'],
+    // Matches assistantPrompts.js (A1) output (llm_context object directly, no wrapper)
+    required_keys: [
+      'company_profile',
+      'services',
+      'cta_analysis',
+      'trust_evidence',
+      'contact_friction',
+      'quality_warnings'
+    ],
+    // Validate that required nested objects contain the keys promised by the prompt.
+    // Note: some nested values may be null (e.g., address/hours), but the keys should exist.
     nested_required: {
-      llm_context: ['business_identity', 'contacts', 'services', 'ctas', 'trust', 'screenshots']
+      company_profile: ['name', 'phones', 'emails', 'address', 'hours', 'social_links'],
+      services: ['featured', 'other_keywords'],
+      cta_analysis: ['primary', 'all_ctas'],
+      contact_friction: ['phone_in_header', 'phone_clickable', 'clicks_to_contact', 'form_detected']
+    },
+    // Type checks for stability in downstream consumers
+    path_types: {
+      company_profile: 'object',
+      'company_profile.phones': 'array',
+      'company_profile.emails': 'array',
+      services: 'object',
+      'services.featured': 'array',
+      'services.other_keywords': 'array',
+      cta_analysis: 'object',
+      'cta_analysis.all_ctas': 'array',
+      trust_evidence: 'array',
+      contact_friction: 'object',
+      quality_warnings: 'array'
     }
   },
   ux_conversion_auditor: {
-    // Matches the OUTPUT SCHEMA stored in DB prompts (ux_score, top_issues, quick_wins_48h, notes_unknowns)
-    required_keys: ['ux_score', 'top_issues', 'quick_wins_48h', 'notes_unknowns'],
-    array_keys: ['top_issues', 'quick_wins_48h', 'notes_unknowns']
+    // Matches assistantPrompts.js (A2) output
+    required_keys: ['top_issues', 'quick_wins', 'mobile_issues'],
+    array_keys: ['top_issues', 'quick_wins', 'mobile_issues'],
+    path_types: {
+      top_issues: 'array',
+      quick_wins: 'array',
+      mobile_issues: 'array'
+    }
   },
   local_seo_geo_auditor: {
-    // Matches the OUTPUT SCHEMA stored in DB prompts (seo_score, issues, content_modules_to_add, nap_snapshot)
-    required_keys: ['seo_score', 'issues', 'content_modules_to_add', 'nap_snapshot'],
-    array_keys: ['issues', 'content_modules_to_add'],
+    // Matches assistantPrompts.js (A3) output
+    required_keys: ['nap_audit', 'local_signals', 'schema_markup', 'geo_ready_score'],
     nested_required: {
-      nap_snapshot: ['name', 'address', 'phones', 'hours']
+      nap_audit: ['status', 'issues'],
+      local_signals: ['city_mentions', 'service_area'],
+      schema_markup: ['local_business'],
+      geo_ready_score: ['score', 'factors']
+    },
+    path_types: {
+      nap_audit: 'object',
+      'nap_audit.issues': 'array',
+      local_signals: 'object',
+      schema_markup: 'object',
+      geo_ready_score: 'object',
+      'geo_ready_score.factors': 'array',
+      'schema_markup.local_business.missing_fields': 'array'
     }
   },
   offer_strategist: {
-    // Matches the OUTPUT SCHEMA stored in DB prompts
-    required_keys: ['offer_name', 'positioning', '7_day_plan', 'deliverables_list', 'risk_reversal', 'upsell_paths_later'],
-    array_keys: ['7_day_plan', 'deliverables_list', 'upsell_paths_later'],
+    // Matches assistantPrompts.js (A4) output
+    required_keys: ['offer_package', 'upsell_paths', 'compliance_notes'],
+    array_keys: ['upsell_paths', 'compliance_notes'],
     nested_required: {
-      positioning: ['one_liner', 'who_its_for', 'why_now']
+      offer_package: ['headline', 'value_prop', 'deliverables', 'pricing_tier']
+    },
+    path_types: {
+      offer_package: 'object',
+      'offer_package.deliverables': 'array',
+      upsell_paths: 'array',
+      compliance_notes: 'array'
     }
   },
   outreach_email_writer: {
-    // Matches the OUTPUT SCHEMA stored in DB prompts
-    required_keys: ['subjects', 'plain_text', 'html', 'personalization_points', 'compliance_note'],
-    array_keys: ['subjects', 'personalization_points']
+    // Matches assistantPrompts.js (A5) output
+    required_keys: [
+      'subject_lines',
+      'email_body_html',
+      'email_body_plaintext',
+      'personalization_evidence',
+      'cta_buttons'
+    ],
+    array_keys: ['subject_lines', 'personalization_evidence', 'cta_buttons'],
+    path_types: {
+      subject_lines: 'array',
+      personalization_evidence: 'array',
+      cta_buttons: 'array'
+    }
   },
   public_audit_page_composer: {
-    // Matches the OUTPUT SCHEMA stored in DB prompts
-    required_keys: ['hero', 'mini_audit', 'top_3_fixes', 'trust_disclaimer', 'cta_block'],
-    array_keys: ['mini_audit', 'top_3_fixes'],
+    // Matches assistantPrompts.js (A6) output
+    required_keys: [
+      'page_meta',
+      'hero',
+      'findings_section',
+      'concept_preview',
+      'offer_section',
+      'compliance_disclaimers'
+    ],
+    array_keys: ['compliance_disclaimers'],
     nested_required: {
-      hero: ['headline', 'subheadline', 'primary_cta_text', 'secondary_cta_text'],
-      cta_block: ['text', 'button_text', 'link_placeholder']
+      page_meta: ['title', 'description'],
+      hero: ['headline', 'subheadline', 'screenshot_ref'],
+      findings_section: ['findings'],
+      concept_preview: ['disclaimer', 'headline', 'improvements', 'concept_image_url'],
+      offer_section: ['headline', 'deliverables', 'cta']
+    },
+    path_types: {
+      page_meta: 'object',
+      hero: 'object',
+      'findings_section.findings': 'array',
+      'concept_preview.improvements': 'array',
+      compliance_disclaimers: 'array'
     }
   }
 };
@@ -110,13 +186,28 @@ function validateAssistantOutput(assistant, output_json) {
     // Check nested required keys
     if (schema.nested_required) {
       Object.keys(schema.nested_required).forEach(parentKey => {
-        if (output_json[parentKey]) {
-          const nestedKeys = schema.nested_required[parentKey];
-          nestedKeys.forEach(nestedKey => {
-            if (!(nestedKey in output_json[parentKey])) {
-              errors.push(`Missing required nested key: "${parentKey}.${nestedKey}"`);
-            }
-          });
+        const parentVal = output_json[parentKey];
+        if (!parentVal || typeof parentVal !== 'object' || Array.isArray(parentVal)) {
+          errors.push(`Key "${parentKey}" should be an object`);
+          return;
+        }
+
+        const nestedKeys = schema.nested_required[parentKey];
+        nestedKeys.forEach(nestedKey => {
+          if (!(nestedKey in parentVal)) {
+            errors.push(`Missing required nested key: "${parentKey}.${nestedKey}"`);
+          }
+        });
+      });
+    }
+
+    // Check required types for important paths (stability + fewer downstream crashes)
+    if (schema.path_types) {
+      Object.entries(schema.path_types).forEach(([path, expectedType]) => {
+        const val = getValueAtPath(output_json, path);
+        if (val === undefined) return; // Missing key handled by required/nested checks
+        if (!matchesExpectedType(val, expectedType)) {
+          errors.push(`Key "${path}" should be ${expectedType}`);
         }
       });
     }
@@ -200,7 +291,10 @@ function validateEvidenceRefs(assistant_key, output_json) {
 function extractIssuesFromOutput(assistant_key, output_json) {
   switch (assistant_key) {
     case 'ux_conversion_auditor':
-      return output_json.top_issues || [];
+      return [
+        ...(output_json.top_issues || []),
+        ...(output_json.mobile_issues || [])
+      ];
     
     case 'local_seo_geo_auditor':
       // Extract issues from nap_audit.issues
@@ -208,6 +302,47 @@ function extractIssuesFromOutput(assistant_key, output_json) {
     
     default:
       return [];
+  }
+}
+
+/**
+ * Get a nested value by dot path (e.g. "nap_audit.issues")
+ */
+function getValueAtPath(obj, path) {
+  if (!obj || typeof obj !== 'object' || !path) return undefined;
+  const parts = String(path).split('.').filter(Boolean);
+  let cur = obj;
+  for (const key of parts) {
+    if (!cur || typeof cur !== 'object') return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
+/**
+ * Validate value types used by path_types.
+ *
+ * Supported expectedType values:
+ * - "array"
+ * - "object" (plain object, not array)
+ * - "string"
+ * - "number"
+ * - "boolean"
+ */
+function matchesExpectedType(value, expectedType) {
+  switch (expectedType) {
+    case 'array':
+      return Array.isArray(value);
+    case 'object':
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    case 'string':
+      return typeof value === 'string';
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value);
+    case 'boolean':
+      return typeof value === 'boolean';
+    default:
+      return true; // Unknown type spec => do not block
   }
 }
 
@@ -223,7 +358,10 @@ function checkComplianceViolations(output_json) {
 
   // Banned patterns
   const bannedPatterns = [
-    { pattern: /\d+\s*%/, message: 'Growth percentages or numeric projections are prohibited' },
+    // IMPORTANT: avoid false-positives on URL-encoded sequences like "%20" or "%2C".
+    // We only want to flag human-readable percent expressions like "30%".
+    // (URL encoding is always "%[0-9A-Fa-f]{2}".)
+    { pattern: /\b\d+\s*%(?![0-9a-f]{2})/i, message: 'Growth percentages or numeric projections are prohibited' },
     { pattern: /guarantee(d|s)?\s+(results|ranking|growth|traffic|leads)/i, message: 'Guarantees are prohibited (guaranteed results/ranking/growth)' },
     { pattern: /will\s+increase\s+(conversions|traffic|leads|sales)/i, message: 'Guarantees about results are prohibited ("will increase...")' },
     { pattern: /your\s+website\s+is\s+(bad|terrible|poor)/i, message: 'Negative framing about client website is prohibited' }

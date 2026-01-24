@@ -233,7 +233,7 @@
                 <h2>Jacob</h2>
                 <div class="photo-preview" id="jacobPreview">
                     <% if (settings.team_jacob_photo) { %>
-                        <img src="<%= settings.team_jacob_photo %>" alt="Jacob">
+                        <img src="<%= settings.team_jacob_photo %>?v=<%= Date.now() %>" alt="Jacob">
                     <% } else { %>
                         <span class="empty">No photo uploaded</span>
                     <% } %>
@@ -257,7 +257,7 @@
                 <h2>Max</h2>
                 <div class="photo-preview" id="maxPreview">
                     <% if (settings.team_max_photo) { %>
-                        <img src="<%= settings.team_max_photo %>" alt="Max">
+                        <img src="<%= settings.team_max_photo %>?v=<%= Date.now() %>" alt="Max">
                     <% } else { %>
                         <span class="empty">No photo uploaded</span>
                     <% } %>
@@ -306,23 +306,21 @@
         document.getElementById('jacobForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const formData = new FormData();
+            // NOTE: member is in URL param (prevents multer field-order bugs)
             formData.append('photo', document.getElementById('jacobPhoto').files[0]);
-            formData.append('member', 'jacob');
-            
-            await uploadPhoto(formData, 'Jacob');
+            await uploadPhoto(formData, 'Jacob', 'jacob');
         });
 
         // Handle Max form submission
         document.getElementById('maxForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const formData = new FormData();
+            // NOTE: member is in URL param (prevents multer field-order bugs)
             formData.append('photo', document.getElementById('maxPhoto').files[0]);
-            formData.append('member', 'max');
-            
-            await uploadPhoto(formData, 'Max');
+            await uploadPhoto(formData, 'Max', 'max');
         });
 
-        async function uploadPhoto(formData, memberName) {
+        async function uploadPhoto(formData, memberName, memberKey) {
             const successMsg = document.getElementById('successMessage');
             const errorMsg = document.getElementById('errorMessage');
             
@@ -330,23 +328,42 @@
             errorMsg.classList.remove('show');
 
             try {
-                const response = await fetch('/admin/team-photos/upload', {
+                const response = await fetch(`/admin/team-photos/upload/${memberKey}`, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 });
 
-                const result = await response.json();
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                let result = null;
+                if (contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    // Most common causes: session expired (redirect to login) or server error returning HTML.
+                    const text = await response.text();
+                    const hint = response.redirected ? ' (redirected - likely logged out)' : '';
+                    throw new Error(`Server returned non-JSON response${hint}. Status ${response.status}.`);
+                }
 
                 if (response.ok) {
                     successMsg.textContent = `✅ ${memberName}'s photo uploaded successfully!`;
                     successMsg.classList.add('show');
-                    
-                    // Reload page after 1 second
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+
+                    // Update preview immediately (avoid cache)
+                    const bust = Date.now();
+                    const newSrc = `${result.path}?v=${bust}`;
+                    if (memberKey === 'jacob') {
+                        document.getElementById('jacobPreview').innerHTML = `<img src="${newSrc}" alt="Jacob">`;
+                    } else if (memberKey === 'max') {
+                        document.getElementById('maxPreview').innerHTML = `<img src="${newSrc}" alt="Max">`;
+                    }
                 } else {
-                    errorMsg.textContent = `❌ Error: ${result.error || 'Upload failed'}`;
+                    const msg = (result && (result.message || result.error)) ? (result.message || result.error) : 'Upload failed';
+                    errorMsg.textContent = `❌ Error: ${msg}`;
                     errorMsg.classList.add('show');
                 }
             } catch (error) {

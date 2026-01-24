@@ -2,11 +2,19 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
-const { insertCrawledPage, insertLighthouseReport } = require('../db');
+const { getPersistentPublicDir } = require('../runtimePaths');
 
 // Configuration
-// Spec: keep crawl small + high-signal (home/contact/services/reviews/service-area + top service pages)
-const MAX_URLS = 8;
+// Spec: crawl enough pages to preserve menu/IA + key content pages
+// Default bumped to 50 for higher-quality "site snapshot" generation.
+const DEFAULT_MAX_URLS = 50;
+const MAX_URLS = (() => {
+  const raw = process.env.SCRAPER_V3_MAX_URLS;
+  const n = parseInt(String(raw || ''), 10);
+  if (!Number.isFinite(n)) return DEFAULT_MAX_URLS;
+  // Safety caps so we don't explode on huge sites.
+  return Math.max(5, Math.min(200, n));
+})();
 const VIEWPORT_DESKTOP = { width: 1280, height: 720 };
 const VIEWPORT_MOBILE = { width: 375, height: 667 };
 
@@ -40,6 +48,141 @@ const BLACKLIST_PATTERNS = [
   /\/page\/\d+/i, // Pagination
   /\/\d{4}\/\d{2}\//i, // Date archives
 ];
+
+/**
+ * Fetch text with timeout (Node fetch).
+ */
+async function fetchTextWithTimeout(url, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MaxAndJacob-Audit/1.0)'
+      },
+      signal: controller.signal
+    });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function decodeXmlEntities(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function parseSitemapLocs(xmlText) {
+  const xml = String(xmlText || '');
+  const locs = [];
+  const re = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
+  let m;
+  while ((m = re.exec(xml))) {
+    const loc = decodeXmlEntities((m[1] || '').trim());
+    if (loc) locs.push(loc);
+  }
+  return locs;
+}
+
+async function discoverSitemapsFromRobots(baseOrigin) {
+  const robotsUrl = `${baseOrigin}/robots.txt`;
+  const txt = await fetchTextWithTimeout(robotsUrl, 8000);
+  if (!txt) return [];
+  const sitemaps = [];
+  const lines = txt.split('\n');
+  for (const line of lines) {
+    const m = line.match(/^\s*sitemap:\s*(.+)\s*$/i);
+    if (m && m[1]) {
+      const u = m[1].trim();
+      if (u) sitemaps.push(u);
+    }
+  }
+  return [...new Set(sitemaps)];
+}
+
+async function collectUrlsFromSitemap(sitemapUrl, limits, visited = new Set()) {
+  const { maxSitemaps = 10, maxUrls = 800, depth = 0, maxDepth = 2 } = limits || {};
+  if (!sitemapUrl || visited.has(sitemapUrl)) return [];
+  if (visited.size >= maxSitemaps) return [];
+  if (depth > maxDepth) return [];
+  visited.add(sitemapUrl);
+
+  const xml = await fetchTextWithTimeout(sitemapUrl, 12000);
+  if (!xml) return [];
+
+  const locs = parseSitemapLocs(xml);
+  if (locs.length === 0) return [];
+
+  const looksLikeIndex = /<sitemapindex[\s>]/i.test(xml);
+  if (looksLikeIndex) {
+    const out = [];
+    for (const loc of locs) {
+      if (out.length >= maxUrls) break;
+      const nested = await collectUrlsFromSitemap(loc, { ...limits, depth: depth + 1 }, visited);
+      for (const u of nested) {
+        out.push(u);
+        if (out.length >= maxUrls) break;
+      }
+    }
+    return out;
+  }
+
+  return locs.slice(0, maxUrls);
+}
+
+async function discoverSitemapPageUrls(startUrl, logFn, jobId) {
+  try {
+    const base = new URL(startUrl);
+    const baseOrigin = base.origin;
+    const fromRobots = await discoverSitemapsFromRobots(baseOrigin);
+    const candidates = [
+      ...fromRobots,
+      `${baseOrigin}/sitemap.xml`,
+      `${baseOrigin}/sitemap_index.xml`
+    ];
+
+    const uniqueCandidates = [...new Set(candidates)].slice(0, 12);
+    const all = [];
+    for (const sm of uniqueCandidates) {
+      if (all.length >= 800) break;
+      const urls = await collectUrlsFromSitemap(sm, { maxSitemaps: 12, maxUrls: 800, maxDepth: 2 });
+      for (const u of urls) {
+        all.push(u);
+        if (all.length >= 800) break;
+      }
+    }
+
+    const filtered = all
+      .map((u) => {
+        try {
+          const abs = new URL(u, baseOrigin);
+          if (abs.origin !== baseOrigin) return null;
+          return abs.href;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    const deduped = [...new Set(filtered)];
+    if (deduped.length > 0) {
+      await logFn(jobId, 'crawler', `Discovered ${deduped.length} URLs from sitemap(s)`);
+    }
+    return deduped;
+  } catch (err) {
+    await logFn(jobId, 'crawler', `Sitemap discovery failed: ${err.message}`);
+    return [];
+  }
+}
 
 // URL Priority patterns (higher score = higher priority)
 const PRIORITY_PATTERNS = [
@@ -75,7 +218,10 @@ const US_CITIES = [
   'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville',
   'Fort Worth', 'Columbus', 'Charlotte', 'Indianapolis', 'Seattle', 'Denver',
   'Boston', 'Portland', 'Las Vegas', 'Detroit', 'Memphis', 'Nashville', 'Baltimore',
-  'Orlando', 'Tampa', 'Atlanta', 'Raleigh', 'Sacramento', 'Kansas City'
+  'Orlando', 'Tampa', 'Atlanta', 'Raleigh', 'Sacramento', 'Kansas City',
+  // Florida cities (Palm Beach County area)
+  'Fort Lauderdale', 'Boca Raton', 'West Palm Beach', 'Palm Beach', 'Delray Beach',
+  'Boynton Beach', 'Pompano Beach', 'Deerfield Beach', 'Highland Beach'
 ];
 
 /**
@@ -150,6 +296,58 @@ async function discoverUrlsFromPage(page, baseUrl) {
 }
 
 /**
+ * Extract likely primary navigation links (seed URLs).
+ * This is intentionally lightweight: used to boost menu pages in the crawl queue.
+ */
+async function extractNavSeedUrls(page, baseUrl) {
+  const baseOrigin = new URL(baseUrl).origin;
+  const urls = await page.evaluate((origin) => {
+    function toAbs(href) {
+      try {
+        return new URL(href, window.location.href).href;
+      } catch {
+        return null;
+      }
+    }
+
+    const candidates = Array.from(document.querySelectorAll(
+      'header nav, nav[role="navigation"], nav, header .menu, .navbar, .nav, .menu, .main-menu, .primary-menu, .site-nav'
+    ));
+
+    // Pick the container with the most internal links
+    let best = null;
+    let bestCount = 0;
+    for (const el of candidates) {
+      const links = Array.from(el.querySelectorAll('a[href]'));
+      const internal = links.filter(a => {
+        const href = a.getAttribute('href');
+        if (!href) return false;
+        const abs = toAbs(href);
+        if (!abs) return false;
+        try { return new URL(abs).origin === origin; } catch { return false; }
+      });
+      if (internal.length > bestCount) {
+        best = el;
+        bestCount = internal.length;
+      }
+    }
+
+    if (!best) return [];
+
+    return Array.from(best.querySelectorAll('a[href]'))
+      .map(a => a.getAttribute('href'))
+      .map(toAbs)
+      .filter(Boolean)
+      .filter((u) => {
+        try { return new URL(u).origin === origin; } catch { return false; }
+      })
+      .slice(0, 80);
+  }, baseOrigin);
+
+  return urls || [];
+}
+
+/**
  * Extract page data
  */
 async function extractPageData(page, url) {
@@ -182,6 +380,224 @@ async function extractPageData(page, url) {
     // Word count (approximate from body text)
     const bodyText = document.body ? document.body.innerText : '';
     const wordCount = bodyText.split(/\s+/).filter(Boolean).length;
+
+    // =========================
+    // Menu / IA extraction
+    // =========================
+    function cleanText(s) {
+      return (s || '').toString().replace(/\s+/g, ' ').trim().slice(0, 140);
+    }
+    function toAbs(href) {
+      try {
+        return new URL(href, window.location.href).href;
+      } catch {
+        return null;
+      }
+    }
+    function normalizeMenuHref(href) {
+      const abs = toAbs(href);
+      if (!abs) return null;
+      // Skip fragment-only links
+      if (abs.includes('#') && abs.split('#')[0] === window.location.href.split('#')[0]) {
+        return null;
+      }
+      return abs;
+    }
+    function buildTreeFromUl(ulEl, depth = 0) {
+      if (!ulEl || depth > 3) return [];
+      const items = [];
+      const lis = Array.from(ulEl.children).filter((c) => c && c.tagName === 'LI');
+      lis.slice(0, 40).forEach((li) => {
+        const a = li.querySelector('a[href]');
+        const text = cleanText(a ? (a.innerText || a.getAttribute('aria-label') || a.getAttribute('title')) : (li.innerText || ''));
+        const href = a ? a.getAttribute('href') : null;
+        const abs = href ? normalizeMenuHref(href) : null;
+        const childUl = li.querySelector(':scope > ul, :scope > ol');
+        const children = childUl ? buildTreeFromUl(childUl, depth + 1) : [];
+        if (text || abs) {
+          items.push({
+            text: text || null,
+            href: href || null,
+            url: abs || null,
+            children
+          });
+        }
+      });
+      return items;
+    }
+
+    const navSelectors = [
+      'header nav',
+      'nav[role="navigation"]',
+      'nav',
+      'header .menu',
+      '.navbar',
+      '.nav',
+      '.menu',
+      '.main-menu',
+      '.primary-menu',
+      '.site-nav'
+    ];
+
+    const navCandidates = Array.from(document.querySelectorAll(navSelectors.join(',')));
+    let navEl = null;
+    let bestCount = 0;
+    navCandidates.forEach((el) => {
+      const links = Array.from(el.querySelectorAll('a[href]'))
+        .map((a) => normalizeMenuHref(a.getAttribute('href')))
+        .filter(Boolean)
+        .filter((u) => {
+          try {
+            return new URL(u).origin === window.location.origin;
+          } catch {
+            return false;
+          }
+        });
+      if (links.length > bestCount) {
+        bestCount = links.length;
+        navEl = el;
+      }
+    });
+
+    let primary_nav_tree = [];
+    if (navEl) {
+      const ul = navEl.querySelector('ul, ol');
+      if (ul) {
+        primary_nav_tree = buildTreeFromUl(ul, 0);
+      } else {
+        // Fallback: flat list → tree of leaf nodes
+        const flat = Array.from(navEl.querySelectorAll('a[href]'))
+          .slice(0, 50)
+          .map((a) => {
+            const href = a.getAttribute('href');
+            const abs = normalizeMenuHref(href);
+            const t = cleanText(a.innerText || a.getAttribute('aria-label') || a.getAttribute('title'));
+            if (!abs && !t) return null;
+            return { text: t || null, href: href || null, url: abs || null, children: [] };
+          })
+          .filter(Boolean);
+        primary_nav_tree = flat;
+      }
+    }
+
+    const footerEl = document.querySelector('footer');
+    const footer_nav_links = footerEl
+      ? Array.from(footerEl.querySelectorAll('a[href]'))
+          .slice(0, 80)
+          .map((a) => {
+            const href = a.getAttribute('href');
+            const abs = normalizeMenuHref(href);
+            const t = cleanText(a.innerText || a.getAttribute('aria-label') || a.getAttribute('title'));
+            if (!abs && !t) return null;
+            return { text: t || null, href: href || null, url: abs || null };
+          })
+          .filter(Boolean)
+      : [];
+
+    // =========================
+    // Page content extraction
+    // =========================
+    function getContentRoot() {
+      const candidates = [
+        document.querySelector('main'),
+        document.querySelector('article'),
+        document.querySelector('#content'),
+        document.querySelector('.site-content'),
+        document.querySelector('.page-content'),
+        document.querySelector('.entry-content'),
+        document.querySelector('.post-content'),
+        document.querySelector('.content')
+      ].filter(Boolean);
+      for (const el of candidates) {
+        const t = (el.innerText || '').trim();
+        if (t.length >= 200) return el;
+      }
+      return document.body;
+    }
+
+    const contentRoot = getContentRoot();
+
+    // Extract content text (bounded; used for future site rebuild, not for LLM directly)
+    const rawContentText = (contentRoot && contentRoot.innerText) ? contentRoot.innerText : bodyText;
+    const content_text = rawContentText
+      ? rawContentText.replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 60000)
+      : '';
+
+    // Content outline: headings + short snippets
+    const outline_sections = [];
+    const headingEls = contentRoot
+      ? Array.from(contentRoot.querySelectorAll('h1, h2, h3')).slice(0, 40)
+      : [];
+
+    function collectSnippetAfterHeading(hEl) {
+      let el = hEl;
+      const snippets = [];
+      let steps = 0;
+      while (el && steps < 30 && snippets.length < 2) {
+        steps += 1;
+        el = el.nextElementSibling;
+        if (!el) break;
+        const tag = (el.tagName || '').toLowerCase();
+        if (tag === 'h1' || tag === 'h2' || tag === 'h3') break;
+        if (tag === 'p' || tag === 'li') {
+          const txt = cleanText(el.innerText || '');
+          if (txt && txt.length >= 20) snippets.push(txt);
+        } else if (el.querySelector) {
+          const p = el.querySelector('p');
+          if (p) {
+            const txt = cleanText(p.innerText || '');
+            if (txt && txt.length >= 20) snippets.push(txt);
+          }
+        }
+      }
+      return snippets.join(' ').slice(0, 280) || null;
+    }
+
+    headingEls.forEach((hEl) => {
+      const level = (hEl.tagName || '').toLowerCase();
+      const text = cleanText(hEl.innerText || '');
+      if (!text) return;
+      outline_sections.push({
+        level,
+        heading: text,
+        snippet: collectSnippetAfterHeading(hEl)
+      });
+    });
+
+    const content_outline_json = {
+      root: contentRoot === document.body ? 'body' : (contentRoot.tagName || '').toLowerCase(),
+      sections: outline_sections.slice(0, 30)
+    };
+
+    // Images inside content (top 20)
+    const images_json = [];
+    const imgs = contentRoot ? Array.from(contentRoot.querySelectorAll('img')) : [];
+    const seenImg = new Set();
+    imgs.slice(0, 80).forEach((img) => {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+      const abs = src ? toAbs(src) : null;
+      if (!abs) return;
+      if (seenImg.has(abs)) return;
+      seenImg.add(abs);
+      const alt = cleanText(img.getAttribute('alt') || '');
+      const w = img.naturalWidth || img.width || null;
+      const h = img.naturalHeight || img.height || null;
+      const rect = img.getBoundingClientRect ? img.getBoundingClientRect() : null;
+      const is_hero_candidate = !!(
+        rect &&
+        rect.top >= -10 &&
+        rect.top < 720 &&
+        rect.height >= 180 &&
+        rect.width >= 280
+      );
+      images_json.push({
+        url: abs,
+        alt: alt || null,
+        width: w,
+        height: h,
+        is_hero_candidate
+      });
+    });
 
     // Services extraction (cards/blocks)
     // - featured: H3 + short description (nearby p/h6) + learn more link if present
@@ -373,16 +789,38 @@ async function extractPageData(page, url) {
     }));
 
     // CTA Candidates with Intent Classification (Evidence Pack v2)
+    // Include contact links even when they have no visible text (icon-only tel/mailto/sms links are common).
+    function getCtaText(el) {
+      const t =
+        (el && (el.innerText || el.value)) ||
+        (el && el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title'))) ||
+        '';
+      return String(t || '').trim();
+    }
+
+    function isContactSchemeHref(hrefLower) {
+      const h = String(hrefLower || '');
+      return (
+        h.startsWith('tel:') ||
+        h.startsWith('mailto:') ||
+        h.startsWith('sms:') ||
+        h.startsWith('smsto:')
+      );
+    }
+
     const ctaElements = Array.from(document.querySelectorAll('a, button, input[type="submit"]'))
-      .filter(el => {
-        const text = (el.innerText || el.value || '').trim();
+      .filter((el) => {
+        const href = (el && el.tagName === 'A') ? (el.getAttribute('href') || '') : '';
+        const hrefLower = String(href || '').toLowerCase();
+        if (isContactSchemeHref(hrefLower)) return true;
+        const text = getCtaText(el);
         // Filter out empty or very long text
         return text.length > 0 && text.length < 100;
       })
-      .slice(0, 100); // Limit to 100 CTAs for analysis
+      .slice(0, 140); // Keep small but include icon-only contact links
 
     const cta_candidates = ctaElements.map(el => {
-      const text = (el.innerText || el.value || '').trim();
+      let text = getCtaText(el);
       const href = el.tagName === 'A' ? el.getAttribute('href') : null;
       const action = el.tagName === 'FORM' ? el.getAttribute('action') : 
                     (el.form ? el.form.getAttribute('action') : null);
@@ -395,11 +833,20 @@ async function extractPageData(page, url) {
       let cta_intent = 'other';
       let target_type = 'other';
       
-      const textLower = text.toLowerCase();
       const hrefLower = (href || action || '').toLowerCase();
       
+      // Provide safe label for icon-only contact links
+      if (!text && hrefLower.startsWith('tel:')) text = 'Call';
+      if (!text && (hrefLower.startsWith('sms:') || hrefLower.startsWith('smsto:'))) text = 'Text';
+      if (!text && hrefLower.startsWith('mailto:')) text = 'Email';
+
+      const textLower = text.toLowerCase();
+      
       // Intent detection
-      if (/\b(call|phone|dial|ring|emergency)\b/i.test(textLower) || hrefLower.startsWith('tel:') || /\b24\/7\b/.test(textLower)) {
+      if (hrefLower.startsWith('sms:') || hrefLower.startsWith('smsto:')) {
+        cta_intent = 'contact';
+        target_type = 'sms';
+      } else if (/\b(call|phone|dial|ring|emergency)\b/i.test(textLower) || hrefLower.startsWith('tel:') || /\b24\/7\b/.test(textLower)) {
         cta_intent = 'call';
         target_type = 'tel';
       } else if (/\b(schedule|book|appointment|calendar)\b/i.test(textLower)) {
@@ -422,6 +869,8 @@ async function extractPageData(page, url) {
         target_type = 'form_submit';
       } else if (hrefLower.startsWith('tel:')) {
         target_type = 'tel';
+      } else if (hrefLower.startsWith('sms:') || hrefLower.startsWith('smsto:')) {
+        target_type = 'sms';
       } else if (hrefLower.startsWith('mailto:')) {
         target_type = 'mailto';
       } else if (hrefLower.startsWith('http') && !hrefLower.includes(window.location.hostname)) {
@@ -497,6 +946,11 @@ async function extractPageData(page, url) {
       h3: h3Elements,
       h6: h6Elements,
       wordCount,
+      primary_nav_tree,
+      footer_nav_links,
+      content_text,
+      content_outline_json,
+      images_json,
       internalLinksCount,
       outboundLinksCount,
       topOutboundDomains,
@@ -782,54 +1236,203 @@ function extractTrustSignals(bodyText) {
 }
 
 /**
- * Extract NAP (Name, Address, Phone) from text and structured data
+ * Extract NAP (Name, Address, Phone) from text, CTAs, and structured data.
+ * NOTE: Stored as JSON in DB (safe to extend with more fields).
  */
-function extractNAP(bodyText, jsonldBlocks) {
+function extractNAP(bodyText, jsonldBlocks, options = {}) {
   const nap = {
     name: null,
     address: null,
-    phone: null
+    phone: null,
+    email: null,
+    text_phone: null,
+    city: null // Used for dynamic location
   };
 
-  // Try JSON-LD first
-  jsonldBlocks.forEach(block => {
-    if (block['@type'] === 'LocalBusiness' || block['@type'] === 'Organization') {
-      if (!nap.name && block.name) {
-        nap.name = block.name.slice(0, 100);
-      }
-      if (!nap.phone && block.telephone) {
-        nap.phone = block.telephone.slice(0, 30);
-      }
-      if (!nap.address && block.address) {
-        if (typeof block.address === 'string') {
-          nap.address = block.address.slice(0, 200);
-        } else if (block.address.streetAddress) {
-          const parts = [
-            block.address.streetAddress,
-            block.address.addressLocality,
-            block.address.addressRegion,
-            block.address.postalCode
-          ].filter(Boolean);
-          nap.address = parts.join(', ').slice(0, 200);
-        }
-      }
-    }
-  });
+  const text = String(bodyText || '');
+  const contentText = String(options.content_text || '');
+  const combinedText = (text + '\n' + contentText).slice(0, 120000);
 
-  // Phone from body text (US format)
+  const ctas = Array.isArray(options.cta_candidates) ? options.cta_candidates : [];
+  const jsonldExtracted = (options.jsonld_extracted && typeof options.jsonld_extracted === 'object')
+    ? options.jsonld_extracted
+    : normalizeJsonLd(Array.isArray(jsonldBlocks) ? jsonldBlocks : []);
+
+  function cleanPhoneFromSchemeHref(href) {
+    const raw = String(href || '').trim();
+    if (!raw) return null;
+    let v = raw.replace(/^(tel:|sms:|smsto:)/i, '');
+    v = v.split(/[?;]/)[0].trim();
+    if (!v) return null;
+    // Guard against obviously invalid values
+    const digits = v.replace(/[^\d]/g, '');
+    if (digits.length < 7) return null;
+    return v.slice(0, 40);
+  }
+
+  function cleanEmailFromMailtoHref(href) {
+    const raw = String(href || '').trim();
+    if (!raw) return null;
+    let v = raw.replace(/^mailto:/i, '').trim();
+    v = v.split('?')[0].trim();
+    if (!v || !v.includes('@')) return null;
+    return v.slice(0, 140);
+  }
+
+  function extractPhoneFromTextBlock(t) {
+    const s = String(t || '');
+    const m =
+      s.match(/(\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?:\s*(?:x|ext\.?|extension)\s*\d{1,5})?/i) ||
+      s.match(/\+\d{1,3}[\s.-]?\d{1,4}[\s.-]?\d{2,4}[\s.-]?\d{2,4}[\s.-]?\d{2,4}/);
+    return m && m[0] ? m[0].slice(0, 40) : null;
+  }
+
+  function extractEmailFromTextBlock(t) {
+    const s = String(t || '');
+    const m = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m && m[0] ? m[0].slice(0, 140) : null;
+  }
+
+  function extractCityFromAddressString(addr) {
+    const a = String(addr || '');
+    const cityMatch = a.match(/,\s*([A-Za-z\s]+),\s*[A-Z]{2}\b/);
+    return cityMatch && cityMatch[1] ? cityMatch[1].trim().slice(0, 100) : null;
+  }
+
+  // 1) JSON-LD (normalized) first
+  if (!nap.name) {
+    nap.name =
+      (jsonldExtracted.organization && jsonldExtracted.organization.name) ||
+      (jsonldExtracted.localbusiness && jsonldExtracted.localbusiness.name) ||
+      null;
+    if (nap.name) nap.name = String(nap.name).slice(0, 100);
+  }
+
   if (!nap.phone) {
-    const phoneMatch = bodyText.match(/(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
-    if (phoneMatch) {
-      nap.phone = phoneMatch[0].slice(0, 30);
+    const p =
+      (jsonldExtracted.localbusiness && jsonldExtracted.localbusiness.telephone) ||
+      (jsonldExtracted.organization && jsonldExtracted.organization.contactPoint && jsonldExtracted.organization.contactPoint.telephone) ||
+      null;
+    if (p) nap.phone = String(p).slice(0, 40);
+  }
+
+  if (!nap.address) {
+    const addr = jsonldExtracted.localbusiness && jsonldExtracted.localbusiness.address ? jsonldExtracted.localbusiness.address : null;
+    if (addr) {
+      if (typeof addr === 'string') {
+        nap.address = addr.slice(0, 240);
+      } else if (addr.full) {
+        nap.address = String(addr.full).slice(0, 240);
+      } else if (addr.streetAddress) {
+        const parts = [
+          addr.streetAddress,
+          addr.addressLocality,
+          addr.addressRegion,
+          addr.postalCode
+        ].filter(Boolean);
+        nap.address = parts.join(', ').slice(0, 240);
+      }
     }
   }
 
-  // Address from body text (US format)
-  if (!nap.address) {
-    const addressMatch = bodyText.match(/\d+\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)[.,\s]+[\w\s]+,?\s+[A-Z]{2}\s+\d{5}/i);
-    if (addressMatch) {
-      nap.address = addressMatch[0].slice(0, 200);
+  if (!nap.city) {
+    const addr = jsonldExtracted.localbusiness && jsonldExtracted.localbusiness.address ? jsonldExtracted.localbusiness.address : null;
+    if (addr && typeof addr === 'object' && addr.addressLocality) {
+      nap.city = String(addr.addressLocality).slice(0, 100);
     }
+  }
+
+  // 2) Raw JSON-LD blocks (for email + edge cases)
+  const blocks = Array.isArray(jsonldBlocks) ? jsonldBlocks : [];
+  const expandItems = (block) => {
+    if (!block) return [];
+    if (Array.isArray(block)) return block.flatMap(expandItems);
+    if (block['@graph'] && Array.isArray(block['@graph'])) return block['@graph'];
+    return [block];
+  };
+  blocks.forEach((block) => {
+    const items = expandItems(block);
+    items.forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      if (!nap.email && item.email) {
+        const e = String(item.email);
+        if (e.includes('@')) nap.email = e.slice(0, 140);
+      }
+      if (!nap.phone && (item.telephone || item.telePhone)) {
+        nap.phone = String(item.telephone || item.telePhone).slice(0, 40);
+      }
+      if (!nap.address && item.address) {
+        if (typeof item.address === 'string') {
+          nap.address = String(item.address).slice(0, 240);
+        } else if (item.address.streetAddress) {
+          const parts = [
+            item.address.streetAddress,
+            item.address.addressLocality,
+            item.address.addressRegion,
+            item.address.postalCode
+          ].filter(Boolean);
+          nap.address = parts.join(', ').slice(0, 240);
+        }
+      }
+      if (!nap.city && item.address && typeof item.address === 'object' && item.address.addressLocality) {
+        nap.city = String(item.address.addressLocality).slice(0, 100);
+      }
+    });
+  });
+
+  // 3) Contact schemes (tel:/sms:/mailto:) from CTA candidates
+  const telHrefs = ctas
+    .map((c) => (c && c.href) ? String(c.href) : '')
+    .filter((h) => /^tel:/i.test(h))
+    .slice(0, 10);
+  const smsHrefs = ctas
+    .map((c) => (c && c.href) ? String(c.href) : '')
+    .filter((h) => /^(sms:|smsto:)/i.test(h))
+    .slice(0, 10);
+  const mailtoHrefs = ctas
+    .map((c) => (c && c.href) ? String(c.href) : '')
+    .filter((h) => /^mailto:/i.test(h))
+    .slice(0, 10);
+
+  if (!nap.phone && telHrefs.length > 0) {
+    nap.phone = cleanPhoneFromSchemeHref(telHrefs[0]);
+  }
+  if (!nap.text_phone && smsHrefs.length > 0) {
+    nap.text_phone = cleanPhoneFromSchemeHref(smsHrefs[0]);
+  }
+  if (!nap.email && mailtoHrefs.length > 0) {
+    nap.email = cleanEmailFromMailtoHref(mailtoHrefs[0]);
+  }
+
+  // 4) Text heuristics (fallbacks)
+  if (!nap.phone) {
+    nap.phone = extractPhoneFromTextBlock(combinedText);
+  }
+  if (!nap.email) {
+    nap.email = extractEmailFromTextBlock(combinedText);
+  }
+
+  // Address from text (US format)
+  if (!nap.address) {
+    const addressMatch = combinedText.match(/\d+\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)[.,\s]+[\w\s]+,?\s+[A-Z]{2}\s+\d{5}/i);
+    if (addressMatch) {
+      nap.address = addressMatch[0].slice(0, 240);
+    }
+  }
+
+  // City from address string
+  if (!nap.city && nap.address) {
+    nap.city = extractCityFromAddressString(nap.address);
+  }
+
+  // If we only detected an SMS number, use it as phone too (common for mobile-first sites).
+  if (!nap.phone && nap.text_phone) {
+    nap.phone = nap.text_phone;
+  }
+
+  // text_phone fallback: use phone if we found it
+  if (!nap.text_phone && nap.phone) {
+    nap.text_phone = nap.phone;
   }
 
   return nap;
@@ -1018,7 +1621,7 @@ function normalizeJsonLd(jsonldBlocks) {
  * Take screenshots for a page
  */
 async function takeScreenshots(page, url, jobId, pageIndex) {
-  const screenshotDir = path.join(__dirname, '..', '..', 'public', 'audit_screenshots', String(jobId), 'pages');
+  const screenshotDir = path.join(getPersistentPublicDir(), 'audit_screenshots', String(jobId), 'pages');
   fs.mkdirSync(screenshotDir, { recursive: true });
 
   const screenshots = {};
@@ -1135,6 +1738,27 @@ async function crawlWebsite(jobId, startUrl, logFn) {
   const visited = new Set();
   const crawledPages = [];
 
+  const enqueue = (absUrl, bonusPriority = 0, forcedType = null) => {
+    if (!absUrl) return;
+    let u;
+    try {
+      u = new URL(absUrl, baseOrigin).href;
+    } catch {
+      return;
+    }
+    if (isBlacklisted(u)) return;
+    const normalized = normalizeUrl(u);
+    if (visited.has(normalized)) return;
+    if (urlQueue.some((q) => q.normalized === normalized)) return;
+    const { score, type } = calculatePriorityScore(u);
+    urlQueue.push({
+      url: u,
+      normalized,
+      priority: (score || 0) + (bonusPriority || 0),
+      type: forcedType || type
+    });
+  };
+
   // Add start URL to queue
   const startNormalized = normalizeUrl(startUrl);
   urlQueue.push({
@@ -1145,6 +1769,10 @@ async function crawlWebsite(jobId, startUrl, logFn) {
   });
 
   await logFn(jobId, 'crawler', `Starting crawl from ${startUrl} (max ${MAX_URLS} pages)`);
+
+  // Seed from sitemap (best-effort) to increase coverage of important pages.
+  const sitemapUrls = await discoverSitemapPageUrls(startUrl, logFn, jobId);
+  (sitemapUrls || []).slice(0, 800).forEach((u) => enqueue(u, 5));
 
   while (urlQueue.length > 0 && crawledPages.length < MAX_URLS) {
     // Sort queue by priority (highest first)
@@ -1177,20 +1805,24 @@ async function crawlWebsite(jobId, startUrl, logFn) {
         .slice(0, 20)
         .map(c => ({ text: c.text, href: c.href, bounding_box: c.bounding_box }));
       
+      // Normalize JSON-LD data (used by multiple extractors)
+      const jsonldExtracted = normalizeJsonLd(pageData.jsonldBlocks);
+
       // Extract trust signals
       const trustSignals = extractTrustSignals(pageData.bodyText);
-      
-      // Extract NAP
-      const nap = extractNAP(pageData.bodyText, pageData.jsonldBlocks);
-      
+
+      // Extract NAP (now also uses CTAs + normalized JSON-LD)
+      const nap = extractNAP(pageData.bodyText, pageData.jsonldBlocks, {
+        cta_candidates: pageData.cta_candidates,
+        jsonld_extracted: jsonldExtracted,
+        content_text: pageData.content_text
+      });
+
       // Extract cities
       const cities = extractCities(pageData.bodyText);
-      
+
       // Extract brand assets (logo candidates)
       const brandAssets = await extractBrandAssets(page, current.url);
-      
-      // Normalize JSON-LD data
-      const jsonldExtracted = normalizeJsonLd(pageData.jsonldBlocks);
       
       // Take screenshots (only for first 5 pages to save storage)
       let screenshots = {};
@@ -1200,6 +1832,12 @@ async function crawlWebsite(jobId, startUrl, logFn) {
       
       // Discover new URLs from this page
       const discoveredUrls = await discoverUrlsFromPage(page, current.url);
+
+      // Extract likely menu URLs (boost in queue)
+      let navSeedUrls = [];
+      if (current.type === 'home') {
+        navSeedUrls = await extractNavSeedUrls(page, current.url);
+      }
       
       // Close page
       await page.close();
@@ -1219,6 +1857,8 @@ async function crawlWebsite(jobId, startUrl, logFn) {
         h3_json: pageData.h3,
         h6_json: pageData.h6,
         word_count: pageData.wordCount,
+        nav_primary_json: pageData.primary_nav_tree || [],
+        footer_nav_links_json: pageData.footer_nav_links || [],
         internal_links_count: pageData.internalLinksCount,
         outbound_links_count: pageData.outboundLinksCount,
         top_outbound_domains_json: pageData.topOutboundDomains,
@@ -1237,6 +1877,9 @@ async function crawlWebsite(jobId, startUrl, logFn) {
         cities_json: cities,
         jsonld_blocks_json: pageData.jsonldBlocks,
         jsonld_extracted_json: jsonldExtracted, // NEW: Normalized JSON-LD for Evidence Pack v2
+        content_text: pageData.content_text || null,
+        content_outline_json: pageData.content_outline_json || null,
+        images_json: pageData.images_json || [],
         services_extracted_json: pageData.services_extracted || {},
         brand_assets_json: brandAssets, // NEW: Logo candidates with priority scoring
         text_snippet: pageData.text_snippet, // NEW: Text snippet for Evidence Pack v2
@@ -1244,24 +1887,10 @@ async function crawlWebsite(jobId, startUrl, logFn) {
       });
       
       // Process discovered URLs
-      discoveredUrls.forEach(url => {
-        const normalized = normalizeUrl(url);
-        
-        // Skip if blacklisted, already visited, or already in queue
-        if (isBlacklisted(url) || visited.has(normalized) || urlQueue.some(u => u.normalized === normalized)) {
-          return;
-        }
-        
-        // Calculate priority
-        const { score, type } = calculatePriorityScore(url);
-        
-        urlQueue.push({
-          url,
-          normalized,
-          priority: score,
-          type
-        });
-      });
+      (discoveredUrls || []).forEach((url) => enqueue(url, 0));
+
+      // Boost nav/menu URLs so we preserve client IA.
+      (navSeedUrls || []).forEach((url) => enqueue(url, 80));
       
     } catch (err) {
       await logFn(jobId, 'crawler', `Error crawling ${current.url}: ${err.message}`);
@@ -1314,6 +1943,11 @@ async function runLighthouseAudits(jobId, crawledPages, logFn) {
 
 module.exports = {
   crawlWebsite,
-  runLighthouseAudits
+  runLighthouseAudits,
+  // Expose internals for unit tests (non-production usage)
+  __testHooks: {
+    extractNAP,
+    normalizeJsonLd
+  }
 };
 

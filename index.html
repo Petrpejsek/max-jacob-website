@@ -40,11 +40,12 @@
                     <span class="typing-text"></span>
                     <span class="typing-cursor">|</span>
                 </div>
-                <p>Fast, reliable and tailored to your business.</p>
+                <p class="hero-subheadline">Web in 7–14 days. Built to get calls & leads.</p>
                 <div class="hero-cta">
-                    <a href="#contact" class="btn-main btn-primary">Get a Free Quote</a>
-                    <a href="#pricing" class="btn-main btn-secondary">See Pricing</a>
+                    <a href="#contact" class="btn-main btn-primary">Start your project</a>
+                    <a href="#pricing" class="btn-main btn-secondary">See packages</a>
                 </div>
+                <p class="hero-cta-microcopy">Takes 2–3 minutes • No payment required</p>
                 <div class="hero-benefits">
                     <div class="hero-benefit">
                         <span class="benefit-icon">
@@ -215,6 +216,27 @@
         </div>
     </section>
 
+    <!-- Reviews / Testimonials section -->
+    <section class="reviews-section">
+        <div class="reviews-container">
+            <div class="review-card">
+                <div class="review-stars">★★★★★</div>
+                <p class="review-text">"Jacob and the team delivered fast and kept everything simple. The site looks premium and the contact flow is way clearer. Communication was on point."</p>
+                <p class="review-author">Mike R., Miami (Plumbing)</p>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">★★★★★</div>
+                <p class="review-text">"We needed something modern that actually converts. Jacob was super responsive and guided us through the structure and copy. The final result feels professional."</p>
+                <p class="review-author">Sarah L., Fort Lauderdale (Cleaning Service)</p>
+            </div>
+            <div class="review-card">
+                <div class="review-stars">★★★★★</div>
+                <p class="review-text">"Super smooth process from start to launch. Jacob helped us tighten the messaging and service pages. Great experience — clean work and on-time delivery."</p>
+                <p class="review-author">Daniel P., Boca Raton (Roofing)</p>
+            </div>
+        </div>
+    </section>
+
     <!-- Services section -->
     <section class="services" id="services">
         <div class="services-header">
@@ -316,6 +338,7 @@
                     </div>
                     <div class="project-info">
                         <h3>CRM Dashboard</h3>
+                        <p class="project-context">Booking request flow + CRM/email integration</p>
                         <p>Intelligent CRM with predictive analytics and automated workflows.</p>
                     </div>
                 </div>
@@ -327,6 +350,7 @@
                     </div>
                     <div class="project-info">
                         <h3>Healthcare App</h3>
+                        <p class="project-context">AI tool directory + SEO-ready landing pages</p>
                         <p>Mobile application for healthcare with AI diagnostics.</p>
                     </div>
                 </div>
@@ -338,6 +362,7 @@
                     </div>
                     <div class="project-info">
                         <h3>E-commerce Platform</h3>
+                        <p class="project-context">Website redesign + lead capture form</p>
                         <p>Custom online store with automated order processing and AI-powered recommendations.</p>
                     </div>
                 </div>
@@ -433,13 +458,15 @@
             <div class="pricing-card">
                 <div class="pricing-content">
                     <h3>Launch</h3>
+                    <p class="pricing-delivery">Delivery: 7 days</p>
                     <p class="pricing-desc">Ideal for a quick start and personal brand.</p>
                     <p class="pricing-price">$1,497</p>
                     <ul>
                         <li>One-page custom website</li>
+                        <li>One-page anchor menu (scroll navigation)</li>
                         <li>Modern responsive design</li>
                         <li>Contact form + basic lead capture</li>
-                        <li>Domain & deployment setup</li>
+                        <li>Domain connection + launch setup</li>
                         <li>Light performance optimization</li>
                         <li>30-min strategy call</li>
                     </ul>
@@ -453,16 +480,17 @@
             <div class="pricing-card pricing-card-popular">
                 <div class="pricing-content">
                     <h3>Grow <span class="popular-badge">Most Popular</span></h3>
+                    <p class="pricing-delivery">Delivery: 7–14 days</p>
                     <p class="pricing-desc">For small businesses and services looking to grow.</p>
                     <p class="pricing-price">$2,997</p>
                     <ul>
                         <li>3–5 custom pages</li>
-                        <li>Custom structure & navigation</li>
-                        <li>SEO-ready setup (meta, alt, sitemap)</li>
-                        <li>Domain & hosting setup</li>
-                        <li>Contact form connected to Google Analytics</li>
-                        <li>Handoff documentation & clean code</li>
+                        <li>Custom page layouts (we design each page section)</li>
+                        <li>Copy structure included (we help shape the content)</li>
+                        <li>Conversion-focused page structure (clear CTAs)</li>
+                        <li>Domain connection + hosting setup</li>
                         <li>30-min strategy call</li>
+                        <li>Handoff documentation & clean code</li>
                     </ul>
                 </div>
                 <div class="pricing-bottom">
@@ -474,16 +502,20 @@
             <div class="pricing-card">
                 <div class="pricing-content">
                     <h3>Scale</h3>
+                    <p class="pricing-delivery">Delivery: 2–4 weeks</p>
                     <p class="pricing-desc">For brands ready to make a strong impression and scale up.</p>
                     <p class="pricing-price">$4,997</p>
                     <ul>
                         <li>Everything from Launch & Grow</li>
-                        <li>CMS/blog with fully editable content</li>
-                        <li>Multilingual support (2 languages)</li>
+                        <li>CMS + Blog (admin editing for pages & posts)</li>
+                        <li>Advanced feature included (more optional as add-ons):</li>
+                        <li class="nested-feature">Customer login / client portal</li>
+                        <li class="nested-feature">Booking requests</li>
+                        <li class="nested-feature">Payments / deposits (Stripe)</li>
+                        <li class="nested-feature">CRM / email integration</li>
+                        <li>Multilingual setup (2 languages) – structure + switching</li>
                         <li>Premium animations, interactions, modern UI</li>
-                        <li>Basic AI integration (e.g. GPT chatbot)</li>
-                        <li>Advanced SEO optimization</li>
-                        <li>Free hosting & domain for 1 year</li>
+                        <li>Hosting setup included (client-owned)</li>
                         <li>30-min strategy call</li>
                     </ul>
                 </div>
@@ -493,7 +525,31 @@
                 </div>
             </div>
         </div>
+        <div class="pricing-trust-section">
+            <p class="pricing-trust-item">✓ Fixed scope. Clear deliverables. No surprises.</p>
+            <p class="pricing-trust-item">✓ We confirm exact scope before we start.</p>
+        </div>
+        
+        <!-- Custom & Add-ons section -->
+        <div class="pricing-custom-addons">
+            <h3>Custom & Add-ons</h3>
+            <p class="addons-subtitle">These are the most common add-ons — we also build custom features on request.</p>
+            <p class="addons-cta">Tell us what you need — we'll scope it and quote it.</p>
+            <div class="addons-list">
+                <span class="addon-item">Tracking & analytics (GA4, pixels)</span>
+                <span class="addon-item">Google Business Profile optimization</span>
+                <span class="addon-item">Ads landing pages</span>
+                <span class="addon-item">Copywriting & photos</span>
+                <span class="addon-item">Ongoing maintenance & updates</span>
+                <span class="addon-item">AI chat / automations</span>
+                <span class="addon-item">Extra pages / extra languages</span>
+                <span class="addon-item">CRM integrations</span>
+            </div>
+            <p class="addons-more">And many more — integrations, portals, booking systems, e-commerce, automations…</p>
+        </div>
+        
         <p class="pricing-footer-note">Need something different? Contact us for a custom quote.</p>
+        <p class="pricing-exclusions">Not included: ad spend, paid plugins, ongoing maintenance (available as add-ons).</p>
     </section>
     <!-- End Pricing section -->
 
@@ -527,87 +583,30 @@
                         <h3 class="column-title">Contact Information</h3>
                         
                         <div class="form-field">
+                            <label for="contact-name">Name <span class="required">*</span></label>
+                            <input type="text" id="contact-name" name="name" placeholder="Your name" required />
+                        </div>
+
+                        <div class="form-field">
                             <label for="contact-email">Email <span class="required">*</span></label>
                             <input type="email" id="contact-email" name="email" placeholder="you@email.com" required />
                         </div>
 
                         <div class="form-field">
-                            <label for="contact-name">Name</label>
-                            <input type="text" id="contact-name" name="name" placeholder="Your name" />
+                            <label for="contact-phone">Phone</label>
+                            <input type="tel" id="contact-phone" name="phone" placeholder="(555) 123-4567" />
                         </div>
 
                         <div class="form-field">
-                            <label for="contact-company">Company Name</label>
-                            <input type="text" id="contact-company" name="company" placeholder="Your company" />
-                        </div>
-
-                        <div class="form-field">
-                            <label for="contact-website">Website URL</label>
+                            <label for="contact-website">Website (optional)</label>
                             <input type="url" id="contact-website" name="website" placeholder="https://yourwebsite.com" />
-                        </div>
-
-                        <div class="form-field">
-                            <label for="contact-zip">ZIP Code</label>
-                            <input type="text" id="contact-zip" name="zip_code" placeholder="12345" />
                         </div>
                     </div>
 
-                    <!-- RIGHT COLUMN: Project Details -->
+                    <!-- RIGHT COLUMN: Optional Details -->
                     <div class="form-column">
-                        <h3 class="column-title">Project Details</h3>
+                        <h3 class="column-title">Additional Details (Optional)</h3>
                         
-                        <div class="form-field">
-                            <label>What do you need help with?</label>
-                            <div class="checkbox-pills">
-                                <label class="pill-checkbox">
-                                    <input type="checkbox" id="need-website" name="needs_help_with" value="Website" />
-                                    <span class="pill-label">Website</span>
-                                </label>
-                                <label class="pill-checkbox">
-                                    <input type="checkbox" name="needs_help_with" value="AI Tools / Automations" />
-                                    <span class="pill-label">AI Tools / Automations</span>
-                                </label>
-                                <label class="pill-checkbox">
-                                    <input type="checkbox" name="needs_help_with" value="Custom Software" />
-                                    <span class="pill-label">Custom Software</span>
-                                </label>
-                                <label class="pill-checkbox">
-                                    <input type="checkbox" name="needs_help_with" value="Brand / UI Design" />
-                                    <span class="pill-label">Brand / UI Design</span>
-                                </label>
-                                <label class="pill-checkbox">
-                                    <input type="checkbox" name="needs_help_with" value="Something else" />
-                                    <span class="pill-label">Something else</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-field">
-                            <label for="contact-industry">Industry</label>
-                            <select id="contact-industry" name="industry">
-                                <option value="">Select industry</option>
-                                <option value="E-commerce">E-commerce</option>
-                                <option value="Healthcare">Healthcare</option>
-                                <option value="Real Estate">Real Estate</option>
-                                <option value="Education">Education</option>
-                                <option value="SaaS / Apps">SaaS / Apps</option>
-                                <option value="Consulting">Consulting</option>
-                                <option value="Local Business">Local Business</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label for="budget-range-select">Estimated Budget</label>
-                            <select id="budget-range-select" name="budget_range">
-                                <option value="">Select budget range</option>
-                                <option value="1000-3000">$1,000 – $3,000</option>
-                                <option value="3000-7000">$3,000 – $7,000</option>
-                                <option value="7000-15000">$7,000 – $15,000</option>
-                                <option value="15000-plus">$15,000+</option>
-                            </select>
-                        </div>
-
                         <div class="form-field">
                             <label for="contact-timeline">Preferred Timeline</label>
                             <select id="contact-timeline" name="timeline">
@@ -618,26 +617,12 @@
                                 <option value="Just exploring">Just exploring</option>
                             </select>
                         </div>
-                    </div>
-                </div>
 
-                <!-- FULL WIDTH: Message & File Upload -->
-                <div class="form-field-full">
-                    <label for="contact-message">Message <span class="required">*</span></label>
-                    <textarea id="contact-message" name="message" rows="6" placeholder="Tell us about your goals, style preferences, examples you like, or the main problem you want to solve." required></textarea>
-                </div>
-
-                <div class="form-field-full">
-                    <label for="contact-files">Attach brief, screenshots, references (optional)</label>
-                    <div class="file-upload-bar">
-                        <span class="file-upload-label">
-                            <span class="file-upload-icon">📎</span>
-                            <span id="file-name-display">Attach file</span>
-                        </span>
-                        <label for="contact-files" class="file-browse-btn">Browse</label>
-                        <input type="file" id="contact-files" name="files" multiple accept=".pdf,.png,.jpg,.jpeg,.zip" class="file-input-hidden" />
+                        <div class="form-field form-field-message">
+                            <label for="contact-message">What do you need? <span class="required">*</span></label>
+                            <textarea id="contact-message" name="message" rows="6" placeholder="Tell us about your project, goals, or what you're looking to build..." required></textarea>
+                        </div>
                     </div>
-                    <p class="field-hint">Accepted formats: PDF, PNG, JPG, JPEG, ZIP</p>
                 </div>
 
                 <div class="form-submit-wrapper">
@@ -896,18 +881,6 @@
                     banner.classList.remove('hidden');
                 }
                 
-                // Pre-fill budget select
-                const budgetSelect = document.getElementById('budget-range-select');
-                if (budgetSelect && budgetRange) {
-                    budgetSelect.value = budgetRange;
-                }
-                
-                // Check "Website" checkbox
-                const websiteCheckbox = document.getElementById('need-website');
-                if (websiteCheckbox) {
-                    websiteCheckbox.checked = true;
-                }
-                
                 // Smooth scroll to contact section
                 const contactSection = document.getElementById('contact');
                 if (contactSection) {
@@ -916,23 +889,7 @@
             });
         });
         
-        // 2. File upload display handler
-        const fileInput = document.getElementById('contact-files');
-        const fileNameDisplay = document.getElementById('file-name-display');
-        
-        if (fileInput && fileNameDisplay) {
-            fileInput.addEventListener('change', function() {
-                if (this.files.length === 0) {
-                    fileNameDisplay.textContent = 'Attach file';
-                } else if (this.files.length === 1) {
-                    fileNameDisplay.textContent = this.files[0].name;
-                } else {
-                    fileNameDisplay.textContent = `${this.files.length} files selected`;
-                }
-            });
-        }
-        
-        // 3. Form submission handler
+        // 2. Form submission handler
         const form = document.getElementById('project-intake-form');
         const successMessage = document.getElementById('form-success-message');
         const errorMessage = document.getElementById('form-error-message');
@@ -949,35 +906,20 @@
                 // Get form data
                 const formData = new FormData(form);
                 
-                // Get all checked "needs_help_with" checkboxes
-                const needsHelpWith = [];
-                document.querySelectorAll('input[name="needs_help_with"]:checked').forEach(checkbox => {
-                    needsHelpWith.push(checkbox.value);
-                });
-                
-                // Check if file is attached
-                const filesInput = document.getElementById('contact-files');
-                const hasAttachment = filesInput && filesInput.files.length > 0;
-                
                 // Build payload
                 const payload = {
-                    email: formData.get('email'),
                     name: formData.get('name'),
-                    company: formData.get('company'),
+                    email: formData.get('email'),
+                    phone: formData.get('phone'),
                     website: formData.get('website'),
-                    zip_code: formData.get('zip_code'),
-                    needs_help_with: needsHelpWith,
-                    industry: formData.get('industry'),
-                    budget_range: formData.get('budget_range'),
                     timeline: formData.get('timeline'),
                     message: formData.get('message'),
-                    has_attachment: hasAttachment,
                     selected_package: formData.get('selected_package')
                 };
                 
                 // Basic validation
-                if (!payload.email || !payload.message) {
-                    errorText.textContent = 'Please fill in all required fields (Email, Message).';
+                if (!payload.name || !payload.email || !payload.message) {
+                    errorText.textContent = 'Please fill in all required fields (Name, Email, Message).';
                     errorMessage.classList.remove('hidden');
                     return;
                 }
@@ -1000,8 +942,8 @@
                         form.reset();
                         
                         // Hide package banner if it was shown
-                        const banner = document.getElementById('selected-package-banner');
-                        if (banner) banner.classList.add('hidden');
+                        const pkgBanner = document.getElementById('selected-package-banner');
+                        if (pkgBanner) pkgBanner.classList.add('hidden');
                         
                         // Scroll to success message
                         successMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

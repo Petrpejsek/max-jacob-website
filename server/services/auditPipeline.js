@@ -12,9 +12,11 @@ const {
   getNichePresetById,
   insertCrawledPage,
   insertLighthouseReport,
-  getAllAssistants
+  getAllAssistants,
+  getCrawledPagesByJobId
 } = require('../db');
 const { getDefaultPromptTemplates } = require('./promptTemplates');
+const { getPersistentPublicDir } = require('../runtimePaths');
 
 // Scraper v3 (multi-page crawler)
 let scraperV3 = null;
@@ -26,6 +28,9 @@ try {
 
 // Check if Scraper v3 is enabled via environment variable
 const USE_SCRAPER_V3 = process.env.USE_SCRAPER_V3 === 'true' || process.env.USE_SCRAPER_V3 === '1';
+
+// Homepage Builder (dynamic homepage proposals)
+const homepageBuilder = require('./homepageBuilder');
 
 const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'you', 'our',
@@ -113,6 +118,18 @@ async function ensureDefaultPrompts() {
 
 function sanitizeText(text) {
   return (text || '').toString().trim();
+}
+
+function extractCityFromUsAddressString(address) {
+  const s = (address || '').toString().trim();
+  if (!s) return null;
+  // Common US pattern: "... , City Name , ST ..." (zip optional, commas vary)
+  // Examples:
+  // - "1150 SW 27th Ave, Fort Lauderdale, FL, 33312"
+  // - "1150 SW 27th Ave, Fort Lauderdale, FL 33312"
+  const m = s.match(/,\s*([A-Za-z][A-Za-z\s.'-]{1,80}?)\s*,\s*([A-Z]{2})\b/);
+  if (!m || !m[1]) return null;
+  return m[1].trim().slice(0, 100);
 }
 
 function assertCompliantJson(output) {
@@ -1342,7 +1359,7 @@ async function scrapeWebsite(url, jobId) {
     .slice(0, 10)
     .map((entry) => entry[0]);
 
-  const screenshotDir = path.join(__dirname, '..', '..', 'public', 'audit_screenshots', String(jobId));
+  const screenshotDir = path.join(getPersistentPublicDir(), 'audit_screenshots', String(jobId));
   fs.mkdirSync(screenshotDir, { recursive: true });
 
   // Desktop screenshots
@@ -2552,8 +2569,13 @@ async function runEmailPolish(job, miniAudit, options) {
 }
 
 function generatePublicSlug(job) {
-  const niche = (job.niche || 'service').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const city = (job.city || 'miami').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // NO FALLBACKS - require real data
+  if (!job.niche || !job.city) {
+    throw new Error(`Cannot generate slug without niche (${job.niche}) and city (${job.city})`);
+  }
+  
+  const niche = job.niche.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const city = job.city.toLowerCase().replace(/[^a-z0-9]/g, '');
   const companySeed = job.company_name
     ? job.company_name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)
     : 'audit';
@@ -2614,7 +2636,7 @@ async function downloadAndStoreLogo(logoUrl, jobId) {
     }
     
     // Create directory (spec: public/brand_assets/<jobId>/logo.ext)
-    const dir = path.join(__dirname, '..', '..', 'public', 'brand_assets', String(jobId));
+    const dir = path.join(getPersistentPublicDir(), 'brand_assets', String(jobId));
     fs.mkdirSync(dir, { recursive: true });
     
     // Save file
@@ -2627,7 +2649,7 @@ async function downloadAndStoreLogo(logoUrl, jobId) {
     
     return {
       stored_path: `public/brand_assets/${jobId}/${filename}`,
-      public_url: `/brand_assets/${jobId}/${filename}`,
+      public_url: `/public/brand_assets/${jobId}/${filename}`,
       format: ext,
       size_bytes: buffer.byteLength
     };
@@ -2681,10 +2703,10 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
             <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:24px;">
               <tr>
                 <td>
-                  <h2 style="margin:0 0 12px 0;">3 quick wins for your ${job.niche} site (${job.city})</h2>
+                  <h2 style="margin:0 0 12px 0;">Website + AI follow-up built to book more ${job.niche} jobs (${job.city})</h2>
                   <p style="margin:0 0 16px 0;">${introLine}</p>
                   ${imageUrl ? `<img src="${imageUrl}" alt="${imageLabel}" style="width:100%;border-radius:8px;margin-bottom:8px;"><p style="font-size:11px;color:#999;margin:0 0 16px 0;font-style:italic;">${imageLabel}</p>` : ''}
-                  <h3 style="margin:0 0 8px 0;">Top 3 leaks we found</h3>
+                  <h3 style="margin:0 0 8px 0;">Top 3 lead leaks we found</h3>
                   <ul style="padding-left:18px;margin:0 0 16px 0;">
                     ${leaks.map((item) => `<li style="margin-bottom:6px;">${item.problem}</li>`).join('')}
                   </ul>
@@ -2692,7 +2714,7 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
                   <ul style="padding-left:18px;margin:0 0 16px 0;">
                     ${plan.map((item) => `<li style="margin-bottom:6px;">${item}</li>`).join('')}
                   </ul>
-                  <a href="mailto:hello@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;margin-top:8px;">${ctaText}</a>
+                  <a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;margin-top:8px;">${ctaText}</a>
                   <p style="font-size:12px;color:#666;margin-top:16px;">This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake. No guarantees or performance promises.</p>
                 </td>
               </tr>
@@ -2708,8 +2730,8 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
 function generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset = null) {
   return {
     hero: {
-      headline: `We found 3 quick wins for your ${job.niche} website (${job.city})`,
-      subhead: 'Local, practical fixes to help convert more visitors into leads.'
+      headline: `Website + AI follow-up built to book more ${job.niche} jobs (${job.city})`,
+      subhead: 'Built to help you capture more leads, respond instantly, and turn visits into booked calls (not just "quick fixes").'
     },
     concept_preview: conceptPreview,
     current_page_leaks: {
@@ -2744,14 +2766,12 @@ async function processAuditJob(jobId, options = {}) {
         });
       });
       
-      // Override niche and city from preset
+      // Apply preset niche only (city should ALWAYS be scraped, never from preset)
       const updates = {};
       if (preset.slug) {
         updates.niche = preset.slug;
       }
-      if (preset.default_city) {
-        updates.city = preset.default_city;
-      }
+      // REMOVED: preset.default_city override - city must be detected from scraped data
       
       if (Object.keys(updates).length > 0) {
         await updateJob(jobId, updates);
@@ -2766,10 +2786,8 @@ async function processAuditJob(jobId, options = {}) {
     if (!job.niche || job.niche.trim() === '') {
       throw new Error('Niche is required - please select a preset');
     }
-    if (!job.city || job.city.trim() === '') {
-      job.city = 'Miami'; // Default fallback
-      await updateJob(jobId, { city: 'Miami' });
-    }
+    // City will be auto-detected from scraped data (NAP addressLocality or page text)
+    // NO FALLBACKS - if detection fails, audit will error
     
     // Scraper v2/v3 conditional logic
     let scrapeResult, rawDump, screenshots, evidencePack;
@@ -2819,7 +2837,72 @@ async function processAuditJob(jobId, options = {}) {
         throw new Error('No homepage found in crawled pages');
       }
       
+      // City MUST come from scraped data (truth) - ignore any prefilled city
+      const detectedCity =
+        (homepage.nap_json && homepage.nap_json.city)
+          ? String(homepage.nap_json.city).trim()
+          : (homepage.nap_json && homepage.nap_json.address)
+            ? extractCityFromUsAddressString(homepage.nap_json.address)
+            : (homepage.cities_json && Array.isArray(homepage.cities_json) && homepage.cities_json.length > 0)
+              ? String(homepage.cities_json[0]).trim()
+              : null;
+
+      if (!detectedCity) {
+        await logStep(jobId, 'scrape', `❌ ERROR: No city detected from scraped data (v3).`);
+        throw new Error('City detection failed (v3) - no city detected from NAP or page text. Cannot proceed without location data.');
+      }
+
+      const prevCity = (job.city || '').toString().trim();
+      job.city = detectedCity;
+      await updateJob(jobId, { city: job.city });
+      if (prevCity && prevCity.toLowerCase() !== job.city.toLowerCase()) {
+        await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCity}" with scraped city "${job.city}"`);
+      } else {
+        await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+      }
+      
       // Convert v3 data to v2 format for backward compatibility with LLM evaluators
+      // IMPORTANT: v3 extracts email into page.nap_json + Evidence Pack v2,
+      // but we must ALSO surface it in scrape_result_json.contacts to avoid downstream regressions.
+      const contactPageV3 = crawledPages.find(p => p.page_type === 'contact') || null;
+
+      // Collect best-available email from v3 pages (prefer contact page, then homepage, then any page).
+      const emailByKey = new Map();
+      const pushEmailCandidate = (raw, source) => {
+        const s = String(raw || '').trim();
+        if (!s) return;
+        const m = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        if (!m || !m[0]) return;
+        const email = m[0].slice(0, 140);
+        const key = email.toLowerCase();
+        if (emailByKey.has(key)) return;
+        emailByKey.set(key, { value: email, source: source || 'unknown' });
+      };
+
+      if (contactPageV3 && contactPageV3.nap_json && contactPageV3.nap_json.email) {
+        pushEmailCandidate(contactPageV3.nap_json.email, 'nap_contact');
+      }
+      if (homepage && homepage.nap_json && homepage.nap_json.email) {
+        pushEmailCandidate(homepage.nap_json.email, 'nap_home');
+      }
+      (crawledPages || []).forEach((p) => {
+        if (p && p.nap_json && p.nap_json.email) {
+          pushEmailCandidate(p.nap_json.email, `nap_${p.page_type || 'page'}`);
+        }
+      });
+
+      // Last-resort fallback: regex scan page text (in case nap_json missed it)
+      if (emailByKey.size === 0) {
+        const blob = [
+          (contactPageV3 && (contactPageV3.content_text || contactPageV3.text_snippet)) || '',
+          (homepage && (homepage.content_text || homepage.text_snippet)) || ''
+        ].join('\n');
+        pushEmailCandidate(blob, 'text_fallback');
+      }
+
+      const emailCandidatesV3 = Array.from(emailByKey.values());
+      const bestEmailV3 = emailCandidatesV3.length ? emailCandidatesV3[0].value : null;
+
       scrapeResult = {
         title: homepage.title,
         meta_description: homepage.meta_description,
@@ -2828,8 +2911,8 @@ async function processAuditJob(jobId, options = {}) {
         h2: homepage.h2_json || [],
         ctas: (homepage.ctas_json || []).map(cta => cta.text).slice(0, 6),
         phone: homepage.nap_json ? homepage.nap_json.phone : null,
-        email: null, // Can be extracted from contact info
-        contact_url: crawledPages.find(p => p.page_type === 'contact') ? crawledPages.find(p => p.page_type === 'contact').url : null,
+        email: bestEmailV3, // v3 extracted (nap/text); keep compatible with older fields
+        contact_url: contactPageV3 ? contactPageV3.url : null,
         trust_signals: (homepage.trust_signals_json || []).map(s => s.type),
         services_keywords: [], // Can be derived from headings
         performance_summary: 'See Lighthouse reports',
@@ -2840,7 +2923,7 @@ async function processAuditJob(jobId, options = {}) {
           has_trust_badge_above_fold: (homepage.trust_signals_json || []).length > 0,
           has_phone_in_header: homepage.has_tel_link,
           phone_clickable_tel_link: homepage.has_tel_link,
-          contact_page_detected: !!crawledPages.find(p => p.page_type === 'contact'),
+          contact_page_detected: !!contactPageV3,
           contact_form_detected: homepage.has_form,
           primary_cta_text: (homepage.ctas_above_fold_json || [])[0] ? (homepage.ctas_above_fold_json || [])[0].text : '',
           primary_cta_source: (() => {
@@ -2852,10 +2935,16 @@ async function processAuditJob(jobId, options = {}) {
         },
         contacts: {
           phones: homepage.nap_json && homepage.nap_json.phone ? [{ value: homepage.nap_json.phone, source: 'nap' }] : [],
-          emails: [],
+          emails: bestEmailV3 ? [{ value: bestEmailV3, source: (emailCandidatesV3[0] && emailCandidatesV3[0].source) ? emailCandidatesV3[0].source : 'nap' }] : [],
           address: homepage.nap_json ? homepage.nap_json.address : null,
           hours: null,
           social_links: {}
+        },
+        contacts_debug: {
+          emails: {
+            sources_checked: ['nap_contact', 'nap_home', 'nap_any', 'text_fallback'],
+            candidates_found: emailCandidatesV3.length
+          }
         }
       };
       
@@ -2885,8 +2974,48 @@ async function processAuditJob(jobId, options = {}) {
         };
       });
 
+      // Aggregated site snapshot (stored for future reuse; not sent to LLM directly)
+      const safeHash = (s) => {
+        const t = (s || '').toString();
+        if (!t) return null;
+        return crypto.createHash('sha1').update(t).digest('hex').slice(0, 16);
+      };
+      const primaryNav = homepage.nav_primary_json || [];
+      const footerLinks = homepage.footer_nav_links_json || [];
+      const siteSnapshot = {
+        version: 'site_snapshot_v1',
+        input_url: job.input_url,
+        base_origin: (() => { try { return new URL(job.input_url).origin; } catch { return null; } })(),
+        created_at: new Date().toISOString(),
+        scrape_stats: {
+          pages_crawled: (crawledPages || []).length,
+          max_pages_target: (process.env.SCRAPER_V3_MAX_URLS || null)
+        },
+        navigation: {
+          primary_tree: primaryNav,
+          footer_links: footerLinks
+        },
+        pages_index: (crawledPages || []).slice(0, 250).map((p) => ({
+          url: p.url,
+          normalized_url: p.normalized_url || null,
+          page_type: p.page_type || null,
+          title: p.title || null,
+          word_count: p.word_count || 0,
+          content_hash: safeHash(p.content_text || p.text_snippet || '')
+        }))
+      };
+
       rawDump = {
         version: 'raw_dump_v2',
+        site_structure_summary: {
+          primary_nav_tree: primaryNav,
+          footer_nav_links: footerLinks,
+          urls: (crawledPages || []).slice(0, 120).map((p) => ({
+            url: p.url,
+            page_type: p.page_type || 'other',
+            title: p.title || null
+          }))
+        },
         pages: selectedPages,
         jsonld_raw: homepage.jsonld_blocks_json || [],
         jsonld_extracted: homepage.jsonld_extracted_json || null
@@ -2919,7 +3048,8 @@ async function processAuditJob(jobId, options = {}) {
         warnings_json: JSON.stringify(warnings),
         logo_scraped_url: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.url : null,
         logo_scraped_source: evidencePackV2 && evidencePackV2.brand_assets && evidencePackV2.brand_assets.detected_logo ? evidencePackV2.brand_assets.detected_logo.source : null,
-        logo_stored_path: logoInfo ? logoInfo.stored_path : null
+        logo_stored_path: logoInfo ? logoInfo.stored_path : null,
+        site_snapshot_json: JSON.stringify(siteSnapshot)
       });
     } else {
       // Scraper v2: Extract contacts + raw dump (legacy)
@@ -2997,6 +3127,36 @@ async function processAuditJob(jobId, options = {}) {
 
       const evidencePackV2 = generateEvidencePackV2(job, pseudoPages, screenshots);
       const warnings = evidencePackV2 ? evidencePackV2.data_quality_warnings : [];
+      
+      // City MUST come from scraped data (truth) - ignore any prefilled city
+      const v2AddressRaw = (scrapeResult && scrapeResult.contacts && scrapeResult.contacts.address)
+        ? scrapeResult.contacts.address
+        : null;
+      const v2AddressValue = (v2AddressRaw && typeof v2AddressRaw === 'object' && v2AddressRaw.value)
+        ? String(v2AddressRaw.value)
+        : (typeof v2AddressRaw === 'string' ? v2AddressRaw : null);
+
+      const v2DetectedCity =
+        (jsonld_extracted_json && jsonld_extracted_json.localbusiness && jsonld_extracted_json.localbusiness.address && jsonld_extracted_json.localbusiness.address.addressLocality)
+          ? String(jsonld_extracted_json.localbusiness.address.addressLocality).trim()
+          : v2AddressValue
+            ? extractCityFromUsAddressString(v2AddressValue)
+            : null;
+
+      if (!v2DetectedCity) {
+        await logStep(jobId, 'scrape', `❌ ERROR: No city detected from scraped data (v2).`);
+        throw new Error('City detection failed (v2) - no addressLocality and unable to parse city from scraped address string.');
+      }
+
+      const prevCityV2 = (job.city || '').toString().trim();
+      job.city = v2DetectedCity;
+      await updateJob(jobId, { city: job.city });
+      if (prevCityV2 && prevCityV2.toLowerCase() !== job.city.toLowerCase()) {
+        await logStep(jobId, 'scrape', `⚠ Overriding prefilled city "${prevCityV2}" with scraped city "${job.city}"`);
+      } else {
+        await logStep(jobId, 'scrape', `✓ City detected from scraped data: ${job.city}`);
+      }
+      
       await updateJob(jobId, {
         evidence_pack_v2_json: JSON.stringify(evidencePackV2),
         warnings_json: JSON.stringify(warnings)
@@ -3005,6 +3165,9 @@ async function processAuditJob(jobId, options = {}) {
       await logStep(jobId, 'scrape', 'Scrape completed (v2: contacts + evidence pack)');
     }
     
+    // Normalize screenshot keys (v3 vs v2) so downstream/UI uses consistent refs
+    screenshots = normalizeScreenshotsForJob(screenshots);
+
     await updateJob(jobId, {
       scrape_result_json: JSON.stringify(scrapeResult),
       raw_dump_json: JSON.stringify(rawDump),
@@ -3067,7 +3230,7 @@ async function processAuditJob(jobId, options = {}) {
       publicPageJson = generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset);
     }
     
-    const publicSlug = generatePublicSlug(job);
+    const publicSlug = job.public_page_slug || generatePublicSlug(job);
 
     await updateJob(jobId, {
       email_html: emailHtml,
@@ -3242,6 +3405,20 @@ const {
   getAssistantRunsByJobId
 } = require('../db');
 
+function normalizeScreenshotsForJob(screenshots = {}) {
+  const s = (screenshots && typeof screenshots === 'object') ? screenshots : {};
+  const out = { ...s };
+
+  // Scraper v3 keys -> legacy keys used across UI/pipeline
+  if (!out.above_fold && out.desktop_above_fold) out.above_fold = out.desktop_above_fold;
+  if (!out.fullpage && out.desktop_full) out.fullpage = out.desktop_full;
+
+  // Scraper v2 "mobile" -> assistants expect mobile_above_fold
+  if (!out.mobile_above_fold && out.mobile) out.mobile_above_fold = out.mobile;
+
+  return out;
+}
+
 function coerceEvidenceNormalizerOutput(output_json, job) {
   const base =
     output_json && typeof output_json === 'object' && !Array.isArray(output_json)
@@ -3250,13 +3427,29 @@ function coerceEvidenceNormalizerOutput(output_json, job) {
 
   let changed = false;
 
+  const ensureWarningsArray = () => {
+    if (!Array.isArray(base.quality_warnings)) {
+      base.quality_warnings = [];
+      changed = true;
+    }
+  };
+
+  const addCoerceWarning = (message) => {
+    ensureWarningsArray();
+    base.quality_warnings.unshift({
+      code: 'WARN_LLM_OUTPUT_COERCED',
+      severity: 'low',
+      message: String(message).slice(0, 300)
+    });
+  };
+
   // company_profile
   if (!base.company_profile || typeof base.company_profile !== 'object' || Array.isArray(base.company_profile)) {
     base.company_profile = {};
     changed = true;
   }
   if (!('name' in base.company_profile)) {
-    base.company_profile.name = job.company_name || job.company || job.input_url || '';
+    base.company_profile.name = job.company_name || job.company || job.input_url || null;
     changed = true;
   }
   if (!Array.isArray(base.company_profile.phones)) {
@@ -3265,6 +3458,18 @@ function coerceEvidenceNormalizerOutput(output_json, job) {
   }
   if (!Array.isArray(base.company_profile.emails)) {
     base.company_profile.emails = [];
+    changed = true;
+  }
+  if (!('address' in base.company_profile)) {
+    base.company_profile.address = null;
+    changed = true;
+  }
+  if (!('hours' in base.company_profile)) {
+    base.company_profile.hours = null;
+    changed = true;
+  }
+  if (!Array.isArray(base.company_profile.social_links)) {
+    base.company_profile.social_links = [];
     changed = true;
   }
 
@@ -3301,22 +3506,299 @@ function coerceEvidenceNormalizerOutput(output_json, job) {
     base.trust_evidence = [];
     changed = true;
   }
-  if (!Array.isArray(base.contact_friction)) {
-    base.contact_friction = [];
+  if (!base.contact_friction || typeof base.contact_friction !== 'object' || Array.isArray(base.contact_friction)) {
+    base.contact_friction = {};
     changed = true;
   }
-  if (!Array.isArray(base.quality_warnings)) {
-    base.quality_warnings = [];
+  if (!('phone_in_header' in base.contact_friction)) {
+    base.contact_friction.phone_in_header = false;
+    changed = true;
+  }
+  if (!('phone_clickable' in base.contact_friction)) {
+    base.contact_friction.phone_clickable = false;
+    changed = true;
+  }
+  if (!('clicks_to_contact' in base.contact_friction)) {
+    base.contact_friction.clicks_to_contact = null;
+    changed = true;
+  }
+  if (!('form_detected' in base.contact_friction)) {
+    base.contact_friction.form_detected = false;
     changed = true;
   }
 
+  ensureWarningsArray();
+
+  // Best-effort normalize quality_warnings entries into objects
+  base.quality_warnings = (base.quality_warnings || [])
+    .map((w) => {
+      if (!w) return null;
+      if (typeof w === 'string') {
+        return { code: 'WARN_NOTE', severity: 'low', message: w.slice(0, 200) };
+      }
+      if (typeof w === 'object' && !Array.isArray(w)) {
+        return {
+          code: w.code || 'WARN_NOTE',
+          severity: w.severity || 'low',
+          message: (w.message || '').toString().slice(0, 300)
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
   if (changed) {
-    base.quality_warnings.unshift(
-      'Auto-filled missing required keys in Evidence Normalizer output (LLM returned incomplete JSON).'
-    );
+    addCoerceWarning('Auto-filled missing required keys in Evidence Normalizer output (LLM returned incomplete JSON).');
   }
 
   return base;
+}
+
+// ==================== LLM OUTPUT NORMALIZATION (ANTI-DUPLICATION) ====================
+
+function canonicalizeForDedup(input) {
+  return String(input || '')
+    .toLowerCase()
+    .replace(/\bphone\s+number\b/g, 'phone')
+    .replace(/\btelephone\b/g, 'phone')
+    .replace(/\bcall[- ]?to[- ]?action\b/g, 'cta')
+    .replace(/\babove[- ]the[- ]fold\b/g, 'above fold')
+    .replace(/\bclick[- ]to[- ]call\b/g, 'click to call')
+    .replace(/\b\d+\b/g, '0')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenSetForDedup(input) {
+  const s = canonicalizeForDedup(input);
+  if (!s) return [];
+  return Array.from(new Set(s.split(' ').filter(Boolean)));
+}
+
+function jaccardSimilarity(tokensA, tokensB) {
+  if (!tokensA.length || !tokensB.length) return 0;
+  const a = new Set(tokensA);
+  const b = new Set(tokensB);
+  let inter = 0;
+  for (const t of a) {
+    if (b.has(t)) inter += 1;
+  }
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function normalizeStringArray(arr, { max = null, similarityThreshold = 0.97 } = {}) {
+  const out = [];
+  const seen = new Set();
+  const tokenSets = [];
+  for (const raw of (Array.isArray(arr) ? arr : [])) {
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (!s) continue;
+
+    const key = canonicalizeForDedup(s);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+
+    const tokens = tokenSetForDedup(s);
+    let tooSimilar = false;
+    for (const prev of tokenSets) {
+      if (jaccardSimilarity(tokens, prev) >= similarityThreshold) {
+        tooSimilar = true;
+        break;
+      }
+    }
+    if (tooSimilar) continue;
+
+    seen.add(key);
+    tokenSets.push(tokens);
+    out.push(s);
+    if (max != null && out.length >= max) break;
+  }
+  return out;
+}
+
+function dedupeObjectsByText(items, getText, { max = null, similarityThreshold = 0.92 } = {}) {
+  const out = [];
+  const seen = new Set();
+  const tokenSets = [];
+  for (const it of (Array.isArray(items) ? items : [])) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) continue;
+    const text = getText(it);
+    const key = canonicalizeForDedup(text);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+
+    const tokens = tokenSetForDedup(text);
+    let tooSimilar = false;
+    for (const prev of tokenSets) {
+      if (jaccardSimilarity(tokens, prev) >= similarityThreshold) {
+        tooSimilar = true;
+        break;
+      }
+    }
+    if (tooSimilar) continue;
+
+    seen.add(key);
+    tokenSets.push(tokens);
+    out.push(it);
+    if (max != null && out.length >= max) break;
+  }
+  return out;
+}
+
+function normalizeUxAuditOutput(output_json) {
+  const base =
+    output_json && typeof output_json === 'object' && !Array.isArray(output_json)
+      ? { ...output_json }
+      : {};
+
+  const topIssuesRaw = Array.isArray(base.top_issues) ? base.top_issues : [];
+  const top_issues = dedupeObjectsByText(
+    topIssuesRaw,
+    (it) => it.problem || it.title || it.issue || '',
+    { max: 5, similarityThreshold: 0.92 }
+  ).map((it) => {
+    const fix_steps = normalizeStringArray(
+      Array.isArray(it.fix_steps) ? it.fix_steps : (typeof it.fix === 'string' ? [it.fix] : []),
+      { max: 6, similarityThreshold: 0.97 }
+    );
+    const evidence_ref = normalizeStringArray(Array.isArray(it.evidence_ref) ? it.evidence_ref : [], { max: 12, similarityThreshold: 0.99 });
+    const problem = (typeof it.problem === 'string') ? it.problem.trim() : it.problem;
+    const why_it_matters = (typeof it.why_it_matters === 'string') ? it.why_it_matters.trim() : it.why_it_matters;
+    const severity = (typeof it.severity === 'string') ? it.severity.trim().toLowerCase() : it.severity;
+    return { ...it, problem, why_it_matters, severity, fix_steps, evidence_ref };
+  });
+
+  const quickWinsRaw = Array.isArray(base.quick_wins) ? base.quick_wins : [];
+  const quick_wins = normalizeStringArray(
+    quickWinsRaw
+      .map((w) => {
+        if (typeof w === 'string') return w;
+        if (w && typeof w === 'object' && !Array.isArray(w)) return w.title || w.action || w.fix || w.problem || null;
+        return null;
+      })
+      .filter(Boolean),
+    { max: 3, similarityThreshold: 0.96 }
+  );
+
+  const mobileIssuesRaw = Array.isArray(base.mobile_issues) ? base.mobile_issues : [];
+  const mobile_issues = dedupeObjectsByText(
+    mobileIssuesRaw,
+    (it) => it.problem || it.title || it.issue || '',
+    { max: 3, similarityThreshold: 0.92 }
+  ).map((it) => {
+    const evidence_ref = normalizeStringArray(Array.isArray(it.evidence_ref) ? it.evidence_ref : [], { max: 10, similarityThreshold: 0.99 });
+    const problem = (typeof it.problem === 'string') ? it.problem.trim() : it.problem;
+    const fix = (typeof it.fix === 'string') ? it.fix.trim() : it.fix;
+    return { ...it, problem, fix, evidence_ref };
+  });
+
+  base.top_issues = top_issues;
+  base.quick_wins = quick_wins;
+  base.mobile_issues = mobile_issues;
+  return base;
+}
+
+function normalizeLocalSeoAuditOutput(output_json) {
+  const base =
+    output_json && typeof output_json === 'object' && !Array.isArray(output_json)
+      ? { ...output_json }
+      : {};
+
+  if (!base.nap_audit || typeof base.nap_audit !== 'object' || Array.isArray(base.nap_audit)) {
+    base.nap_audit = { status: 'missing', issues: [] };
+  }
+  const napIssuesRaw = Array.isArray(base.nap_audit.issues) ? base.nap_audit.issues : [];
+  const issues = dedupeObjectsByText(
+    napIssuesRaw,
+    (it) => it.problem || it.title || '',
+    { max: 12, similarityThreshold: 0.92 }
+  ).map((it) => {
+    const evidence_ref = normalizeStringArray(Array.isArray(it.evidence_ref) ? it.evidence_ref : [], { max: 12, similarityThreshold: 0.99 });
+    const problem = (typeof it.problem === 'string') ? it.problem.trim() : it.problem;
+    const fix = (typeof it.fix === 'string') ? it.fix.trim() : it.fix;
+    const impact = (typeof it.impact === 'string') ? it.impact.trim() : it.impact;
+    return { ...it, problem, fix, impact, evidence_ref };
+  });
+  base.nap_audit = { ...base.nap_audit, issues };
+
+  if (base.schema_markup && base.schema_markup.local_business && Array.isArray(base.schema_markup.local_business.missing_fields)) {
+    base.schema_markup = { ...base.schema_markup };
+    base.schema_markup.local_business = { ...base.schema_markup.local_business };
+    base.schema_markup.local_business.missing_fields = normalizeStringArray(
+      base.schema_markup.local_business.missing_fields,
+      { max: 20, similarityThreshold: 0.99 }
+    );
+  }
+
+  if (base.geo_ready_score && typeof base.geo_ready_score === 'object' && !Array.isArray(base.geo_ready_score)) {
+    const factorsRaw = Array.isArray(base.geo_ready_score.factors) ? base.geo_ready_score.factors : [];
+    const factors = dedupeObjectsByText(
+      factorsRaw,
+      (f) => f.factor || '',
+      { max: 30, similarityThreshold: 0.98 }
+    ).map((f) => {
+      const evidence_ref = normalizeStringArray(Array.isArray(f.evidence_ref) ? f.evidence_ref : [], { max: 10, similarityThreshold: 0.99 });
+      const factor = (typeof f.factor === 'string') ? f.factor.trim() : f.factor;
+      return { ...f, factor, evidence_ref };
+    });
+    base.geo_ready_score = { ...base.geo_ready_score, factors };
+  }
+
+  return base;
+}
+
+function normalizePublicPageOutput(output_json) {
+  const base =
+    output_json && typeof output_json === 'object' && !Array.isArray(output_json)
+      ? { ...output_json }
+      : {};
+
+  if (!base.findings_section || typeof base.findings_section !== 'object' || Array.isArray(base.findings_section)) {
+    base.findings_section = { findings: [] };
+  }
+  const findingsRaw = Array.isArray(base.findings_section.findings) ? base.findings_section.findings : [];
+  const findings = dedupeObjectsByText(
+    findingsRaw,
+    (f) => f.title || f.problem || f.issue || '',
+    { max: 3, similarityThreshold: 0.92 }
+  ).map((f) => {
+    const title = (typeof f.title === 'string') ? f.title.trim() : f.title;
+    const description = (typeof f.description === 'string') ? f.description.trim() : f.description;
+    const evidence_ref = normalizeStringArray(Array.isArray(f.evidence_ref) ? f.evidence_ref : [], { max: 12, similarityThreshold: 0.99 });
+    return { ...f, title, description, evidence_ref };
+  });
+  base.findings_section = { ...base.findings_section, findings };
+
+  if (base.concept_preview && typeof base.concept_preview === 'object' && !Array.isArray(base.concept_preview) && Array.isArray(base.concept_preview.improvements)) {
+    base.concept_preview = { ...base.concept_preview };
+    base.concept_preview.improvements = normalizeStringArray(base.concept_preview.improvements, { max: 8, similarityThreshold: 0.96 });
+  }
+
+  if (Array.isArray(base.compliance_disclaimers)) {
+    base.compliance_disclaimers = normalizeStringArray(base.compliance_disclaimers, { max: 12, similarityThreshold: 0.98 });
+  }
+
+  return base;
+}
+
+function normalizeAssistantOutput(assistant_key, output_json) {
+  try {
+    switch (assistant_key) {
+      case 'ux_conversion_auditor':
+        return normalizeUxAuditOutput(output_json);
+      case 'local_seo_geo_auditor':
+        return normalizeLocalSeoAuditOutput(output_json);
+      case 'public_audit_page_composer':
+        return normalizePublicPageOutput(output_json);
+      default:
+        return output_json;
+    }
+  } catch (_) {
+    return output_json;
+  }
 }
 
 /**
@@ -3427,6 +3909,114 @@ async function runSingleAssistant(jobId, assistant_key, payload_data = {}, optio
 
       await logStep(jobId, `assistant_${assistant_key}`, `Validation failed: ${validation.errors.join('; ')}`);
 
+      // Optional: one repair attempt for non-A1 assistants.
+      // We record the failed run above, then create a second run that retries with
+      // explicit validation errors appended to the system prompt.
+      const repairEnabled =
+        assistant_key !== 'evidence_normalizer' &&
+        !(options && options.disable_validation_repair === true);
+
+      if (repairEnabled) {
+        const repairModel = (options && options.validation_repair_model) || 'openai/gpt-4.1-mini';
+        const repairTemperature = 0.0;
+        const repairPrompt =
+          `${prompt}\n\n` +
+          `IMPORTANT: Your previous response failed validation. Fix ONLY the errors below and return corrected JSON only.\n` +
+          `Validation errors:\n- ${validation.errors.join('\n- ')}\n\n` +
+          `Rules:\n` +
+          `- Do NOT add new facts or new findings.\n` +
+          `- Keep the same items; only fix JSON structure, missing keys/types, evidence_ref formatting/prefixes, and remove prohibited phrasing if present.\n` +
+          `- Return STRICT JSON only (double quotes, no trailing commas, no markdown).\n`;
+
+        await logStep(jobId, `assistant_${assistant_key}`, `Attempting auto-repair with ${repairModel}...`);
+
+        const repairRunId = await new Promise((resolve, reject) => {
+          insertAssistantRun({
+            job_id: jobId,
+            assistant_key,
+            model: repairModel,
+            temperature: repairTemperature,
+            prompt_template_id: null,
+            status: 'running',
+            started_at: new Date().toISOString()
+          }, (err, result) => {
+            if (err) return reject(err);
+            resolve(result.id);
+          });
+        });
+
+        try {
+          const repairResponse = await retryOnTransientError(async () => {
+            return await sendOpenRouterRequest({
+              model: repairModel,
+              temperature: repairTemperature,
+              system_prompt: repairPrompt,
+              user_content,
+              metadata: {
+                job_id: jobId,
+                assistant_key,
+                run_id: repairRunId,
+                repair_of_run_id: runId
+              }
+            });
+          }, 1, 2000);
+
+          const repaired = repairResponse.parsed_json;
+          const repairValidation = validateAssistantOutput(assistant, repaired);
+
+          if (repairValidation.valid) {
+            const normalizedRepaired = normalizeAssistantOutput(assistant_key, repaired);
+            await new Promise((resolve, reject) => {
+              updateAssistantRun(repairRunId, {
+                status: 'ok',
+                request_payload_json: repairResponse.request_payload,
+                response_text: repairResponse.raw_text,
+                response_json: normalizedRepaired,
+                token_usage_json: repairResponse.token_usage,
+                finished_at: new Date().toISOString()
+              }, (err) => {
+                if (err) return reject(err);
+                resolve();
+              });
+            });
+
+            await logStep(jobId, `assistant_${assistant_key}`, `Auto-repair succeeded (run ${repairRunId})`);
+
+            return {
+              status: 'ok',
+              output: normalizedRepaired,
+              error: null
+            };
+          }
+
+          await new Promise((resolve, reject) => {
+            updateAssistantRun(repairRunId, {
+              status: 'failed',
+              error: repairValidation.errors.join('; '),
+              request_payload_json: repairResponse.request_payload,
+              response_text: repairResponse.raw_text,
+              response_json: repaired,
+              token_usage_json: repairResponse.token_usage,
+              finished_at: new Date().toISOString()
+            }, (err) => {
+              if (err) return reject(err);
+              resolve();
+            });
+          });
+
+          await logStep(jobId, `assistant_${assistant_key}`, `Auto-repair failed: ${repairValidation.errors.join('; ')}`);
+        } catch (repairErr) {
+          await new Promise((resolve) => {
+            updateAssistantRun(repairRunId, {
+              status: 'failed',
+              error: repairErr.message,
+              finished_at: new Date().toISOString()
+            }, () => resolve());
+          });
+          await logStep(jobId, `assistant_${assistant_key}`, `Auto-repair request failed: ${repairErr.message}`);
+        }
+      }
+
       return {
         status: 'failed',
         error: validation.errors.join('; '),
@@ -3434,7 +4024,9 @@ async function runSingleAssistant(jobId, assistant_key, payload_data = {}, optio
       };
     }
 
-    // 6. Save successful run
+    // 6. Normalize output (anti-dup / stability), then save successful run
+    parsed = normalizeAssistantOutput(assistant_key, parsed);
+
     await new Promise((resolve, reject) => {
       updateAssistantRun(runId, {
         status: 'ok',
@@ -3497,6 +4089,15 @@ async function runAssistantsPipeline(jobId, options = {}) {
   await logStep(jobId, 'assistants_pipeline', 'Starting LLM Assistants v1 pipeline (6 assistants)');
 
   const job = await loadJob(jobId);
+
+  // Ensure a stable public slug exists BEFORE assistants produce links (A5/A6).
+  // This avoids sending "#" placeholders into outreach emails.
+  if (!job.public_page_slug) {
+    const slug = generatePublicSlug(job);
+    await updateJob(jobId, { public_page_slug: slug });
+    job.public_page_slug = slug;
+    await logStep(jobId, 'assistants_pipeline', `Public page slug generated early: ${slug}`);
+  }
 
   // Prepare payload data from job
   const payload_data = {
@@ -3600,6 +4201,9 @@ async function runAssistantsPipeline(jobId, options = {}) {
     public_page_json: a6_result.output ? JSON.stringify(a6_result.output) : null
   });
 
+  // Step 7: Generate Homepage Proposal (if preset configured)
+  await generateHomepageProposal(jobId, job);
+
   await logStep(jobId, 'assistants_pipeline', `Pipeline complete. All outputs saved.`);
 
   // Log summary
@@ -3608,6 +4212,85 @@ async function runAssistantsPipeline(jobId, options = {}) {
   const failed = results.filter(r => r.status === 'failed').length;
   
   await logStep(jobId, 'assistants_pipeline', `Summary: ${succeeded}/6 succeeded, ${failed}/6 failed`);
+}
+
+/**
+ * Generate Homepage Proposal (Step 7 of pipeline)
+ * Creates a dynamic homepage preview using scraped data + preset template
+ * 
+ * @param {number} jobId - Audit job ID
+ * @param {Object} job - Audit job object
+ */
+async function generateHomepageProposal(jobId, job) {
+  try {
+    // Skip if no preset configured
+    if (!job.preset_id) {
+      await logStep(jobId, 'homepage_proposal', 'Skipped - no preset configured');
+      return;
+    }
+
+    await logStep(jobId, 'homepage_proposal', 'Generating homepage proposal...');
+
+    // Load preset
+    const preset = await new Promise((resolve, reject) => {
+      getNichePresetById(job.preset_id, (err, preset) => {
+        if (err) return reject(err);
+        resolve(preset);
+      });
+    });
+
+    if (!preset) {
+      await logStep(jobId, 'homepage_proposal', 'Skipped - preset not found');
+      return;
+    }
+
+    // Check if template is configured
+    const templateSlug = preset.homepage_template_path || preset.slug;
+    
+    await logStep(jobId, 'homepage_proposal', `Using template: ${templateSlug}`);
+
+    // Load crawled pages
+    const crawledPages = await new Promise((resolve, reject) => {
+      getCrawledPagesByJobId(jobId, (err, pages) => {
+        if (err) return reject(err);
+        resolve(pages);
+      });
+    });
+
+    if (!crawledPages || crawledPages.length === 0) {
+      await logStep(jobId, 'homepage_proposal', 'Warning - no crawled pages found, skipping');
+      return;
+    }
+
+    await logStep(jobId, 'homepage_proposal', `Building template data from ${crawledPages.length} pages...`);
+
+    // Build template data
+    const templateData = await homepageBuilder.buildTemplateData(job, crawledPages);
+
+    if (templateData.warnings.length > 0) {
+      await logStep(jobId, 'homepage_proposal', `Warnings: ${templateData.warnings.join(', ')}`);
+    }
+
+    await logStep(jobId, 'homepage_proposal', `Rendering template: ${templateSlug}.ejs`);
+
+    // Render template
+    const proposalHtml = await homepageBuilder.renderTemplate(templateSlug, templateData);
+
+    await logStep(jobId, 'homepage_proposal', `Template rendered (${proposalHtml.length} bytes)`);
+
+    // Save to database
+    await updateJob(jobId, {
+      homepage_proposal_html: proposalHtml,
+      homepage_proposal_data_json: templateData
+    });
+
+    await logStep(jobId, 'homepage_proposal', 'Homepage proposal saved successfully');
+
+  } catch (error) {
+    console.error('[AUDIT PIPELINE] Homepage proposal generation failed:', error);
+    await logStep(jobId, 'homepage_proposal', `Failed: ${error.message}`);
+    // Don't fail the whole pipeline if homepage generation fails
+  }
 }
 
 module.exports = {

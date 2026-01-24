@@ -7,6 +7,74 @@
  * - Evidence Pack v2 format
  */
 
+function normalizeScreenshotsForAssistants(screenshots = {}) {
+  const s = (screenshots && typeof screenshots === 'object') ? screenshots : {};
+
+  // Scraper v2 keys: above_fold, fullpage, mobile
+  // Scraper v3 keys: desktop_above_fold, desktop_full, mobile_above_fold
+  const above_fold = s.above_fold || s.desktop_above_fold || null;
+  const fullpage = s.fullpage || s.desktop_full || null;
+  const mobile_above_fold = s.mobile_above_fold || s.mobile || null;
+
+  return {
+    refs: {
+      above_fold,
+      fullpage,
+      mobile_above_fold,
+      contact_page: s.contact_page || null,
+      services_page: s.services_page || null,
+      reviews_page: s.reviews_page || null
+    },
+    available: {
+      above_fold: !!above_fold,
+      fullpage: !!fullpage,
+      mobile: !!mobile_above_fold,
+      contact_page: !!s.contact_page,
+      services_page: !!s.services_page,
+      reviews_page: !!s.reviews_page
+    }
+  };
+}
+
+function trimRawDumpForAssistants(raw_dump) {
+  if (!raw_dump || typeof raw_dump !== 'object') return null;
+
+  const pages = Array.isArray(raw_dump.pages) ? raw_dump.pages : [];
+  const trimmedPages = pages.slice(0, 8).map((p) => {
+    const headings = (p && p.headings && typeof p.headings === 'object') ? p.headings : {};
+    const links_summary = (p && p.links_summary && typeof p.links_summary === 'object') ? p.links_summary : {};
+
+    return {
+      page_url: p.page_url || null,
+      page_type: p.page_type || null,
+      title: p.title || null,
+      meta_description: p.meta_description || null,
+      canonical: p.canonical || null,
+      headings: {
+        h1: headings.h1 || null,
+        h2: Array.isArray(headings.h2) ? headings.h2.slice(0, 10) : [],
+        h3: Array.isArray(headings.h3) ? headings.h3.slice(0, 15) : [],
+        h6: Array.isArray(headings.h6) ? headings.h6.slice(0, 15) : []
+      },
+      word_count: Number.isFinite(p.word_count) ? p.word_count : 0,
+      text_snippet: p.text_snippet ? String(p.text_snippet).slice(0, 1200) : null,
+      links_summary: {
+        tel_links: Array.isArray(links_summary.tel_links) ? links_summary.tel_links.slice(0, 8) : [],
+        internal_important_links: Array.isArray(links_summary.internal_important_links)
+          ? links_summary.internal_important_links.slice(0, 12)
+          : []
+      }
+    };
+  });
+
+  return {
+    version: raw_dump.version || null,
+    pages: trimmedPages,
+    jsonld_raw: Array.isArray(raw_dump.jsonld_raw) ? raw_dump.jsonld_raw.slice(0, 20) : [],
+    jsonld_extracted: raw_dump.jsonld_extracted || null
+  };
+}
+
 /**
  * A1: Evidence Normalizer
  * 
@@ -20,6 +88,8 @@
  * @returns {Object} - Payload for A1
  */
 function buildA1Payload(job, evidence_pack_v2, raw_dump, screenshots) {
+  const ss = normalizeScreenshotsForAssistants(screenshots);
+  const rd = trimRawDumpForAssistants(raw_dump);
   return {
     job: {
       job_id: job.id,
@@ -28,23 +98,8 @@ function buildA1Payload(job, evidence_pack_v2, raw_dump, screenshots) {
       input_url: job.input_url
     },
     evidence_pack_v2_json: evidence_pack_v2,
-    raw_dump_pages_json: raw_dump.pages || [],
-    screenshots: {
-      refs: {
-        above_fold: screenshots.above_fold || null,
-        fullpage: screenshots.fullpage || null,
-        contact_page: screenshots.contact_page || null,
-        services_page: screenshots.services_page || null,
-        reviews_page: screenshots.reviews_page || null
-      },
-      available: {
-        above_fold: !!screenshots.above_fold,
-        fullpage: !!screenshots.fullpage,
-        contact_page: !!screenshots.contact_page,
-        services_page: !!screenshots.services_page,
-        reviews_page: !!screenshots.reviews_page
-      }
-    }
+    raw_dump_pages_json: (rd && Array.isArray(rd.pages)) ? rd.pages : [],
+    screenshots: ss
   };
 }
 
@@ -56,10 +111,12 @@ function buildA1Payload(job, evidence_pack_v2, raw_dump, screenshots) {
  * 
  * @param {Object} job
  * @param {Object} llm_context - Output from A1
+ * @param {Object} raw_dump
  * @param {Object} screenshots
  * @returns {Object} - Payload for A2
  */
-function buildA2Payload(job, llm_context, screenshots) {
+function buildA2Payload(job, llm_context, raw_dump, screenshots) {
+  const ss = normalizeScreenshotsForAssistants(screenshots);
   return {
     job: {
       job_id: job.id,
@@ -68,18 +125,8 @@ function buildA2Payload(job, llm_context, screenshots) {
       input_url: job.input_url
     },
     llm_context: llm_context,
-    screenshots: {
-      refs: {
-        above_fold: screenshots.above_fold || null,
-        fullpage: screenshots.fullpage || null,
-        mobile_above_fold: screenshots.mobile_above_fold || null
-      },
-      available: {
-        above_fold: !!screenshots.above_fold,
-        fullpage: !!screenshots.fullpage,
-        mobile: !!screenshots.mobile_above_fold
-      }
-    }
+    raw_dump: trimRawDumpForAssistants(raw_dump),
+    screenshots: ss
   };
 }
 
@@ -91,9 +138,10 @@ function buildA2Payload(job, llm_context, screenshots) {
  * 
  * @param {Object} job
  * @param {Object} llm_context - Output from A1
+ * @param {Object} raw_dump
  * @returns {Object} - Payload for A3
  */
-function buildA3Payload(job, llm_context) {
+function buildA3Payload(job, llm_context, raw_dump) {
   return {
     job: {
       job_id: job.id,
@@ -101,7 +149,8 @@ function buildA3Payload(job, llm_context) {
       city: job.city,
       input_url: job.input_url
     },
-    llm_context: llm_context
+    llm_context: llm_context,
+    raw_dump: trimRawDumpForAssistants(raw_dump)
   };
 }
 
@@ -176,6 +225,7 @@ function buildA5Payload(job, llm_context, offer_copy_json, links = {}) {
  * @returns {Object} - Payload for A6
  */
 function buildA6Payload(job, llm_context, ux_audit_json, local_seo_audit_json, offer_copy_json, screenshots, links = {}) {
+  const ss = normalizeScreenshotsForAssistants(screenshots);
   return {
     job: {
       job_id: job.id,
@@ -187,16 +237,7 @@ function buildA6Payload(job, llm_context, ux_audit_json, local_seo_audit_json, o
     ux_audit_json: ux_audit_json,
     local_seo_audit_json: local_seo_audit_json,
     offer_copy_json: offer_copy_json,
-    screenshots: {
-      refs: {
-        above_fold: screenshots.above_fold || null,
-        fullpage: screenshots.fullpage || null
-      },
-      available: {
-        above_fold: !!screenshots.above_fold,
-        fullpage: !!screenshots.fullpage
-      }
-    },
+    screenshots: ss,
     compliance: {
       concept_preview_required: true,
       no_growth_guarantees: true,
@@ -233,10 +274,10 @@ function buildPayload(assistant_key, data) {
       return buildA1Payload(job, evidence_pack_v2, raw_dump, screenshots);
     
     case 'ux_conversion_auditor':
-      return buildA2Payload(job, llm_context, screenshots);
+      return buildA2Payload(job, llm_context, raw_dump, screenshots);
     
     case 'local_seo_geo_auditor':
-      return buildA3Payload(job, llm_context);
+      return buildA3Payload(job, llm_context, raw_dump);
     
     case 'offer_strategist':
       return buildA4Payload(job, llm_context, ux_audit_json, local_seo_audit_json);

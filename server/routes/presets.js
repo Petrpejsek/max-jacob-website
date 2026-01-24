@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { getPersistentPublicDir } = require('../runtimePaths');
 const {
   createNichePreset,
   getAllNichePresets,
@@ -10,6 +11,13 @@ const {
   updateNichePreset,
   deleteNichePreset
 } = require('../db');
+
+function publicRefToFsPath(publicRef) {
+  const s = String(publicRef || '').trim();
+  if (!s) return null;
+  const stripped = s.replace(/^\/?public\//, '');
+  return path.join(getPersistentPublicDir(), stripped);
+}
 
 // Middleware pro ověření admin přístupu
 function requireAdmin(req, res, next) {
@@ -22,7 +30,7 @@ function requireAdmin(req, res, next) {
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '..', '..', 'public', 'presets');
+    const uploadDir = path.join(getPersistentPublicDir(), 'presets');
     // Ensure directory exists
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -163,7 +171,7 @@ router.put('/:id', requireAdmin, upload.single('concept_image'), (req, res) => {
     // First get old preset to delete old image
     getNichePresetById(id, (err, oldPreset) => {
       if (!err && oldPreset && oldPreset.concept_image_url) {
-        const oldPath = path.join(__dirname, '..', '..', oldPreset.concept_image_url);
+        const oldPath = publicRefToFsPath(oldPreset.concept_image_url);
         if (fs.existsSync(oldPath)) {
           fs.unlinkSync(oldPath);
         }
@@ -218,7 +226,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
 
       // Delete associated image if exists
       if (preset.concept_image_url) {
-        const imagePath = path.join(__dirname, '..', '..', preset.concept_image_url);
+        const imagePath = publicRefToFsPath(preset.concept_image_url);
         if (fs.existsSync(imagePath)) {
           fs.unlinkSync(imagePath);
         }

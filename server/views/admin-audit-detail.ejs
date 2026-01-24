@@ -65,6 +65,16 @@
             gap: 12px;
             flex-wrap: wrap;
         }
+        
+        .btn-homepage {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        
+        .btn-homepage:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
 
         .btn {
             padding: 12px 20px;
@@ -592,11 +602,133 @@
                 <div class="small">Status: <span class="badge"><%= auditJob.status %></span></div>
             </div>
             <div class="nav-actions">
+                <button class="btn btn-primary" type="button" onclick="copyScrapedAll(event)" title="Copy all scraped data for this job">Copy Scraped All</button>
+                <% if (publicUrl) { %>
+                    <% const publicUrlV2 = `${publicUrl}?v=2`; %>
+                    <% const publicUrlV2Abs = `${(baseOrigin || '').toString()}${publicUrlV2}`; %>
+                    <div style="display:flex; flex-direction:column; gap:6px; align-items:stretch;">
+                        <a href="<%= publicUrlV2 %>" class="btn" target="_blank" rel="noopener noreferrer">Public URL</a>
+                        <a href="<%= publicUrlV2 %>" target="_blank" rel="noopener noreferrer" style="font-size: 0.82rem; color: #6a82fb; text-decoration: none; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <%= publicUrlV2Abs %>
+                        </a>
+                    </div>
+                <% } %>
+                <% if (auditJob.homepage_proposal_html) { %>
+                    <a href="/admin/audits/<%= auditJob.id %>/homepage-preview" class="btn btn-homepage">📄 View Homepage Proposal</a>
+                <% } %>
                 <button class="btn" type="button" onclick="openLlmModal()">LLM Settings</button>
                 <button class="btn" type="button" onclick="openPresetsModal()">Presets</button>
                 <a href="/admin/audits" class="btn">Back to Audits</a>
                 <a href="/admin" class="btn">Admin Home</a>
                 <a href="/admin/logout" class="btn">Logout</a>
+            </div>
+        </div>
+
+        <!-- Outreach Email Generator -->
+        <div class="section">
+            <div class="section-title">Outreach Email Generator</div>
+            
+            <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 20px;">
+                <div id="outreachEmailError" style="display:none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d1f1f; border: 1px solid #5d2d2d; color: #ffb3b3; font-size: 0.95rem;"></div>
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" type="button" id="generateOutreachBtn" style="flex: 0 0 auto;">
+                        ✨ Show / Regenerate
+                    </button>
+                    <button class="btn" type="button" id="copyOutreachBtn" style="flex: 0 0 auto; display: none;">
+                        📋 Copy Email
+                    </button>
+                </div>
+                
+                <% 
+                    function mjSanitizeName(s) {
+                        const t = (s || '').toString().replace(/\s+/g, ' ').trim();
+                        if (!t) return null;
+                        // Remove obvious URL-like prefixes if someone stored a URL as name
+                        const stripped = t
+                            .replace(/^https?:\/\//i, '')
+                            .replace(/^www\./i, '')
+                            .replace(/\/+$/, '');
+                        // If it still contains a slash, it's probably a URL/path — ignore as a company name
+                        if (/[\/\\]/.test(stripped)) return null;
+                        return stripped.slice(0, 120);
+                    }
+
+                    function mjTitleCase(s) {
+                        return (s || '')
+                            .toString()
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .map(w => w.length ? (w[0].toUpperCase() + w.slice(1)) : w)
+                            .join(' ')
+                            .trim();
+                    }
+
+                    function mjNameFromUrl(inputUrl) {
+                        try {
+                            const u = new URL(String(inputUrl || ''));
+                            const host = (u.hostname || '').replace(/^www\./i, '');
+                            if (!host) return null;
+                            const parts = host.split('.').filter(Boolean);
+                            const base = parts.length > 2 ? parts.slice(0, -1).join('.') : (parts[0] || host);
+                            const spaced = base.replace(/[-_.]+/g, ' ').trim();
+                            return mjTitleCase(spaced) || null;
+                        } catch (e) {
+                            const raw = String(inputUrl || '')
+                                .replace(/^https?:\/\//i, '')
+                                .replace(/^www\./i, '')
+                                .split('/')[0];
+                            const base = raw.split('.').slice(0, -1).join('.') || raw;
+                            const spaced = base.replace(/[-_.]+/g, ' ').trim();
+                            return mjTitleCase(spaced) || null;
+                        }
+                    }
+
+                    // Best-effort company name priority:
+                    // 1) auditJob.company_name
+                    // 2) Evidence Pack v2 company_profile.name
+                    // 3) OG site name / title from scrape_result_json
+                    // 4) Derived from domain
+                    const mjCompanyNameDirect = mjSanitizeName(auditJob.company_name);
+                    let mjEvidenceName = null;
+                    try {
+                        let epv2 = auditJob.evidence_pack_v2_json || null;
+                        if (typeof epv2 === 'string') epv2 = JSON.parse(epv2);
+                        mjEvidenceName = mjSanitizeName(epv2 && epv2.company_profile && epv2.company_profile.name);
+                    } catch (_) {}
+
+                    const mjScrape = auditJob.scrape_result_json || {};
+                    const mjOgName = mjSanitizeName(mjScrape.og_site_name || mjScrape.ogSiteName || null);
+                    const mjTitleRaw = (mjScrape.title || '').toString();
+                    const mjTitleName = mjSanitizeName(mjTitleRaw ? mjTitleRaw.split('|')[0].split(' - ')[0].trim() : null);
+
+                    const mjDerivedName = mjNameFromUrl(auditJob.input_url);
+
+                    const mjBusinessName = mjCompanyNameDirect || mjEvidenceName || mjOgName || mjTitleName || mjDerivedName || 'your business';
+                    const mjFirstName = mjBusinessName; // per spec: first name = company name
+                    const mjNiche = (auditJob.niche || '').toString().trim() || 'local service';
+                    const mjCity = (auditJob.city || '').toString().trim() || 'your area';
+                    const mjAuditLinkPlaceholder = publicUrl ? `__ORIGIN__${publicUrl}?v=2` : '__ORIGIN__/?v=2';
+                    const mjDefaultOutreachEmail = `Hi ${mjFirstName},\n\nJacob here — we’re Max & Jacob (two brothers). We build and improve websites for local businesses that have strong potential to grow online.\n\nWe found ${mjBusinessName} while searching for ${mjNiche} services in ${mjCity}. Your business looks legit — and that’s exactly why we’re emailing: your website can be improved in a way that can directly increase leads.\n\nThe reason this matters right now: people are choosing services online faster than ever (Google + AI search results), and the companies that update first take the calls.\n\nWe made a free audit with screenshots and priorities: ${mjAuditLinkPlaceholder}\n\nIf you’re open to it, reply and we’ll walk you through it. We’re fast, easy to reach, and we keep it affordable — without cutting quality.`; 
+                %>
+
+                <div id="outreachEmailContainer" style="display: none;">
+                    <div style="background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                        <div style="color: #b6b6d6; font-size: 0.85rem; margin-bottom: 8px; font-weight: 500;">Email (editable):</div>
+                        <textarea id="outreachEmailText" style="min-height: 240px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.92rem; line-height: 1.6;"><%= mjDefaultOutreachEmail %></textarea>
+                        <textarea id="outreachEmailDefault" style="display:none;"><%= mjDefaultOutreachEmail %></textarea>
+                    </div>
+                    
+                    <div style="color: #999; font-size: 0.85rem;">
+                        <strong>Variables used:</strong>
+                        <ul style="margin: 8px 0 0 20px; color: #b6b6d6;">
+                            <li><code>{FirstName}</code>: <span id="varFirstName"><%= mjFirstName %></span></li>
+                            <li><code>{BusinessName}</code>: <span id="varBusinessName"><%= mjBusinessName %></span></li>
+                            <li><code>{Niche}</code>: <span id="varNiche"><%= mjNiche %></span></li>
+                            <li><code>{City}</code>: <span id="varCity"><%= mjCity %></span></li>
+                            <li><code>{AuditLink}</code>: <span id="varAuditLink"><%= publicUrl ? (publicUrl + '?v=2') : '/?v=2' %></span></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -672,6 +804,16 @@
             <% const evidencePackV2 = auditJob.evidence_pack_v2_json || null; %>
             <% const evidencePackV1 = auditJob.evidence_pack_json || null; %>
             <% const evidencePack = evidencePackV2 || evidencePackV1 || {}; %>
+
+            <div class="actions-row" style="margin-top: 8px; margin-bottom: 16px;">
+                <button class="btn btn-primary" type="button" onclick="copyScrapedAll(event)" id="copyScrapedAllBtn" style="display: flex; align-items: center; gap: 8px;">
+                    <span>Copy Scraped All</span>
+                    <span id="copyScrapedAllCheck" style="display: none; color: #10b981;">✓</span>
+                </button>
+                <div class="small" style="align-self: center;">
+                    Copies: site snapshot + crawled pages + full extracted content + evidence/raw dump.
+                </div>
+            </div>
             
             <!-- Contacts Section (v2) -->
             <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
@@ -936,6 +1078,56 @@
             </details>
         </div>
 
+        <!-- B1.5) Site Snapshot (stored for future reuse) -->
+        <% if (auditJob && auditJob.site_snapshot_json) { %>
+        <div class="section">
+            <div class="section-title">B1.5) Site Snapshot (menu + pages index)</div>
+
+            <div class="nav-actions" style="margin-bottom: 12px;">
+                <button class="btn btn-primary" type="button" onclick="copySiteSnapshot(event)">Copy JSON</button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                    <div class="field-label">Pages indexed</div>
+                    <div class="field-value" style="font-size: 1.4rem; font-weight: 700; color: #6a82fb;">
+                        <%= (auditJob.site_snapshot_json.pages_index || []).length %>
+                    </div>
+                </div>
+                <div style="background: #181828; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px;">
+                    <div class="field-label">Primary menu items (top level)</div>
+                    <div class="field-value" style="font-size: 1.4rem; font-weight: 700; color: #6a82fb;">
+                        <%= ((auditJob.site_snapshot_json.navigation || {}).primary_tree || []).length %>
+                    </div>
+                </div>
+            </div>
+
+            <details style="margin-top: 12px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px; padding: 16px;">
+                <summary style="cursor: pointer; font-weight: 500; color: #b6b6d6; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🗂️ Site Snapshot JSON</span>
+                </summary>
+                <div style="margin-top: 12px;">
+                    <div class="output-preview"><pre><%= JSON.stringify(auditJob.site_snapshot_json, null, 2) %></pre></div>
+                </div>
+            </details>
+
+            <script>
+                // IMPORTANT: never inline raw JSON directly into <script> – scraped content may contain `<\/script>`
+                const siteSnapshotData = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.site_snapshot_json || null), "utf8").toString("base64") %>');
+                async function copySiteSnapshot(event) {
+                    event.preventDefault();
+                    try {
+                        await navigator.clipboard.writeText(JSON.stringify(siteSnapshotData, null, 2));
+                        alert('Site snapshot copied to clipboard');
+                    } catch (err) {
+                        console.error('Copy failed', err);
+                        alert('Copy failed (see console)');
+                    }
+                }
+            </script>
+        </div>
+        <% } %>
+
         <!-- B2) Pages Crawl (Scraper v3) -->
         <% if (crawledPages && crawledPages.length > 0) { %>
         <div class="section">
@@ -1167,6 +1359,39 @@
                                 ${page.h2_json.slice(0, 5).map(h2 => `<li>${h2}</li>`).join('')}
                                 ${page.h2_json.length > 5 ? `<li style="color: #b6b6d6;"><em>...and ${page.h2_json.length - 5} more</em></li>` : ''}
                             </ul>
+                        </div>
+                    ` : ''}
+
+                    ${page.content_outline_json && page.content_outline_json.sections && page.content_outline_json.sections.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 6px;">Content Outline (${page.content_outline_json.sections.length} sections):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px; max-height: 240px; overflow-y: auto;">
+                                ${page.content_outline_json.sections.slice(0, 12).map(s => `
+                                    <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2d2d44;">
+                                        <div style="color: #d1d1e0; font-weight: 600;">${s.level || ''} ${s.heading || ''}</div>
+                                        ${s.snippet ? `<div style="font-size: 0.85rem; color: #b6b6d6; margin-top: 4px;">${s.snippet}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                                ${page.content_outline_json.sections.length > 12 ? `<div style="color: #b6b6d6;"><em>...and ${page.content_outline_json.sections.length - 12} more</em></div>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${page.images_json && page.images_json.length > 0 ? `
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 0.9rem; color: #b6b6d6; margin-bottom: 6px;">Images (top ${Math.min(page.images_json.length, 10)} of ${page.images_json.length}):</div>
+                            <div style="background: #23233a; padding: 12px; border-radius: 8px; max-height: 240px; overflow-y: auto;">
+                                ${page.images_json.slice(0, 10).map(img => `
+                                    <div style="margin-bottom: 10px;">
+                                        <div style="color: #d1d1e0; font-weight: 500;">
+                                            <a href="${img.url}" target="_blank" style="color: #6a82fb; text-decoration: none;">${img.url}</a>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: #b6b6d6; margin-top: 2px;">
+                                            ${img.alt ? `Alt: ${img.alt} • ` : ''}${img.width ? `${img.width}x${img.height || ''}` : 'size unknown'}${img.is_hero_candidate ? ' • hero candidate' : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
                     ` : ''}
 
@@ -1484,9 +1709,13 @@
                     <div class="field-group">
                         <div class="field-label">Public Landing URL</div>
                         <% if (publicUrl) { %>
-                            <div class="field-value"><a href="<%= publicUrl %>" class="view-link" target="_blank"><%= publicUrl %></a></div>
+                            <% const publicUrlV2 = `${publicUrl}?v=2`; %>
+                            <% const publicUrlV2Abs = `${(baseOrigin || '').toString()}${publicUrlV2}`; %>
+                            <div class="field-value">
+                                <a href="<%= publicUrlV2 %>" class="view-link" target="_blank"><%= publicUrlV2Abs %></a>
+                            </div>
                             <div class="actions-row">
-                                <a class="btn" href="<%= publicUrl %>" target="_blank">Open</a>
+                                <a class="btn" href="<%= publicUrlV2 %>" target="_blank">Open</a>
                             </div>
                         <% } else { %>
                             <div class="field-value">-</div>
@@ -1681,7 +1910,7 @@ STYLE:
 - Short, punchy CTA suggestions
 - Headline should be benefit-focused for local audience (check evidence_pack.city)
 - Subhead clarifies the offer or reduces friction`,
-            email: `You are polishing an outbound email for a Miami local business audit.
+            email: `You are polishing an outbound email for a local business audit.
 Work with the mini audit evidence - no exaggerations.
 
 Return ONLY valid JSON with this shape:
@@ -1699,7 +1928,7 @@ RULES:
 - Keep it conversational and professional
 
 STYLE:
-- Miami local, friendly but professional
+- Local context, friendly but professional (use the detected city from evidence)
 - Evidence-based (reference findings from mini audit)
 - Action-oriented`
         };
@@ -2170,7 +2399,7 @@ STYLE:
 
                     <div class="field-group">
                         <div class="field-label">Default Headline</div>
-                        <input type="text" id="presetHeadline" placeholder="e.g. More calls from your Miami plumbing website">
+                        <input type="text" id="presetHeadline" placeholder="e.g. More calls from your {city} {niche} website">
                     </div>
 
                     <div class="field-group">
@@ -2184,8 +2413,8 @@ STYLE:
                     </div>
 
                     <div class="field-group">
-                        <div class="field-label">Default City (optional)</div>
-                        <input type="text" id="presetCity" placeholder="e.g. Miami">
+                        <div class="field-label">Default City (deprecated — city is scraped)</div>
+                        <input type="text" id="presetCity" placeholder="(city is auto-detected from scraped data)" disabled>
                     </div>
 
                     <div class="field-group">
@@ -2398,7 +2627,8 @@ STYLE:
                 if (secondary) secondary.value = preset.default_secondary_cta || '';
 
                 const city = $('presetCity');
-                if (city) city.value = preset.default_city || '';
+                // City is scraped (truth). Presets should not set/override city.
+                if (city) city.value = '';
 
                 const bullets = Array.isArray(preset.default_bullets_json) ? preset.default_bullets_json : [];
                 const b1 = $('presetBullet1'); if (b1) b1.value = bullets[0] || '';
@@ -2443,7 +2673,8 @@ STYLE:
                 formData.append('default_headline', ($('presetHeadline') && $('presetHeadline').value ? $('presetHeadline').value : '').trim());
                 formData.append('default_primary_cta', ($('presetPrimaryCta') && $('presetPrimaryCta').value ? $('presetPrimaryCta').value : '').trim());
                 formData.append('default_secondary_cta', ($('presetSecondaryCta') && $('presetSecondaryCta').value ? $('presetSecondaryCta').value : '').trim());
-                formData.append('default_city', ($('presetCity') && $('presetCity').value ? $('presetCity').value : '').trim());
+                // Deprecated: city is always scraped, never from preset
+                formData.append('default_city', '');
 
                 const bullets = [
                     ($('presetBullet1') && $('presetBullet1').value ? $('presetBullet1').value : '').trim(),
@@ -2939,6 +3170,65 @@ STYLE:
                 alert('Failed to copy to clipboard');
             }
         }
+
+        // Copy EVERYTHING scraped (one JSON blob)
+        // Uses already-embedded base64 JSON to avoid <\/script> issues.
+        const scrapeResultData = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.scrape_result_json || {}), "utf8").toString("base64") %>');
+        const evidencePackV2Data = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.evidence_pack_v2_json || null), "utf8").toString("base64") %>');
+        const evidencePackV1Data = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.evidence_pack_json || null), "utf8").toString("base64") %>');
+        const warningsData = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.warnings_json || []), "utf8").toString("base64") %>');
+        const siteSnapshotDataAll = parseBase64Json('<%- Buffer.from(JSON.stringify(auditJob.site_snapshot_json || null), "utf8").toString("base64") %>');
+        const lighthouseReportsData = parseBase64Json('<%- Buffer.from(JSON.stringify(lighthouseReports || []), "utf8").toString("base64") %>');
+
+        function copyScrapedAll(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            const btn = document.getElementById('copyScrapedAllBtn');
+            const check = document.getElementById('copyScrapedAllCheck');
+
+            const payload = {
+                exported_at: new Date().toISOString(),
+                job: {
+                    id: <%= auditJob.id %>,
+                    status: <%- JSON.stringify(auditJob.status || null) %>,
+                    input_url: <%- JSON.stringify(auditJob.input_url || null) %>,
+                    niche: <%- JSON.stringify(auditJob.niche || null) %>,
+                    city: <%- JSON.stringify(auditJob.city || null) %>,
+                    company_name: <%- JSON.stringify(auditJob.company_name || null) %>
+                },
+                site_snapshot: siteSnapshotDataAll || null,
+                warnings: warningsData || [],
+                scrape_result: scrapeResultData || {},
+                raw_dump: rawDumpData || {},
+                evidence_pack_effective: evidencePackData || {},
+                evidence_pack_v2: evidencePackV2Data || null,
+                evidence_pack_v1: evidencePackV1Data || null,
+                crawled_pages: (typeof crawledPagesData !== 'undefined' && Array.isArray(crawledPagesData)) ? crawledPagesData : [],
+                lighthouse_reports: lighthouseReportsData || []
+            };
+
+            const text = JSON.stringify(payload, null, 2);
+
+            try {
+                navigator.clipboard.writeText(text).then(() => {
+                    if (check) check.style.display = 'inline';
+                    if (btn) btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        if (check) check.style.display = 'none';
+                        if (btn) btn.style.background = '';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard (payload may be very large).');
+                });
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard (payload may be very large).');
+            }
+        }
         
         // Copy all assistant outputs
         function copyAllOutputs() {
@@ -3067,6 +3357,56 @@ STYLE:
             const text = el.textContent || '';
             navigator.clipboard.writeText(text).catch(() => {});
         }
+
+        // Outreach Email Generator (simple + robust)
+        (function outreachEmailModule() {
+            function $(id) { return document.getElementById(id); }
+
+            function show() {
+                const container = $('outreachEmailContainer');
+                if (container) container.style.display = 'block';
+                const copyBtn = $('copyOutreachBtn');
+                if (copyBtn) copyBtn.style.display = 'inline-block';
+            }
+
+            function regenerate() {
+                const def = $('outreachEmailDefault');
+                const ta = $('outreachEmailText');
+                if (!ta || !def) return;
+                // Replace __ORIGIN__ placeholder with actual origin at time of generation.
+                const origin = (window && window.location && window.location.origin) ? window.location.origin : '';
+                ta.value = String(def.value || '').replaceAll('__ORIGIN__', origin);
+                show();
+            }
+
+            async function copy() {
+                const ta = $('outreachEmailText');
+                if (!ta) return;
+                const text = String(ta.value || '').trim();
+                if (!text) return;
+                const btn = $('copyOutreachBtn');
+                const original = btn ? btn.textContent : null;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    if (btn) {
+                        btn.textContent = '✓ Copied!';
+                        btn.style.background = 'linear-gradient(90deg, #4ade80, #22c55e)';
+                        setTimeout(() => {
+                            btn.textContent = original || '📋 Copy Email';
+                            btn.style.background = '';
+                        }, 1500);
+                    }
+                } catch (e) {
+                    // Fallback: select text so user can cmd+c
+                    try { ta.focus(); ta.select(); } catch (_) {}
+                }
+            }
+
+            const genBtn = $('generateOutreachBtn');
+            const copyBtn = $('copyOutreachBtn');
+            if (genBtn) genBtn.addEventListener('click', regenerate);
+            if (copyBtn) copyBtn.addEventListener('click', copy);
+        })();
 
     </script>
 </body>

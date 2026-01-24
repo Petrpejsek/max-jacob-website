@@ -207,6 +207,6 @@ ISC
 
 ## Support
 
-For issues or questions, contact: info@maxandjacob.com
+For issues or questions, contact: jacob@maxandjacob.com
 
 

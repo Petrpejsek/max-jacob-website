@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { getPersistentPublicDir } = require('../runtimePaths');
 const {
   getAllSubmissions,
   getSubmissionById,
@@ -28,18 +29,22 @@ const {
   setSiteSetting
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
+const { loginLimiter, auditJobLimiter } = require('../middleware/security');
+const { auditQueue } = require('../services/auditQueue');
 
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../../public/team');
+    const uploadDir = path.join(getPersistentPublicDir(), 'team');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    const member = req.body.member || 'unknown';
+    // IMPORTANT: do NOT rely on req.body here (multipart field order is not guaranteed).
+    // Use route param if available; fall back to body only if present.
+    const member = req.params?.member || req.body?.member || 'unknown';
     const ext = path.extname(file.originalname);
     cb(null, `${member}${ext}`);
   }
@@ -60,6 +65,29 @@ const upload = multer({
     }
   }
 });
+
+// Wrap multer so errors always return JSON (prevents HTML error pages breaking fetch().json()).
+function uploadSingleJson(fieldName) {
+  return function (req, res, next) {
+    upload.single(fieldName)(req, res, (err) => {
+      if (!err) return next();
+
+      const isMulterError = err && err.name === 'MulterError';
+      let status = 400;
+      let code = isMulterError ? err.code : 'upload_error';
+      let message = err.message || 'Upload failed';
+
+      if (isMulterError && err.code === 'LIMIT_FILE_SIZE') {
+        message = 'File is too large (max 5MB).';
+      }
+
+      return res.status(status).json({
+        error: code,
+        message
+      });
+    });
+  };
+}
 
 // Middleware pro ověření admin přístupu
 function requireAdmin(req, res, next) {
@@ -98,7 +126,7 @@ router.get('/login', (req, res) => {
 });
 
 // POST /admin/login - zpracování přihlášení
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { password } = req.body;
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
@@ -174,8 +202,8 @@ router.get('/audits', requireAdmin, (req, res) => {
 router.get('/audits/new', requireAdmin, (req, res) => {
   const payload = {
     input_url: '',
-    niche: 'plumbing',
-    city: 'Miami',
+    niche: '', // Empty - MUST be selected before running audit
+    city: '', // Empty - will be auto-detected from scraped data
     company_name: null,
     brand_logo_url: null,
     preset_id: null,
@@ -270,6 +298,7 @@ router.get('/audits/:id', requireAdmin, (req, res) => {
                 runLogs: runLogs || [],
                 promptTemplates: promptsByName,
                 publicUrl: auditJob.public_page_slug ? `/${auditJob.public_page_slug}` : null,
+                baseOrigin: `${req.protocol}://${req.get('host')}`,
                 crawledPages: crawledPages || [],
                 lighthouseReports: lighthouseReports || [],
                 assistantRuns: assistantRuns || []
@@ -508,8 +537,8 @@ router.post('/audits/:id/run-assistant', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /admin/audits/:id/run-full-pipeline - Run all 6 assistants
-router.post('/audits/:id/run-full-pipeline', requireAdmin, async (req, res) => {
+// POST /admin/audits/:id/run-full-pipeline - Run all 6 assistants (queued)
+router.post('/audits/:id/run-full-pipeline', requireAdmin, auditJobLimiter, async (req, res) => {
   const { id } = req.params;
   
   try {
@@ -574,6 +603,199 @@ router.get('/audits/:id/assistant-run/:runId/payload', requireAdmin, (req, res) 
       token_usage: run.token_usage_json
     });
   });
+});
+
+// ==================== HOMEPAGE PROPOSAL ROUTES ====================
+
+// GET /admin/audits/:id/homepage-preview - View homepage proposal preview
+router.get('/audits/:id/homepage-preview', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  getAuditJobById(id, (err, job) => {
+    if (err) {
+      console.error('Error loading job:', err);
+      return res.status(500).send('Failed to load audit job');
+    }
+    
+    if (!job) {
+      return res.status(404).send('Audit job not found');
+    }
+    
+    if (!job.homepage_proposal_html) {
+      return res.status(404).send('Homepage proposal not generated yet. Run the audit pipeline first.');
+    }
+    
+    // Parse proposal data
+    const proposalData = job.homepage_proposal_data_json;
+    
+    res.render('admin-homepage-preview', {
+      job,
+      proposalData
+    });
+  });
+});
+
+// GET /admin/audits/:id/homepage-proposal.html - Serve rendered HTML for iframe
+router.get('/audits/:id/homepage-proposal.html', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  getAuditJobById(id, (err, job) => {
+    if (err) {
+      console.error('Error loading job:', err);
+      return res.status(500).send('Failed to load audit job');
+    }
+    
+    if (!job) {
+      return res.status(404).send('Audit job not found');
+    }
+    
+    if (!job.homepage_proposal_html && !job.homepage_proposal_data_json) {
+      return res.status(404).send('Homepage proposal not generated yet.');
+    }
+    
+    // Inject click-blocking script into the HTML (deterministic; prevents "sometimes clickable" after refresh)
+    const injectClickBlock = (inputHtml) => {
+      let html = String(inputHtml || '');
+      const MARK = '__MJ_PREVIEW_CLICKBLOCK__';
+      if (html.includes(MARK)) return html;
+
+      const script = `
+    <script>
+      /* ${MARK} */
+      (function () {
+        function block(e) {
+          try { e.preventDefault(); } catch (_) {}
+          try { e.stopPropagation(); } catch (_) {}
+          try { e.stopImmediatePropagation(); } catch (_) {}
+          return false;
+        }
+        document.addEventListener('click', block, true);
+        document.addEventListener('submit', block, true);
+        document.addEventListener('mousedown', block, true);
+        document.addEventListener('mouseup', block, true);
+        document.addEventListener('pointerdown', block, true);
+        document.addEventListener('pointerup', block, true);
+        document.addEventListener('keydown', function (e) {
+          const k = e.key;
+          if (k === 'Enter' || k === ' ') return block(e);
+        }, true);
+        window.__mjPreviewClicksBlocked = true;
+      })();
+    </script>
+`;
+
+      if (/<head[^>]*>/i.test(html)) {
+        html = html.replace(/<head[^>]*>/i, (m) => `${m}${script}`);
+        return html;
+      }
+      if (/<html[^>]*>/i.test(html)) {
+        html = html.replace(/<html[^>]*>/i, (m) => `${m}<head>${script}</head>`);
+        return html;
+      }
+      return `${script}${html}`;
+    };
+
+    // Prefer rendering from saved proposal data so template improvements apply retroactively.
+    const homepageBuilder = require('../services/homepageBuilder');
+    const templateSlug =
+      (job.homepage_proposal_data_json && job.homepage_proposal_data_json.job && job.homepage_proposal_data_json.job.niche) ||
+      job.niche ||
+      'plumbing';
+
+    const renderPromise = job.homepage_proposal_data_json
+      ? homepageBuilder.renderTemplate(templateSlug, job.homepage_proposal_data_json)
+          .catch(() => job.homepage_proposal_html || '')
+      : Promise.resolve(job.homepage_proposal_html || '');
+
+    renderPromise
+      .then((htmlRaw) => {
+        const html = injectClickBlock(htmlRaw);
+        // Serve the HTML with injected script
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+      })
+      .catch((renderErr) => {
+        console.error('Error rendering homepage proposal:', renderErr);
+        res.status(500).send('Failed to load homepage proposal');
+      });
+  });
+});
+
+// POST /admin/audits/:id/regenerate-homepage - Regenerate homepage proposal
+router.post('/audits/:id/regenerate-homepage', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const job = await new Promise((resolve, reject) => {
+      getAuditJobById(id, (err, job) => {
+        if (err) return reject(err);
+        resolve(job);
+      });
+    });
+    
+    if (!job) {
+      return res.status(404).send('Audit job not found');
+    }
+    
+    if (!job.preset_id) {
+      return res.status(400).send('No preset configured for this job');
+    }
+    
+    // Import homepage builder
+    const homepageBuilder = require('../services/homepageBuilder');
+    const { getCrawledPagesByJobId } = require('../db');
+    
+    // Load crawled pages
+    const crawledPages = await new Promise((resolve, reject) => {
+      getCrawledPagesByJobId(id, (err, pages) => {
+        if (err) return reject(err);
+        resolve(pages);
+      });
+    });
+    
+    if (!crawledPages || crawledPages.length === 0) {
+      return res.status(400).send('No crawled pages found. Run scraper first.');
+    }
+    
+    // Load preset
+    const { getNichePresetById } = require('../db');
+    const preset = await new Promise((resolve, reject) => {
+      getNichePresetById(job.preset_id, (err, preset) => {
+        if (err) return reject(err);
+        resolve(preset);
+      });
+    });
+    
+    if (!preset) {
+      return res.status(404).send('Preset not found');
+    }
+    
+    const templateSlug = preset.homepage_template_path || preset.slug;
+    
+    // Build template data
+    const templateData = await homepageBuilder.buildTemplateData(job, crawledPages);
+    
+    // Render template
+    const proposalHtml = await homepageBuilder.renderTemplate(templateSlug, templateData);
+    
+    // Save to database
+    await new Promise((resolve, reject) => {
+      updateAuditJob(id, {
+        homepage_proposal_html: proposalHtml,
+        homepage_proposal_data_json: templateData
+      }, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+    
+    // Redirect back to preview
+    res.redirect(`/admin/audits/${id}/homepage-preview`);
+    
+  } catch (error) {
+    console.error('Error regenerating homepage:', error);
+    res.status(500).send(`Failed to regenerate homepage: ${error.message}`);
+  }
 });
 
 // POST /admin/audits/:id/update-prompts
@@ -674,19 +896,38 @@ router.get('/team-photos', requireAdmin, (req, res) => {
   });
 });
 
-// POST /admin/team-photos/upload - Upload team photo
-router.post('/team-photos/upload', requireAdmin, upload.single('photo'), (req, res) => {
+function cleanupOtherTeamPhotoExtensions(member, keepFilename) {
+  const uploadDir = path.join(getPersistentPublicDir(), 'team');
+  const exts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  exts.forEach((ext) => {
+    const filename = `${member}${ext}`;
+    if (keepFilename && filename === keepFilename) return;
+    const p = path.join(uploadDir, filename);
+    try {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    } catch (e) {
+      // Best-effort cleanup; don't fail upload on delete issues.
+      console.warn('[TEAM PHOTOS] cleanup failed:', p, e.message);
+    }
+  });
+}
+
+// POST /admin/team-photos/upload/:member - Upload team photo
+router.post('/team-photos/upload/:member', requireAdmin, uploadSingleJson('photo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const member = req.body.member;
+  const member = req.params.member;
   if (!member || !['jacob', 'max'].includes(member)) {
     return res.status(400).json({ error: 'Invalid team member' });
   }
 
   const photoPath = `/public/team/${req.file.filename}`;
   const settingKey = `team_${member}_photo`;
+
+  // If they switch file type (jpg -> png), ensure old one doesn't hang around.
+  cleanupOtherTeamPhotoExtensions(member, req.file.filename);
 
   setSiteSetting(settingKey, photoPath, (err) => {
     if (err) {
@@ -699,6 +940,20 @@ router.post('/team-photos/upload', requireAdmin, upload.single('photo'), (req, r
       message: `${member}'s photo uploaded successfully`,
       path: photoPath
     });
+  });
+});
+
+// Backward-compatible endpoint (older admin UI). NOTE: can still be affected by field order.
+router.post('/team-photos/upload', requireAdmin, uploadSingleJson('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const member = req.body.member;
+  if (!member || !['jacob', 'max'].includes(member)) return res.status(400).json({ error: 'Invalid team member' });
+  const photoPath = `/public/team/${req.file.filename}`;
+  const settingKey = `team_${member}_photo`;
+  cleanupOtherTeamPhotoExtensions(member, req.file.filename);
+  setSiteSetting(settingKey, photoPath, (err) => {
+    if (err) return res.status(500).json({ error: 'Error saving photo path' });
+    res.json({ success: true, message: `${member}'s photo uploaded successfully`, path: photoPath });
   });
 });
 
@@ -804,33 +1059,51 @@ router.post('/api/assistants', requireAdmin, (req, res) => {
 // PUT /admin/api/assistants/:id - Aktualizovat asistenta
 router.put('/api/assistants/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { name, key, model, temperature, prompt, sort_order } = req.body;
-  
-  if (!name || !key || !model || temperature === undefined || !prompt) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  
-  const data = {
-    name,
-    key,
-    model,
-    temperature: parseFloat(temperature),
-    prompt,
-    sort_order: sort_order || 999
-  };
-  
-  updateAssistant(id, data, (err, result) => {
-    if (err) {
-      console.error('Error updating assistant:', err);
-      if (err.message && err.message.includes('UNIQUE')) {
-        return res.status(400).json({ error: 'Assistant with this key already exists' });
-      }
-      return res.status(500).json({ error: 'Failed to update assistant' });
+  const body = req.body || {};
+
+  // Backward compatible: allow partial updates from the admin UI (model/temp/prompt only).
+  // We merge with existing assistant fields so DB update stays consistent.
+  getAssistantById(id, (loadErr, existing) => {
+    if (loadErr) {
+      console.error('Error loading assistant for update:', loadErr);
+      return res.status(500).json({ error: 'Failed to load assistant' });
     }
-    if (result.changes === 0) {
+    if (!existing) {
       return res.status(404).json({ error: 'Assistant not found' });
     }
-    res.json({ success: true });
+
+    const merged = {
+      name: body.name || existing.name,
+      key: body.key || existing.key,
+      model: body.model || existing.model,
+      temperature:
+        body.temperature !== undefined
+          ? parseFloat(body.temperature)
+          : existing.temperature,
+      prompt: body.prompt !== undefined ? body.prompt : existing.prompt,
+      sort_order:
+        body.sort_order !== undefined
+          ? body.sort_order
+          : existing.sort_order
+    };
+
+    if (!merged.name || !merged.key || !merged.model || !Number.isFinite(merged.temperature) || merged.prompt === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    updateAssistant(id, merged, (err, result) => {
+      if (err) {
+        console.error('Error updating assistant:', err);
+        if (err.message && err.message.includes('UNIQUE')) {
+          return res.status(400).json({ error: 'Assistant with this key already exists' });
+        }
+        return res.status(500).json({ error: 'Failed to update assistant' });
+      }
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Assistant not found' });
+      }
+      res.json({ success: true });
+    });
   });
 });
 

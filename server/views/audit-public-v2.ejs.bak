@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Audit: <%= job.input_url %> | Max & Jacob</title>
+    <meta name="description" content="Personal website diagnosis for <%= job.niche %> in <%= job.city %>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .animate-bounce-slow {
+            animation: bounce-slow 4s ease-in-out infinite;
+        }
+        
+        .animate-pulse-slow {
+            animation: pulse-slow 3s ease-in-out infinite;
+        }
+        
+        .cursor-zoom-in {
+            cursor: zoom-in;
+        }
+        
+        .cursor-zoom-out {
+            cursor: zoom-out;
+        }
+
+        /* Homepage proposal annotations - Premium cards design */
+        .proposal-annotation {
+            position: absolute;
+            width: 220px;
+            padding: 18px 16px 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.92) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.1) inset;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (min-width: 1536px) {
+            .proposal-annotation { width: 260px; padding: 20px 18px 18px; }
+        }
+
+        .proposal-annotation:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.15) inset;
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .proposal-annotation__header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .proposal-annotation__icon {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 900;
+            transition: transform 0.3s ease;
+        }
+
+        .proposal-annotation:hover .proposal-annotation__icon {
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        .proposal-icon--seo { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+        .proposal-icon--conversion { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
+        .proposal-icon--trust { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
+        .proposal-icon--local { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4); }
+        .proposal-icon--tech { background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white; box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4); }
+
+        .proposal-annotation__tag {
+            flex: 1;
+            font-size: 8px;
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            line-height: 1;
+        }
+
+        .proposal-tag--seo { color: #2563eb; }
+        .proposal-tag--conversion { color: #16a34a; }
+        .proposal-tag--trust { color: #d97706; }
+        .proposal-tag--local { color: #9333ea; }
+        .proposal-tag--tech { color: #475569; }
+
+        .proposal-annotation__title {
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            color: #0f172a;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+
+        .proposal-annotation__benefit {
+            font-size: 11px;
+            line-height: 1.45;
+            color: #475569;
+            font-weight: 600;
+            padding: 8px 10px;
+            background: rgba(59, 130, 246, 0.06);
+            border-radius: 8px;
+            border-left: 3px solid;
+        }
+
+        .proposal-benefit--seo { border-left-color: #3b82f6; background: rgba(59, 130, 246, 0.06); }
+        .proposal-benefit--conversion { border-left-color: #22c55e; background: rgba(34, 197, 94, 0.06); }
+        .proposal-benefit--trust { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.06); }
+        .proposal-benefit--local { border-left-color: #a855f7; background: rgba(168, 85, 247, 0.06); }
+        .proposal-benefit--tech { border-left-color: #64748b; background: rgba(100, 116, 139, 0.06); }
+
+        .proposal-annotation--left::before,
+        .proposal-annotation--right::before {
+            content: '';
+            position: absolute;
+            top: 24px;
+            width: 12px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9));
+        }
+
+        .proposal-annotation--left::before { right: -12px; }
+        .proposal-annotation--right::before { left: -12px; transform: scaleX(-1); }
+
+        /* Mobile checklist details marker reset */
+        .proposal-checklist summary { list-style: none; }
+        .proposal-checklist summary::-webkit-details-marker { display: none; }
+        .proposal-checklist details[open] .proposal-chevron { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="bg-[#fcfdfe] text-slate-900 antialiased">
+    
+    <!-- HEADER -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-2xl border-b border-slate-100">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="font-black text-2xl tracking-tighter text-blue-600">
+                Max & Jacob
+            </div>
+            <a href="#form" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
+                Get the 7-Day Plan
+            </a>
+        </div>
+    </header>
+
+    <!-- Zoom Modal -->
+    <div id="zoomModal" class="hidden fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-6 cursor-zoom-out">
+        <img id="zoomImage" src="" class="max-w-full max-h-[90vh] rounded-[2rem] shadow-2xl border-4 border-white/10">
+    </div>
+
+    <!-- HERO SECTION -->
+    <section class="pt-32 lg:pt-40 pb-24 px-6 max-w-[90rem] mx-auto overflow-visible">
+        <div class="grid lg:grid-cols-12 gap-16 lg:gap-32 items-center">
+            <div class="lg:col-span-5 text-center lg:text-left order-2 lg:order-1 relative z-40 lg:pl-8">
+                <% 
+                    const backlogCounts = (vm.improvement_backlog && vm.improvement_backlog.counts) ? vm.improvement_backlog.counts : null;
+                    const criticalCount = backlogCounts ? backlogCounts.critical : vm.top_3_issues.length;
+                    const warningCount = backlogCounts ? backlogCounts.warning : 0;
+                    const totalCount = backlogCounts ? backlogCounts.total : vm.top_3_issues.length;
+                    const highImpactCount = (backlogCounts ? (backlogCounts.critical + backlogCounts.warning) : vm.top_3_issues.length);
+                %>
+                <div class="inline-block px-4 py-1.5 bg-red-50 text-red-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8 border border-red-200 animate-pulse">
+                    ⚠️ <%= highImpactCount %> High-Impact Issues Found • <%= criticalCount %> Critical
+                </div>
+                <h1 class="text-5xl md:text-8xl font-black text-slate-900 tracking-tighter leading-[1.1] mb-10">
+                    Grow bigger online.<br/>
+                    More<br/>
+                    <span id="typingText" class="text-blue-600"></span><span id="cursor" class="text-blue-600 animate-pulse font-light opacity-70">|</span>
+                </h1>
+                <p class="text-xl text-slate-500 font-medium leading-relaxed mb-12 max-w-xl mx-auto lg:mx-0">
+                    <%= vm.hero.subheadline %>
+                </p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <a href="#homepage-proposal" class="px-12 py-6 bg-blue-600 text-white rounded-[2rem] font-black text-2xl hover:bg-blue-700 shadow-2xl shadow-blue-200 transition-all transform hover:-translate-y-2 active:scale-95">
+                        <%= vm.hero.primary_cta_text %>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-7 order-1 lg:order-2 flex justify-center lg:-mt-24">
+                <!-- Hero Visuals -->
+                <div class="relative w-full h-[500px] lg:h-[700px] flex items-center justify-center">
+                    <!-- Large Desktop Mockup -->
+                    <% if (vm.aha_moment.has_screenshot) { %>
+                    <div class="relative z-10 w-full max-w-[1050px]">
+                        <div class="bg-slate-900 rounded-t-2xl p-3 flex gap-2 items-center">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <div class="mx-auto bg-white/10 rounded-lg px-4 py-1 text-[10px] text-white/40 font-mono tracking-widest uppercase">Analyzing Presence</div>
+                        </div>
+                        <div class="bg-white p-1 rounded-b-3xl shadow-[0_60px_120px_-30px_rgba(0,0,0,0.3)] border-x border-b border-slate-200 overflow-hidden aspect-[16/10] cursor-zoom-in" onclick="openZoom('<%= vm.aha_moment.screenshot_url %>')">
+                            <img src="<%= vm.aha_moment.screenshot_url %>" alt="Desktop Preview" class="w-full object-top">
+                        </div>
+
+                        <!-- Low Clarity Tag -->
+                        <div class="absolute -top-8 -left-4 md:-left-16 bg-red-600 text-white p-7 rounded-[2.5rem] shadow-2xl animate-bounce-slow z-30">
+                            <p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Diagnosis</p>
+                            <p class="text-3xl font-black tracking-tighter">CRITICAL FRICTION</p>
+                        </div>
+                    </div>
+
+                    <!-- Refined Mobile Mockup (from 7-day-web-clarity-plan) -->
+                    <% if (vm.aha_moment.mobile_screenshot_url) { %>
+                    <div class="absolute -bottom-8 -right-2 lg:-right-4 z-20 w-[160px] md:w-[260px]">
+                        <div class="bg-slate-900 p-1.5 md:p-2 rounded-[3rem] shadow-2xl border border-slate-700/50 ring-1 ring-slate-200/50">
+                            <div class="bg-white rounded-[2.25rem] overflow-hidden aspect-[9/19] cursor-zoom-in" onclick="openZoom('<%= vm.aha_moment.mobile_screenshot_url %>')">
+                                <img src="<%= vm.aha_moment.mobile_screenshot_url %>" alt="Mobile Preview" class="w-full object-top">
+                            </div>
+                        </div>
+                    </div>
+                    <% } %>
+                    <% } else { %>
+                    <div class="h-full bg-slate-50 flex items-center justify-center text-slate-200 font-black text-4xl uppercase tracking-tighter rounded-3xl border-2 border-dashed border-slate-200 p-12">
+                        Audit Preview
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- GROWTH GAP SECTION -->
+    <section class="py-24 px-6 bg-white border-y border-slate-100">
+        <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-20 items-start">
+            <!-- 6 Progress Bars: Current State + Potential -->
+            <div class="bg-white p-10 pb-0 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden">
+                <div class="mb-8">
+                    <div class="inline-block px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-3">
+                        Performance Analysis
+                    </div>
+                    <h3 class="text-xl font-black text-slate-900">Your current scoring of <%= vm.hero.brand_or_domain %></h3>
+                </div>
+
+                <div class="space-y-5">
+                    <% 
+                        const healthMetrics = (vm.health_snapshot && vm.health_snapshot.metrics) ? vm.health_snapshot.metrics : [];
+                        const localSeo = healthMetrics.find(m => m.key === 'local_seo') || { score: 0, label: 'Local SEO (Google)' };
+                        const geoSignals = healthMetrics.find(m => m.key === 'geo') || { score: 0, label: 'AI Search Ready' };
+                        const trust = healthMetrics.find(m => m.key === 'trust') || { score: 0, label: 'Trust & Credibility' };
+                        const conversion = healthMetrics.find(m => m.key === 'conversion') || { score: 0, label: 'Conversion Path' };
+                        const content = healthMetrics.find(m => m.key === 'content') || { score: 0, label: 'Content' };
+                        const design = healthMetrics.find(m => m.key === 'design') || { score: 48, label: 'Design' };
+                        
+                        const metrics = [localSeo, geoSignals, trust, conversion, content, design];
+                        const overallScore = Math.round(metrics.reduce((sum, m) => sum + m.score, 0) / metrics.length);
+                        
+                        function getBarColor(score) {
+                            if (score >= 70) return 'bg-emerald-500';
+                            if (score >= 40) return 'bg-amber-500';
+                            return 'bg-red-500';
+                        }
+                        
+                        function getTextColor(score) {
+                            if (score >= 70) return 'text-emerald-600';
+                            if (score >= 40) return 'text-amber-600';
+                            return 'text-red-600';
+                        }
+                    %>
+                    
+                    <% metrics.forEach((metric, idx) => { %>
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-sm font-bold text-slate-900">
+                                <%= metric.label || `Metric ${idx + 1}` %>
+                                <% if (idx === 1) { %>
+                                <span class="ml-2 text-[9px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded font-bold uppercase">New</span>
+                                <% } %>
+                            </p>
+                            <span class="text-sm font-black <%= getTextColor(metric.score) %>"><%= metric.score %>%</span>
+                        </div>
+                        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full <%= getBarColor(metric.score) %> transition-all duration-500" style="width: <%= metric.score %>%"></div>
+                        </div>
+                    </div>
+                    <% }); %>
+
+                    <!-- Overall Score -->
+                    <div class="-mx-10 px-10 pt-5 pb-6 mt-4 border-t border-slate-200 bg-slate-50">
+                        <div class="flex items-center justify-between mb-3">
+                            <p class="text-base font-black text-slate-900">Overall Scoring</p>
+                            <span class="text-lg font-black <%= getTextColor(overallScore) %>"><%= overallScore %>%</span>
+                        </div>
+                        <div class="h-5 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full <%= getBarColor(overallScore) %> transition-all duration-500" style="width: <%= overallScore %>%"></div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-medium mt-2">Average across all metrics</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-10">
+                <h2 class="text-4xl md:text-6xl font-black text-slate-900 tracking-tight leading-tight">Every day without these fixes costs you real customers.</h2>
+                <p class="text-xl text-slate-500 font-medium leading-relaxed">
+                    Right now, there’s a clear gap between your current site and what a conversion-first version could look like.
+                    <span class="text-blue-600 font-black">We’ll show you exactly what to change and ship in 7 days—no endless revisions, no surprises.</span>
+                </p>
+                <div class="flex flex-wrap gap-8">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl font-black text-slate-900"><%= vm.growth_chart.stats.capture_time %></span>
+                        <p class="text-[10px] font-black text-slate-400 uppercase leading-tight">To capture<br/>attention</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl font-black text-slate-900"><%= vm.growth_chart.stats.wont_return %></span>
+                        <p class="text-[10px] font-black text-slate-400 uppercase leading-tight">Wont return<br/>after a bad visit</p>
+                    </div>
+                    <% if (vm.seo_local.seo_score > 0) { %>
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl font-black <%= vm.seo_local.seo_score >= 70 ? 'text-emerald-600' : vm.seo_local.seo_score >= 40 ? 'text-amber-600' : 'text-red-600' %>"><%= vm.seo_local.seo_score %>/100</span>
+                        <p class="text-[10px] font-black text-slate-400 uppercase leading-tight">Local SEO<br/>Score</p>
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SEO & LOCAL SEARCH VISIBILITY -->
+    <%
+        // Visibility tier is based on Local SEO + GEO (AI search) scores
+        const visLocalScore = (typeof localSeo !== 'undefined' && localSeo && typeof localSeo.score === 'number')
+            ? localSeo.score
+            : (vm.seo_local && typeof vm.seo_local.seo_score === 'number' ? vm.seo_local.seo_score : 0);
+        const visGeoScore = (typeof geoSignals !== 'undefined' && geoSignals && typeof geoSignals.score === 'number')
+            ? geoSignals.score
+            : 0;
+        const visComposite = Math.round((visLocalScore + visGeoScore) / 2);
+        const visTier = visComposite >= 70 ? 'good' : visComposite >= 40 ? 'ok' : 'bad';
+    %>
+    <section class="py-24 px-6 bg-gradient-to-br <%= visTier === 'good' ? 'from-slate-50 to-white border-slate-100' : visTier === 'ok' ? 'from-amber-50 to-orange-50 border-amber-100' : 'from-red-50 to-orange-50 border-red-100' %> border-y">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <div class="inline-block px-4 py-2 <%= visTier === 'good' ? 'bg-emerald-600' : visTier === 'ok' ? 'bg-amber-600' : 'bg-red-600' %> text-white rounded-full text-xs font-black uppercase tracking-wider mb-6">
+                    <%= visTier === 'good' ? '✅ Strong' : visTier === 'ok' ? '⚠️ Mixed' : '🚨 Critical' %>: Search & AI Visibility
+                </div>
+                <h2 class="text-4xl md:text-6xl font-black text-slate-900 tracking-tight mb-6">
+                    <%= visTier === 'good'
+                        ? `You're Showing Up to ${vm.hero.city} Customers Across Search & AI.`
+                        : visTier === 'ok'
+                            ? `You're Partially Visible to ${vm.hero.city} Customers—But Missing Easy Wins.`
+                            : `You're Invisible to ${vm.hero.city} Customers Everywhere.` %>
+                </h2>
+                <p class="text-xl text-slate-600 font-medium max-w-3xl mx-auto mb-8">
+                    <%= visTier === 'good'
+                        ? `Whether they search on Google, ask ChatGPT, or use Perplexity—${vm.hero.brand_or_domain} has solid visibility. Here's where to lock it in and push higher:`
+                        : visTier === 'ok'
+                            ? `Whether they search on Google, ask ChatGPT, or use Perplexity—${vm.hero.brand_or_domain} shows up sometimes, but not consistently. Here's what's holding you back:`
+                            : `Whether they search on Google, ask ChatGPT, or use Perplexity—${vm.hero.brand_or_domain} doesn't appear. Here's the damage:` %>
+                </p>
+                
+                <!-- AI Search Warning -->
+                <div class="<%= visTier === 'good' ? 'bg-slate-900' : visTier === 'ok' ? 'bg-slate-900' : 'bg-slate-900' %> text-white p-8 rounded-3xl shadow-2xl max-w-4xl mx-auto mb-12">
+                    <div class="flex items-center justify-center gap-6 mb-6 flex-wrap">
+                        <div class="flex items-center gap-3 <%= visTier === 'good' ? 'opacity-90' : visTier === 'ok' ? 'opacity-70' : 'opacity-50' %>">
+                            <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
+                                <span class="text-2xl">🤖</span>
+                            </div>
+                            <span class="font-black text-lg">ChatGPT</span>
+                        </div>
+                        <div class="flex items-center gap-3 <%= visTier === 'good' ? 'opacity-90' : visTier === 'ok' ? 'opacity-70' : 'opacity-50' %>">
+                            <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
+                                <span class="text-2xl">💎</span>
+                            </div>
+                            <span class="font-black text-lg">Gemini</span>
+                        </div>
+                        <div class="flex items-center gap-3 <%= visTier === 'good' ? 'opacity-90' : visTier === 'ok' ? 'opacity-70' : 'opacity-50' %>">
+                            <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
+                                <span class="text-2xl">🔮</span>
+                            </div>
+                            <span class="font-black text-lg">Perplexity</span>
+                        </div>
+                        <div class="flex items-center gap-3 <%= visTier === 'good' ? 'opacity-90' : visTier === 'ok' ? 'opacity-70' : 'opacity-50' %>">
+                            <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
+                                <span class="text-2xl">🔍</span>
+                            </div>
+                            <span class="font-black text-lg">Google</span>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-3xl font-black mb-3">
+                            <%= visTier === 'good'
+                                ? `✅ "${vm.hero.brand_or_domain} shows up"`
+                                : visTier === 'ok'
+                                    ? `⚠️ "${vm.hero.brand_or_domain}" is inconsistent`
+                                    : `❌ "${vm.hero.brand_or_domain} not found"` %>
+                        </p>
+                        <p class="text-lg text-slate-300 font-medium">
+                            <%= visTier === 'good'
+                                ? `When customers search for the best ${vm.hero.niche} in ${vm.hero.city}, you're in a strong position—now let's make it consistent and dominant.`
+                                : visTier === 'ok'
+                                    ? `When customers search for the best ${vm.hero.niche} in ${vm.hero.city}, you can show up—but competitors still steal the obvious wins.`
+                                    : `When AI recommends the best ${vm.hero.niche} in ${vm.hero.city}, you're not on the list.` %>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <% if (vm.seo_local.opportunities && vm.seo_local.opportunities.length > 0) { %>
+            <% const opportunityItems = (vm.improvement_backlog && vm.improvement_backlog.opportunities && vm.improvement_backlog.opportunities.length > 0) ? vm.improvement_backlog.opportunities : vm.seo_local.opportunities.map(o => ({ title: o.opportunity, impact: o.benefit, fix: o.action, category: o.category || 'visibility' })); %>
+            <div class="bg-white rounded-[3rem] border border-slate-100 shadow-sm p-10">
+                <div class="text-center mb-10">
+                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-black uppercase tracking-wider mb-4">
+                        📋 Opportunity Backlog (Next Steps)
+                    </div>
+                    <h3 class="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-3">
+                        Additional visibility improvements (after critical fixes)
+                    </h3>
+                    <p class="text-slate-500 font-medium max-w-3xl mx-auto">
+                        These aren’t “urgent blockers”, but they compound your visibility in Google and AI search. More items = a clearer picture of scope.
+                    </p>
+                    <div class="mt-6 inline-flex items-center gap-3 px-4 py-2 rounded-full bg-slate-50 border border-slate-100">
+                        <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">SHOWING</span>
+                        <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-900"><%= Math.min(8, opportunityItems.length) %> OF <%= opportunityItems.length %></span>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-5">
+                    <% opportunityItems.slice(0, 8).forEach((it, idx) => { %>
+                    <div class="rounded-3xl border border-slate-100 bg-slate-50/40 p-6">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center font-black text-slate-900">
+                                <%= idx + 1 %>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 flex-wrap mb-2">
+                                    <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">OPPORTUNITY</span>
+                                    <% if (it.category) { %>
+                                    <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">• <%= it.category.replace(/_/g, ' ') %></span>
+                                    <% } %>
+                                </div>
+                                <h4 class="text-lg font-black text-slate-900 leading-snug"><%= it.title %></h4>
+                                <p class="mt-2 text-sm text-slate-600 font-medium leading-relaxed">
+                                    <span class="text-slate-900 font-black">Why:</span> <%= it.impact %>
+                                </p>
+                                <p class="mt-1 text-sm text-slate-600 font-medium leading-relaxed">
+                                    <span class="text-slate-900 font-black">Action:</span> <%= it.fix %>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <% }); %>
+                </div>
+            </div>
+            <% } %>
+        </div>
+    </section>
+
+    <!-- MINI AUDIT BULLETS -->
+    <section class="py-24 px-6 max-w-6xl mx-auto">
+        <div class="text-center mb-20">
+            <h2 class="text-4xl md:text-5xl font-black tracking-tight mb-4">What We Found on <%= vm.hero.brand_or_domain %></h2>
+            <p class="text-slate-500 font-medium text-lg">
+                These are specific signals we detected (or could not detect) on <%= vm.hero.brand_or_domain %> — not generic advice.
+            </p>
+        </div>
+
+        <!-- PERSONALIZED HEALTH SNAPSHOT (PROGRESS BARS) -->
+        <% if (vm.health_snapshot && vm.health_snapshot.metrics && vm.health_snapshot.metrics.length > 0) { %>
+        <div class="max-w-5xl mx-auto mb-20">
+            <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 md:p-10">
+                <div class="flex items-center justify-between gap-6 flex-wrap mb-8">
+                    <div>
+                        <h3 class="text-2xl md:text-3xl font-black tracking-tight text-slate-900">Personalized Health Snapshot</h3>
+                        <p class="text-slate-500 font-medium">Scores based on your niche, your city, and what we could verify from the scrape.</p>
+                    </div>
+                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 border border-slate-100">
+                        <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">AUDIT FOR</span>
+                        <span class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-900"><%= vm.hero.city %> <%= vm.hero.niche %></span>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-8">
+                    <% vm.health_snapshot.metrics.forEach((m) => { %>
+                    <div class="rounded-3xl border border-slate-100 bg-white p-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-sm font-black text-slate-900 tracking-tight"><%= m.label %></p>
+                            <p class="text-sm font-black <%= m.text_class %>"><%= m.score %>/100</p>
+                        </div>
+                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full <%= m.bar_class %>" style="width: <%= m.score %>%"></div>
+                        </div>
+                        <p class="mt-2 text-[12px] text-slate-500 font-medium leading-relaxed"><%= m.note %></p>
+                    </div>
+                    <% }); %>
+                </div>
+            </div>
+        </div>
+        <% } %>
+
+        <div class="grid md:grid-cols-2 gap-12 md:gap-20">
+            <div class="space-y-10">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <h3 class="text-2xl font-black text-slate-900 tracking-tight">Verified strengths (detected on your site)</h3>
+                </div>
+                <ul class="space-y-4">
+                    <% vm.mini_audit.well.forEach(bullet => { %>
+                    <li class="flex gap-4 p-6 bg-white rounded-3xl border border-slate-100 text-slate-700 font-semibold shadow-sm">
+                        <span class="text-emerald-500">✓</span>
+                        <div class="flex-1">
+                            <p class="text-slate-900 font-black leading-snug"><%= bullet.title || bullet.text %></p>
+                            <% if (bullet.detail) { %>
+                            <p class="mt-1 text-[12px] text-slate-500 font-medium leading-relaxed"><%= bullet.detail %></p>
+                            <% } %>
+                        </div>
+                    </li>
+                    <% }); %>
+                </ul>
+            </div>
+            <div class="space-y-10">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center font-black">!</div>
+                    <h3 class="text-2xl font-black text-slate-900 tracking-tight">Booking blockers (detected or missing)</h3>
+                </div>
+                <ul class="space-y-4">
+                    <% vm.mini_audit.unclear.forEach(bullet => { %>
+                    <li class="flex gap-4 p-6 bg-red-50/30 rounded-3xl border border-red-100 text-slate-700 font-medium">
+                        <span class="text-red-500 font-black">•</span>
+                        <div class="flex-1">
+                            <p class="text-slate-900 font-black leading-snug"><%= bullet.title || bullet.text %></p>
+                            <% if (bullet.detail) { %>
+                            <p class="mt-1 text-[12px] text-slate-600 font-medium leading-relaxed"><%= bullet.detail %></p>
+                            <% } %>
+                        </div>
+                    </li>
+                    <% }); %>
+                </ul>
+            </div>
+        </div>
+
+        <!-- PERSONALIZED IMPROVEMENT BACKLOG -->
+        <% if (vm.improvement_backlog && vm.improvement_backlog.counts && vm.improvement_backlog.counts.total > 0) { %>
+        <div class="mt-20">
+            <div class="text-center mb-10">
+                <h3 class="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mb-3">Your Personalized Improvement Backlog</h3>
+                <p class="text-slate-500 font-medium max-w-3xl mx-auto">
+                    This shows the breadth of changes we’d make to turn your site into a booking machine — grouped by priority.
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-3 gap-6">
+                <!-- Critical -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-7">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="inline-flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                            <p class="text-sm font-black uppercase tracking-[0.2em] text-slate-700">Critical</p>
+                        </div>
+                        <p class="text-sm font-black text-slate-900"><%= vm.improvement_backlog.counts.critical %></p>
+                    </div>
+                    <div class="space-y-3">
+                        <% vm.improvement_backlog.critical.forEach((it) => { %>
+                        <div class="bg-white rounded-2xl border border-slate-100 border-l-4 border-l-red-500 p-4">
+                            <p class="font-black text-slate-900 text-sm leading-snug"><%= it.title %></p>
+                            <p class="mt-1 text-[12px] text-slate-500 font-medium leading-relaxed"><%= it.fix %></p>
+                        </div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <!-- Warning -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-7">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="inline-flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            <p class="text-sm font-black uppercase tracking-[0.2em] text-slate-700">Warning</p>
+                        </div>
+                        <p class="text-sm font-black text-slate-900"><%= vm.improvement_backlog.counts.warning %></p>
+                    </div>
+                    <div class="space-y-3">
+                        <% vm.improvement_backlog.warnings.forEach((it) => { %>
+                        <div class="bg-white rounded-2xl border border-slate-100 border-l-4 border-l-amber-500 p-4">
+                            <p class="font-black text-slate-900 text-sm leading-snug"><%= it.title %></p>
+                            <p class="mt-1 text-[12px] text-slate-500 font-medium leading-relaxed"><%= it.fix %></p>
+                        </div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <!-- Opportunity -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-7">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="inline-flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            <p class="text-sm font-black uppercase tracking-[0.2em] text-slate-700">Opportunity</p>
+                        </div>
+                        <p class="text-sm font-black text-slate-900"><%= vm.improvement_backlog.counts.opportunity %></p>
+                    </div>
+                    <div class="space-y-3">
+                        <% vm.improvement_backlog.opportunities.forEach((it) => { %>
+                        <div class="bg-white rounded-2xl border border-slate-100 border-l-4 border-l-blue-500 p-4">
+                            <p class="font-black text-slate-900 text-sm leading-snug"><%= it.title %></p>
+                            <p class="mt-1 text-[12px] text-slate-500 font-medium leading-relaxed"><%= it.fix %></p>
+                        </div>
+                        <% }); %>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <% } %>
+    </section>
+
+    <!-- MEET THE BROTHERS -->
+    <section class="px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="bg-blue-600 rounded-[4rem] p-12 text-white relative overflow-hidden my-20">
+                <div class="max-w-6xl mx-auto flex flex-col lg:flex-row items-center gap-16 relative z-10">
+                    <div class="flex flex-row gap-6">
+                        <div class="text-center group">
+                            <div class="w-36 h-36 md:w-56 md:h-56 rounded-3xl bg-slate-100 border-4 border-white overflow-hidden shadow-2xl mb-4 transition-transform group-hover:scale-[1.02]">
+                                <img src="<%= vm.team_photos.max %>" alt="Max" class="w-full h-full object-cover">
+                            </div>
+                            <p class="font-black text-xl mb-0.5">Max</p>
+                            <p class="text-[10px] font-black uppercase text-blue-200 tracking-widest">Co-Founder & Strategy</p>
+                        </div>
+                        <div class="text-center group">
+                            <div class="w-36 h-36 md:w-56 md:h-56 rounded-3xl bg-slate-100 border-4 border-white overflow-hidden shadow-2xl mb-4 transition-transform group-hover:scale-[1.02]">
+                                <img src="<%= vm.team_photos.jacob %>" alt="Jacob" class="w-full h-full object-cover">
+                            </div>
+                            <p class="font-black text-xl mb-0.5">Jacob</p>
+                            <p class="text-[10px] font-black uppercase text-blue-200 tracking-widest">Co-Founder & Design</p>
+                        </div>
+                    </div>
+                    <div class="flex-1 text-center lg:text-left">
+                        <h3 class="text-4xl md:text-5xl font-black mb-6 tracking-tight">
+                            Real help
+                            <span class="block">directly from us.</span>
+                        </h3>
+                        <% const _totalIssues = (vm.improvement_backlog && vm.improvement_backlog.counts) ? (vm.improvement_backlog.counts.critical + vm.improvement_backlog.counts.warning) : vm.top_3_issues.length; %>
+                        <% const _criticalIssues = (vm.improvement_backlog && vm.improvement_backlog.counts) ? vm.improvement_backlog.counts.critical : vm.top_3_issues.length; %>
+                        <p class="text-lg md:text-xl text-blue-50 font-medium mb-6 leading-relaxed max-w-2xl">
+                            &ldquo;Hey — we’re Max and Jacob. We took a real look at <%= vm.hero.brand_or_domain %> and found <%= _totalIssues %> high-impact issues that are holding your website back (<%= _criticalIssues %> of them critical).<br><br>
+                            No agencies, no account managers — just us working with you to turn your site into a reliable lead machine. If you want, we’ll walk you through what’s broken, what matters most, and we can help you fix it fast.&rdquo;
+                        </p>
+                        <p class="text-sm md:text-base text-blue-100 font-black mb-10 tracking-tight">— Max &amp; Jacob</p>
+                        <div class="inline-flex items-center gap-4 px-6 py-3 bg-white/10 rounded-2xl border border-white/20">
+                            <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                            <p class="text-xs font-black uppercase tracking-widest">Available for new implementations</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOP 3 FIXES: TRANSFORMATIONS -->
+    <section id="fixes" class="py-24 px-6 bg-slate-50/50 border-y border-slate-100">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-24">
+                <h2 class="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter mb-8">The Transformation Strategy</h2>
+                <p class="text-slate-500 font-medium max-w-2xl mx-auto text-xl">We don't just "fix websites." We implement these specific strategic shifts to move the needle.</p>
+            </div>
+            <% if (vm.top_3_issues.length > 0) { %>
+            <div class="grid md:grid-cols-3 gap-8">
+                <% vm.top_3_issues.slice(0, 3).forEach((fix, idx) => { %>
+                <div class="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 hover:shadow-2xl transition-all hover:-translate-y-3 group">
+                    <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mb-12 shadow-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        <% if (idx === 0) { %>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        <% } else if (idx === 1) { %>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4z" /></svg>
+                        <% } else { %>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        <% } %>
+                    </div>
+                    <h3 class="text-3xl font-black text-slate-900 mb-10 tracking-tight leading-none"><%= fix.title %></h3>
+                    <div class="space-y-10">
+                        <div>
+                            <p class="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Current Weakness</p>
+                            <p class="text-sm text-slate-800 font-bold leading-relaxed"><%= fix.why_it_matters %></p>
+                        </div>
+                        <div class="pt-8 border-t border-slate-50">
+                            <p class="text-[10px] font-black uppercase text-emerald-600 mb-3 tracking-widest">What we'd ship (7 days)</p>
+                            <% const steps = Array.isArray(fix.fix_steps) ? fix.fix_steps : [fix.fix_steps]; %>
+                            <ul class="space-y-2">
+                                <% steps.slice(0, 3).forEach((s) => { %>
+                                <li class="flex gap-3 items-start">
+                                    <span class="mt-0.5 text-emerald-600 font-black">✓</span>
+                                    <span class="text-sm text-slate-900 font-black leading-snug"><%= s %></span>
+                                </li>
+                                <% }); %>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <% }); %>
+            </div>
+            <% } else { %>
+            <div class="text-center py-20 text-slate-400">
+                <p class="text-xl">Analysis in progress or insufficient data available.</p>
+            </div>
+            <% } %>
+        </div>
+    </section>
+
+    <!-- THE 7-DAY DELIVERY -->
+    <section class="py-32 px-6 max-w-5xl mx-auto">
+        <div class="text-center mb-20">
+            <h2 class="text-5xl md:text-7xl font-black mb-8 tracking-tighter">The 7-Day Sprint</h2>
+            <p class="text-xl text-slate-500 font-medium">Fast, predictable, and professional. No endless meetings.</p>
+        </div>
+        <div class="grid gap-4">
+            <% vm.seven_day_plan.forEach((step, i) => { %>
+            <div class="flex items-start gap-10 p-10 bg-white border border-slate-100 rounded-[3rem] shadow-sm hover:shadow-2xl transition-all group">
+                <div class="flex flex-col items-center leading-none">
+                    <% const _dayNum = (step && step.day) ? step.day : (i + 1); %>
+                    <% const _dayLabel = String(_dayNum).padStart(2, '0'); %>
+                    <span class="text-7xl font-black text-slate-200 group-hover:text-slate-300 transition-colors">
+                        <%= _dayLabel %>
+                    </span>
+                </div>
+                <div class="flex-1 pt-2">
+                    <p class="text-2xl text-slate-900 font-black tracking-tight"><%= (step && step.title) ? step.title : step %></p>
+                    <% if (step && step.detail) { %>
+                    <p class="mt-2 text-slate-500 font-medium leading-relaxed"><%= step.detail %></p>
+                    <% } %>
+                </div>
+            </div>
+            <% }); %>
+        </div>
+    </section>
+
+    <!-- FINAL CTA: THE INVITATION -->
+    <section class="py-32 px-6 text-center bg-slate-950 text-white rounded-[5rem] mx-4 lg:mx-12 my-20 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+            <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 L0,100 Z" fill="url(#grad)"/><defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs></svg>
+        </div>
+        <div class="max-w-4xl mx-auto relative z-10">
+            <h2 class="text-5xl md:text-8xl font-black mb-10 tracking-tighter">Stop losing <%= vm.hero.niche %> customers to <%= vm.hero.city %> competitors.</h2>
+            <p class="text-2xl text-slate-400 font-medium mb-16 leading-relaxed">
+                We've identified exactly what's wrong with <%= vm.hero.brand_or_domain %>. Answer 5 quick questions, and Max & Jacob will send you the complete 7-day transformation plan—customized for your business.
+            </p>
+            <a href="#form" class="inline-flex px-16 py-8 bg-blue-600 text-white rounded-[2.5rem] font-black text-3xl hover:bg-blue-700 shadow-[0_35px_60px_-15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105">
+                Get My Free Plan
+            </a>
+            <div class="mt-16 pt-12 border-t border-white/10 flex flex-wrap justify-center gap-10 text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+                <span>Concept Review</span>
+                <span>Accuracy Verified</span>
+                <span>Max & Jacob Studio</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- PROPOSED NEW HOMEPAGE (PREVIEW) -->
+    <section class="py-24 bg-slate-800" id="homepage-proposal">
+        <div class="max-w-[90rem] mx-auto px-6">
+        <div class="text-center mb-10">
+            <h2 class="text-4xl md:text-6xl font-black text-white tracking-tighter mb-4">Sample Homepage Preview</h2>
+            <p class="text-slate-300 font-medium max-w-3xl mx-auto text-lg">
+                Everything will be built custom to your goals — design, copy, structure, and full implementation (including AI, automations, and tracking), based on what you want.
+            </p>
+        </div>
+
+        <%
+            const _proposalCity = (job && job.city) ? String(job.city) : 'your city';
+            const _proposalNiche = (job && job.niche) ? String(job.niche) : 'your service';
+
+            const proposalNotes = [
+                {
+                    id: 'header-menu',
+                    side: 'left',
+                    top: 6,
+                    icon: '☰',
+                    tag: 'SEO',
+                    tagClass: 'proposal-tag--seo',
+                    iconClass: 'proposal-icon--seo',
+                    benefitClass: 'proposal-benefit--seo',
+                    title: 'Clear navigation',
+                    benefit: 'More calls + better crawlability'
+                },
+                {
+                    id: 'hero',
+                    side: 'left',
+                    top: 20,
+                    icon: '🎯',
+                    tag: 'CONVERT',
+                    tagClass: 'proposal-tag--conversion',
+                    iconClass: 'proposal-icon--conversion',
+                    benefitClass: 'proposal-benefit--conversion',
+                    title: 'H1 + city + CTA',
+                    benefit: 'Higher conversion + local SEO boost'
+                },
+                {
+                    id: 'trust-fold',
+                    side: 'left',
+                    top: 36,
+                    icon: '✓',
+                    tag: 'TRUST',
+                    tagClass: 'proposal-tag--trust',
+                    iconClass: 'proposal-icon--trust',
+                    benefitClass: 'proposal-benefit--trust',
+                    title: 'Trust above fold',
+                    benefit: 'More qualified leads ready to buy'
+                },
+                {
+                    id: 'services',
+                    side: 'left',
+                    top: 54,
+                    icon: '⚙',
+                    tag: 'SEO',
+                    tagClass: 'proposal-tag--seo',
+                    iconClass: 'proposal-icon--seo',
+                    benefitClass: 'proposal-benefit--seo',
+                    title: 'Service pages',
+                    benefit: 'More organic traffic from search'
+                },
+                {
+                    id: 'local-geo',
+                    side: 'left',
+                    top: 70,
+                    tag: 'LOCAL',
+                    tagClass: 'proposal-tag--local',
+                    title: 'GEO signals (Local SEO)',
+                    what: 'Service areas + map + consistent NAP.',
+                    why: 'Strengthens local pack and “near me” relevance.',
+                    benefit: 'More leads from ' + _proposalCity + ' searches.'
+                },
+                {
+                    id: 'conversion-flow',
+                    side: 'right',
+                    top: 12,
+                    icon: '☎',
+                    tag: 'CONVERT',
+                    tagClass: 'proposal-tag--conversion',
+                    iconClass: 'proposal-icon--conversion',
+                    benefitClass: 'proposal-benefit--conversion',
+                    title: 'Multiple contact paths',
+                    benefit: 'Higher contact rate, fewer drop-offs'
+                },
+                {
+                    id: 'reviews-proof',
+                    side: 'right',
+                    top: 32,
+                    icon: '★',
+                    tag: 'TRUST',
+                    tagClass: 'proposal-tag--trust',
+                    iconClass: 'proposal-icon--trust',
+                    benefitClass: 'proposal-benefit--trust',
+                    title: 'Social proof',
+                    benefit: 'Trust + pricing power'
+                },
+                {
+                    id: 'about-team',
+                    side: 'right',
+                    top: 50,
+                    icon: '👥',
+                    tag: 'TRUST',
+                    tagClass: 'proposal-tag--trust',
+                    iconClass: 'proposal-icon--trust',
+                    benefitClass: 'proposal-benefit--trust',
+                    title: 'Team credentials',
+                    benefit: 'E-E-A-T signals for rankings'
+                },
+                {
+                    id: 'faq',
+                    side: 'right',
+                    top: 66,
+                    icon: '?',
+                    tag: 'SEO',
+                    tagClass: 'proposal-tag--seo',
+                    iconClass: 'proposal-icon--seo',
+                    benefitClass: 'proposal-benefit--seo',
+                    title: 'FAQ content',
+                    benefit: 'Removes objections + long-tail traffic'
+                },
+                {
+                    id: 'tech',
+                    side: 'right',
+                    top: 80,
+                    tag: 'TECH',
+                    tagClass: 'proposal-tag--tech',
+                    title: 'Technical SEO + tracking',
+                    what: 'Schema, Core Web Vitals, analytics + conversion tracking.',
+                    why: 'Speed + measurement makes growth repeatable.',
+                    benefit: 'Scale what works, fix what doesn’t.'
+                }
+            ];
+        %>
+
+        <div class="mx-auto" style="width: calc(100% * var(--proposalScale, 0.65));">
+            <!-- Open in browser -->
+            <div class="flex justify-center mb-3">
+                <a
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-blue-600 text-white text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-colors"
+                    href="/<%= publicSlug %>/homepage-proposal.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Open site in browser
+                    <span aria-hidden="true" class="text-[11px] opacity-90">↗</span>
+                </a>
+            </div>
+
+            <!-- Disclaimer (looks like disclaimer; no container) -->
+            <div class="mb-2 text-center">
+                <p class="mt-1 text-[12px] text-slate-300/90 font-medium leading-relaxed">
+                    This is a sample design. Images are placeholders and reviews are examples. This preview will not be published anywhere — it's only for you.
+                </p>
+            </div>
+        </div>
+
+        <!-- Full-length preview (no internal scroll). The audit page scrolls instead. -->
+        <div id="proposal-viewport" class="relative overflow-hidden" style="height: 780px; --proposalScale: 0.65;">
+            <!-- Subtle reflection/glow at the top edge of the preview (doesn't block hover) -->
+            <div class="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2" style="width: calc(100% * var(--proposalScale, 0.65));">
+                <div class="h-24 bg-gradient-to-b from-white/10 to-transparent blur-2xl opacity-80"></div>
+            </div>
+
+            <!-- Side “what matters” bubbles (desktop only) -->
+            <div class="hidden xl:block absolute inset-0 z-20">
+                <% proposalNotes.filter(n => n.side === 'left').forEach(n => { %>
+                <div class="proposal-annotation proposal-annotation--left" style="top: <%= n.top %>%; left: 0.75rem;">
+                    <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
+                    <div class="proposal-annotation__title"><%= n.title %></div>
+                    <div class="proposal-annotation__text">
+                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
+                        <p class="mt-1"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
+                        <p class="mt-1"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                    </div>
+                </div>
+                <% }); %>
+
+                <% proposalNotes.filter(n => n.side === 'right').forEach(n => { %>
+                <div class="proposal-annotation proposal-annotation--right" style="top: <%= n.top %>%; right: 0.75rem;">
+                    <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
+                    <div class="proposal-annotation__title"><%= n.title %></div>
+                    <div class="proposal-annotation__text">
+                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
+                        <p class="mt-1"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
+                        <p class="mt-1"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                    </div>
+                </div>
+                <% }); %>
+            </div>
+
+            <div id="proposal-scale" class="relative z-10" style="transform: scale(var(--proposalScale, 0.65)); transform-origin: top center;">
+                <iframe
+                    id="proposal-iframe"
+                    src="/<%= publicSlug %>/homepage-proposal.html"
+                    class="w-full border-0 block"
+                    title="Homepage Proposal Preview"
+                    loading="lazy"
+                    scrolling="no"
+                    style="height: 1200px;"
+                ></iframe>
+            </div>
+        </div>
+
+        <!-- Checklist version (mobile/tablet) -->
+        <div class="xl:hidden mt-10 max-w-3xl mx-auto proposal-checklist">
+            <h3 class="text-white text-2xl font-black tracking-tight">What makes this homepage perform</h3>
+            <p class="mt-3 text-slate-300 font-medium leading-relaxed">
+                Use this as a checklist. It covers the SEO, trust, local GEO signals, and contact flow that consistently drive calls and bookings.
+            </p>
+            <div class="mt-5 space-y-3">
+                <% proposalNotes.forEach(n => { %>
+                <details class="group bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
+                    <summary class="cursor-pointer flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="flex items-center flex-wrap gap-2">
+                                <span class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></span>
+                                <span class="text-white font-black text-base tracking-tight"><%= n.title %></span>
+                            </div>
+                        </div>
+                        <span aria-hidden="true" class="proposal-chevron text-slate-300/80 font-black text-2xl leading-none transition-transform">⌄</span>
+                    </summary>
+                    <div class="mt-4 text-slate-200/90 text-sm leading-relaxed">
+                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
+                        <p class="mt-3"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
+                        <p class="mt-3"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                    </div>
+                </details>
+                <% }); %>
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- FORM SECTION -->
+    <section class="py-24 px-6 max-w-4xl mx-auto" id="form">
+        <div class="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-100">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-black mb-4"><%= vm.form_config.headline %></h2>
+                <p class="text-slate-500 text-lg"><%= vm.form_config.subheadline %></p>
+            </div>
+
+            <form action="<%= vm.form_config.action %>" method="<%= vm.form_config.method %>">
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="flex flex-col">
+                        <label class="mb-2 text-slate-700 font-semibold text-sm">Name *</label>
+                        <input type="text" name="name" required placeholder="Your name" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="mb-2 text-slate-700 font-semibold text-sm">Email *</label>
+                        <input type="email" name="email" required placeholder="your@email.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="mb-2 text-slate-700 font-semibold text-sm">Website</label>
+                        <input type="text" name="website" value="<%= vm.form_config.prefill.website %>" placeholder="www.yoursite.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="mb-2 text-slate-700 font-semibold text-sm">Budget Range</label>
+                        <input
+                            type="text"
+                            name="budget_range"
+                            placeholder="Optional (e.g. $1k–$10k)"
+                            class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                        >
+                    </div>
+
+                    <div class="flex flex-col md:col-span-2">
+                        <label class="mb-2 text-slate-700 font-semibold text-sm">Are you the decision maker?</label>
+                        <select name="decision_maker" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                            <option value="">Select</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
+                    <%= vm.form_config.cta_button_text %>
+                </button>
+
+                <p class="text-center text-slate-400 text-sm mt-6">
+                    <%= vm.form_config.disclaimer %>
+                </p>
+            </form>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-24 border-t border-slate-100 bg-white">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-16">
+            <div class="text-center md:text-left">
+                <div class="font-black text-4xl tracking-tighter text-blue-600 mb-4">Max & Jacob</div>
+                <p class="text-md text-slate-500 font-bold max-w-xs">Building trust engines for elite local service providers.</p>
+            </div>
+            <div class="text-center md:text-right">
+                <p class="text-xs text-slate-400 font-black uppercase tracking-[0.3em] mb-4 italic">No guarantees, just clarity.</p>
+                <div class="flex justify-center md:justify-end gap-10 text-xs font-black uppercase text-slate-400 tracking-widest">
+                    <a href="https://maxandjacob.com/privacy" class="hover:text-blue-600">Privacy</a>
+                    <a href="#" class="hover:text-blue-600">Terms</a>
+                    <a href="mailto:hello@maxandjacob.com" class="hover:text-blue-600">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Typing animation for headline
+        (function() {
+            const words = ['leads,', 'bookings,', 'revenue'];
+            let wordIndex = 0;
+            let charIndex = 0;
+            let isDeleting = false;
+            const typingSpeed = 150;
+            const deletingSpeed = 100;
+            const pauseDelay = 2000;
+            
+            const typingText = document.getElementById('typingText');
+            const cursor = document.getElementById('cursor');
+            
+            function type() {
+                const currentWord = words[wordIndex];
+                
+                if (isDeleting) {
+                    typingText.textContent = currentWord.substring(0, charIndex - 1);
+                    charIndex--;
+                } else {
+                    typingText.textContent = currentWord.substring(0, charIndex + 1);
+                    charIndex++;
+                }
+                
+                if (!isDeleting && charIndex === currentWord.length) {
+                    // Pause at end of word
+                    isDeleting = true;
+                    setTimeout(type, pauseDelay);
+                    return;
+                }
+                
+                if (isDeleting && charIndex === 0) {
+                    isDeleting = false;
+                    wordIndex = (wordIndex + 1) % words.length;
+                }
+                
+                setTimeout(type, isDeleting ? deletingSpeed : typingSpeed);
+            }
+            
+            // Start typing animation
+            setTimeout(type, 500);
+        })();
+
+        // Zoom modal functionality
+        function openZoom(imageUrl) {
+            const modal = document.getElementById('zoomModal');
+            const img = document.getElementById('zoomImage');
+            img.src = imageUrl;
+            modal.classList.remove('hidden');
+        }
+
+        document.getElementById('zoomModal').addEventListener('click', function() {
+            this.classList.add('hidden');
+        });
+
+        document.getElementById('zoomImage').addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Block all clicks and interactions inside homepage proposal iframe
+        function disableIframeClicks() {
+            const iframe = document.getElementById('proposal-iframe');
+            if (!iframe) return;
+            
+            try {
+                const iframeDoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                if (!iframeDoc) return;
+                
+                // Add event listeners to block all clicks and navigation
+                iframeDoc.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }, true);
+                
+                iframeDoc.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }, true);
+                
+                // Block all link clicks
+                iframeDoc.addEventListener('mousedown', function(e) {
+                    if (e.target.tagName === 'A' || e.target.closest('a')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                }, true);
+                
+                console.log('[Audit Page] Homepage preview interactions disabled. Hover effects remain active.');
+            } catch (e) {
+                // Cross-origin or iframe not ready - ignore
+                console.log('[Audit Page] Cannot access iframe content (cross-origin or not ready)');
+            }
+        }
+        
+        // Auto-fit proposed homepage iframe height (no internal scroll), while preview is scaled down.
+        function resizeProposalIframe() {
+            const iframe = document.getElementById('proposal-iframe');
+            const viewport = document.getElementById('proposal-viewport');
+            if (!iframe) return;
+            try {
+                // Keep in sync with CSS --proposalScale (set on #proposal-viewport)
+                const scaleRaw = viewport ? getComputedStyle(viewport).getPropertyValue('--proposalScale') : '';
+                const scale = Number.parseFloat((scaleRaw || '').trim()) || 0.65;
+                const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                if (!doc) return;
+                const height = Math.max(
+                    doc.body ? doc.body.scrollHeight : 0,
+                    doc.documentElement ? doc.documentElement.scrollHeight : 0
+                );
+                if (height && Number.isFinite(height)) {
+                    iframe.style.height = `${Math.ceil(height)}px`;
+                    if (viewport) viewport.style.height = `${Math.ceil(height * scale)}px`;
+                }
+            } catch (e) {
+                // If iframe isn't ready yet, do nothing.
+            }
+        }
+
+        // Keep height correct after fonts/images settle + on resize
+        window.addEventListener('resize', () => setTimeout(resizeProposalIframe, 200));
+        window.addEventListener('load', () => {
+            const iframe = document.getElementById('proposal-iframe');
+            if (iframe) {
+                iframe.addEventListener('load', () => {
+                    // Disable clicks immediately after iframe loads
+                    disableIframeClicks();
+                    setTimeout(disableIframeClicks, 100);
+                    setTimeout(disableIframeClicks, 500);
+                    
+                    // Resize iframe
+                    resizeProposalIframe();
+                    setTimeout(resizeProposalIframe, 250);
+                    setTimeout(resizeProposalIframe, 900);
+                });
+            }
+            setTimeout(resizeProposalIframe, 200);
+            setTimeout(resizeProposalIframe, 800);
+        });
+    </script>
+</body>
+</html>

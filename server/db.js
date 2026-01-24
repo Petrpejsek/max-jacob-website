@@ -1,9 +1,19 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
+const { getSqliteDbPath } = require('./runtimePaths');
 
 // Vytvoření/připojení k databázi
 // Pro produkci použijeme persistent disk nebo vytvoříme databázi v aktuálním adresáři
-const dbPath = path.join(__dirname, '..', 'data.db');
+const dbPath = getSqliteDbPath();
+try {
+  const dir = path.dirname(dbPath);
+  if (dir && !fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Failed to ensure DB directory exists:', e.message);
+}
 console.log('Database path:', dbPath);
 console.log('Working directory:', process.cwd());
 console.log('__dirname:', __dirname);
@@ -18,14 +28,20 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CR
   } else {
     console.log('Connected to SQLite database at:', dbPath);
     // Test, jestli můžeme psát do databáze
-    db.run('PRAGMA journal_mode=WAL;', (pragmaErr) => {
-      if (pragmaErr) {
-        console.error('Error setting WAL mode:', pragmaErr);
-      } else {
-        console.log('Database WAL mode enabled');
-      }
-      initDatabase();
-    });
+  // Production-ready SQLite configuration
+  db.run('PRAGMA journal_mode=WAL;', (pragmaErr) => {
+    if (pragmaErr) {
+      console.error('Error setting WAL mode:', pragmaErr);
+    } else {
+      console.log('Database WAL mode enabled');
+    }
+  });
+  
+  db.run('PRAGMA busy_timeout=5000;', () => {}); // 5s timeout for locks
+  db.run('PRAGMA foreign_keys=ON;', () => {}); // Enforce foreign keys
+  db.run('PRAGMA synchronous=NORMAL;', () => {}); // Good balance for WAL mode
+  
+  initDatabase();
   }
 });
 
@@ -56,6 +72,19 @@ function initDatabase() {
       console.error('Error creating contact_submissions table:', err);
     } else {
       console.log('Table contact_submissions ready');
+      
+      // Add new columns if they don't exist (for existing databases)
+      db.run('ALTER TABLE contact_submissions ADD COLUMN phone TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding phone column:', alterErr);
+        }
+      });
+      
+      db.run('ALTER TABLE contact_submissions ADD COLUMN selected_week TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding selected_week column:', alterErr);
+        }
+      });
     }
   });
 
@@ -119,6 +148,7 @@ function initDatabase() {
       error_message TEXT,
       raw_dump_json TEXT,
       evidence_pack_json TEXT,
+      site_snapshot_json TEXT,
       FOREIGN KEY (preset_id) REFERENCES niche_presets(id)
     )
   `;
@@ -214,6 +244,33 @@ function initDatabase() {
           console.log('Column data_quality_warnings_json already exists or error:', alterErr.message);
         } else if (!alterErr) {
           console.log('Column data_quality_warnings_json added to audit_jobs');
+        }
+      });
+
+      // Add site_snapshot_json column (aggregated site structure + content index for future reuse)
+      db.run('ALTER TABLE audit_jobs ADD COLUMN site_snapshot_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column site_snapshot_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column site_snapshot_json added to audit_jobs');
+        }
+      });
+
+      // Add homepage_proposal_html column (generated homepage HTML for preview)
+      db.run('ALTER TABLE audit_jobs ADD COLUMN homepage_proposal_html TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column homepage_proposal_html already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column homepage_proposal_html added to audit_jobs');
+        }
+      });
+
+      // Add homepage_proposal_data_json column (template variables used for generation)
+      db.run('ALTER TABLE audit_jobs ADD COLUMN homepage_proposal_data_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column homepage_proposal_data_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column homepage_proposal_data_json added to audit_jobs');
         }
       });
     }
@@ -369,6 +426,14 @@ function initDatabase() {
       console.error('Error creating niche_presets table:', err);
     } else {
       console.log('Table niche_presets ready');
+      // Add homepage_template_path column (path to EJS template file)
+      db.run('ALTER TABLE niche_presets ADD COLUMN homepage_template_path TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column homepage_template_path already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column homepage_template_path added to niche_presets');
+        }
+      });
     }
   });
 
@@ -390,6 +455,8 @@ function initDatabase() {
       h3_json TEXT,
       h6_json TEXT,
       word_count INTEGER DEFAULT 0,
+      nav_primary_json TEXT,
+      footer_nav_links_json TEXT,
       internal_links_count INTEGER DEFAULT 0,
       outbound_links_count INTEGER DEFAULT 0,
       top_outbound_domains_json TEXT,
@@ -409,6 +476,9 @@ function initDatabase() {
       jsonld_blocks_json TEXT,
       jsonld_extracted_json TEXT,
       text_snippet TEXT,
+      content_text TEXT,
+      content_outline_json TEXT,
+      images_json TEXT,
       services_extracted_json TEXT,
       brand_assets_json TEXT,
       screenshots_json TEXT,
@@ -495,6 +565,51 @@ function initDatabase() {
           console.log('Column og_site_name added to crawled_pages');
         }
       });
+
+      // Add nav_primary_json column (menu tree; usually only homepage)
+      db.run('ALTER TABLE crawled_pages ADD COLUMN nav_primary_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column nav_primary_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column nav_primary_json added to crawled_pages');
+        }
+      });
+
+      // Add footer_nav_links_json column
+      db.run('ALTER TABLE crawled_pages ADD COLUMN footer_nav_links_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column footer_nav_links_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column footer_nav_links_json added to crawled_pages');
+        }
+      });
+
+      // Add content_text column (fuller extracted page text; NOT sent to LLM)
+      db.run('ALTER TABLE crawled_pages ADD COLUMN content_text TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column content_text already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column content_text added to crawled_pages');
+        }
+      });
+
+      // Add content_outline_json column
+      db.run('ALTER TABLE crawled_pages ADD COLUMN content_outline_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column content_outline_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column content_outline_json added to crawled_pages');
+        }
+      });
+
+      // Add images_json column
+      db.run('ALTER TABLE crawled_pages ADD COLUMN images_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column images_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column images_json added to crawled_pages');
+        }
+      });
     }
   });
 
@@ -528,6 +643,23 @@ function initDatabase() {
       console.log('Table lighthouse_reports ready');
     }
   });
+
+  // Site settings table (team photos, config)
+  const createSiteSettingsTableSQL = `
+    CREATE TABLE IF NOT EXISTS site_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  db.run(createSiteSettingsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating site_settings table:', err);
+    } else {
+      console.log('Table site_settings ready');
+    }
+  });
   
   // Test zápisu do databáze
   db.run('SELECT 1', (err) => {
@@ -543,26 +675,23 @@ function initDatabase() {
 function insertSubmission(data, callback) {
   const sql = `
     INSERT INTO contact_submissions (
-      email, name, company, website, zip_code, needs_help_with, 
-      industry, budget_range, timeline, message, 
-      has_attachment, ip_address, selected_package
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      email, name, phone, website, 
+      industry, timeline, message, 
+      ip_address, selected_package, selected_week
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
     data.email,
     data.name || null,
-    data.company || null,
+    data.phone || null,
     data.website || null,
-    data.zip_code || null,
-    typeof data.needs_help_with === 'object' ? JSON.stringify(data.needs_help_with) : data.needs_help_with,
     data.industry || null,
-    data.budget_range,
     data.timeline || null,
     data.message,
-    data.has_attachment ? 1 : 0,
     data.ip_address || null,
-    data.selected_package || null
+    data.selected_package || null,
+    data.selected_week || null
   ];
 
   db.run(sql, params, function(err) {
@@ -783,6 +912,7 @@ function getAuditJobById(id, callback) {
         row.llm_context_json = safeJsonParse(row.llm_context_json);
         row.assistant_outputs_json = safeJsonParse(row.assistant_outputs_json);
         row.data_quality_warnings_json = safeJsonParse(row.data_quality_warnings_json);
+          row.site_snapshot_json = safeJsonParse(row.site_snapshot_json);
       }
       callback(null, row);
     }
@@ -814,6 +944,8 @@ function getAuditJobBySlug(slug, callback) {
         row.llm_context_json = safeJsonParse(row.llm_context_json);
         row.assistant_outputs_json = safeJsonParse(row.assistant_outputs_json);
         row.data_quality_warnings_json = safeJsonParse(row.data_quality_warnings_json);
+        row.site_snapshot_json = safeJsonParse(row.site_snapshot_json);
+        row.homepage_proposal_data_json = safeJsonParse(row.homepage_proposal_data_json);
       }
       callback(null, row);
     }
@@ -848,7 +980,12 @@ const AUDIT_JOB_UPDATE_FIELDS = new Set([
   // LLM Assistants v1
   'llm_context_json',
   'assistant_outputs_json',
-  'data_quality_warnings_json'
+  'data_quality_warnings_json',
+  // Aggregated site snapshot for future reuse
+  'site_snapshot_json',
+  // Homepage proposal
+  'homepage_proposal_html',
+  'homepage_proposal_data_json'
 ]);
 
 function updateAuditJob(id, updates, callback) {
@@ -1099,7 +1236,8 @@ const NICHE_PRESET_UPDATE_FIELDS = new Set([
   'default_primary_cta',
   'default_secondary_cta',
   'default_city',
-  'default_bullets_json'
+  'default_bullets_json',
+  'homepage_template_path'
 ]);
 
 function updateNichePreset(id, updates, callback) {
@@ -1151,14 +1289,16 @@ function insertCrawledPage(data, callback) {
     INSERT INTO crawled_pages (
       audit_job_id, url, normalized_url, page_type, priority_score,
       title, og_site_name, meta_description, canonical_url, h1_text, h2_json, h3_json, h6_json,
-      word_count, internal_links_count, outbound_links_count, top_outbound_domains_json,
+      word_count, nav_primary_json, footer_nav_links_json,
+      internal_links_count, outbound_links_count, top_outbound_domains_json,
       forms_count, forms_summary_json, forms_detailed_json,
       ctas_json, cta_candidates_json, ctas_above_fold_json,
       has_tel_link, has_mailto_link, has_form,
       trust_signals_json, trust_extracted_json,
       nap_json, cities_json, jsonld_blocks_json, jsonld_extracted_json,
-      text_snippet, services_extracted_json, brand_assets_json, screenshots_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      text_snippet, content_text, content_outline_json, images_json,
+      services_extracted_json, brand_assets_json, screenshots_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -1176,6 +1316,8 @@ function insertCrawledPage(data, callback) {
     data.h3_json ? JSON.stringify(data.h3_json) : null,
     data.h6_json ? JSON.stringify(data.h6_json) : null,
     data.word_count || 0,
+    data.nav_primary_json ? JSON.stringify(data.nav_primary_json) : null,
+    data.footer_nav_links_json ? JSON.stringify(data.footer_nav_links_json) : null,
     data.internal_links_count || 0,
     data.outbound_links_count || 0,
     data.top_outbound_domains_json ? JSON.stringify(data.top_outbound_domains_json) : null,
@@ -1195,6 +1337,9 @@ function insertCrawledPage(data, callback) {
     data.jsonld_blocks_json ? JSON.stringify(data.jsonld_blocks_json) : null,
     data.jsonld_extracted_json ? JSON.stringify(data.jsonld_extracted_json) : null,
     data.text_snippet || null,
+    data.content_text || null,
+    data.content_outline_json ? JSON.stringify(data.content_outline_json) : null,
+    data.images_json ? JSON.stringify(data.images_json) : null,
     data.services_extracted_json ? JSON.stringify(data.services_extracted_json) : null,
     data.brand_assets_json ? JSON.stringify(data.brand_assets_json) : null,
     data.screenshots_json ? JSON.stringify(data.screenshots_json) : null
@@ -1225,6 +1370,8 @@ function getCrawledPagesByJobId(jobId, callback) {
         if (row.h2_json) row.h2_json = safeJsonParse(row.h2_json);
         if (row.h3_json) row.h3_json = safeJsonParse(row.h3_json);
         if (row.h6_json) row.h6_json = safeJsonParse(row.h6_json);
+        if (row.nav_primary_json) row.nav_primary_json = safeJsonParse(row.nav_primary_json);
+        if (row.footer_nav_links_json) row.footer_nav_links_json = safeJsonParse(row.footer_nav_links_json);
         if (row.top_outbound_domains_json) row.top_outbound_domains_json = safeJsonParse(row.top_outbound_domains_json);
         if (row.forms_summary_json) row.forms_summary_json = safeJsonParse(row.forms_summary_json);
         if (row.forms_detailed_json) row.forms_detailed_json = safeJsonParse(row.forms_detailed_json);
@@ -1237,6 +1384,8 @@ function getCrawledPagesByJobId(jobId, callback) {
         if (row.cities_json) row.cities_json = safeJsonParse(row.cities_json);
         if (row.jsonld_blocks_json) row.jsonld_blocks_json = safeJsonParse(row.jsonld_blocks_json);
         if (row.jsonld_extracted_json) row.jsonld_extracted_json = safeJsonParse(row.jsonld_extracted_json);
+        if (row.content_outline_json) row.content_outline_json = safeJsonParse(row.content_outline_json);
+        if (row.images_json) row.images_json = safeJsonParse(row.images_json);
         if (row.services_extracted_json) row.services_extracted_json = safeJsonParse(row.services_extracted_json);
         if (row.brand_assets_json) row.brand_assets_json = safeJsonParse(row.brand_assets_json);
         if (row.screenshots_json) row.screenshots_json = safeJsonParse(row.screenshots_json);
@@ -1397,6 +1546,35 @@ function initializeDefaultAssistants() {
       });
     } else {
       console.log(`AI assistants already exist (${row.count} found)`);
+      // Keep DB prompts in sync with code prompts so new runs use latest rules
+      // (No fallbacks / evidence-first / fix_steps schema, etc.)
+      db.all('SELECT id, key, prompt FROM ai_assistants WHERE is_active = 1', [], (selErr, rows2) => {
+        if (selErr) {
+          console.error('Error loading assistants for prompt sync:', selErr);
+          return;
+        }
+        const byKey = {};
+        (rows2 || []).forEach((r) => { byKey[r.key] = r; });
+        const entries = Object.entries(prompts || {});
+        let updatedCount = 0;
+        entries.forEach(([key, prompt]) => {
+          if (!key || !prompt) return;
+          const existing = byKey[key];
+          if (!existing) return;
+          if ((existing.prompt || '').trim() === String(prompt).trim()) return;
+          db.run('UPDATE ai_assistants SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?', [String(prompt), key], (updErr) => {
+            if (updErr) {
+              console.error(`Error syncing prompt for assistant ${key}:`, updErr);
+            } else {
+              updatedCount += 1;
+              console.log(`Synced prompt for assistant ${key}`);
+            }
+          });
+        });
+        if (entries.length > 0) {
+          console.log(`Assistant prompt sync scheduled (${entries.length} keys checked)`);
+        }
+      });
     }
   });
 }
