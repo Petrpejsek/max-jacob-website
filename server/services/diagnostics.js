@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const { db } = require('../db');
 const { getRepoRoot, getPersistentPublicDir, getSqliteDbPath } = require('../runtimePaths');
+const { getAllAssistantPrompts } = require('./assistantPrompts');
 
 function sha256(text) {
   return crypto.createHash('sha256').update(String(text || ''), 'utf8').digest('hex');
@@ -65,6 +66,7 @@ async function getCount(table) {
 
 async function getAssistantsSummary() {
   try {
+    const codePrompts = getAllAssistantPrompts() || {};
     const rows = await sqlAll(
       'SELECT id, key, name, model, temperature, is_active, sort_order, requires_evidence_refs, prompt FROM ai_assistants ORDER BY sort_order ASC, id ASC'
     );
@@ -73,7 +75,11 @@ async function getAssistantsSummary() {
       .filter((r) => (r.prompt || '').includes('job.city'))
       .map((r) => r.key);
 
-    const assistants = rows.map((r) => ({
+    const assistants = rows.map((r) => {
+      const codePrompt = codePrompts[r.key];
+      const codePromptSha = codePrompt ? sha256(codePrompt) : null;
+      const dbPromptSha = sha256(r.prompt || '');
+      return {
       id: r.id,
       key: r.key,
       name: r.name,
@@ -83,13 +89,22 @@ async function getAssistantsSummary() {
       sort_order: r.sort_order,
       requires_evidence_refs: r.requires_evidence_refs,
       prompt_length: (r.prompt || '').length,
-      prompt_sha256: sha256(r.prompt || '')
-    }));
+        prompt_sha256: dbPromptSha,
+        code_prompt_sha256: codePromptSha,
+        code_prompt_missing: !codePrompt,
+        prompt_matches_code: codePromptSha ? (codePromptSha === dbPromptSha) : null
+      };
+    });
+
+    const drift = assistants
+      .filter((a) => a.code_prompt_missing === false && a.prompt_matches_code === false)
+      .map((a) => a.key);
 
     return {
       count_total: rows.length,
       count_active: rows.filter((r) => Number(r.is_active) === 1).length,
       bad_job_city_refs: badRefs,
+      prompt_drift_keys: drift,
       assistants
     };
   } catch (e) {
@@ -139,6 +154,16 @@ async function collectDiagnostics() {
   const publicDir = getPersistentPublicDir();
   const dbPath = getSqliteDbPath();
 
+  // Code prompts summary (source of truth)
+  const codePrompts = getAllAssistantPrompts() || {};
+  const codePromptSummary = Object.keys(codePrompts)
+    .sort()
+    .map((k) => ({
+      key: k,
+      length: String(codePrompts[k] || '').length,
+      sha256: sha256(codePrompts[k] || '')
+    }));
+
   const env = {
     NODE_ENV: process.env.NODE_ENV || null,
     APP_URL: process.env.APP_URL || null,
@@ -185,6 +210,10 @@ async function collectDiagnostics() {
       schema,
       assistants: await getAssistantsSummary(),
       prompt_templates: await getPromptTemplatesSummary()
+    },
+    prompts_code: {
+      count: codePromptSummary.length,
+      items: codePromptSummary
     },
     playwright: await getPlaywrightDiagnostics()
   };
