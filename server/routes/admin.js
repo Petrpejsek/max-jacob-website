@@ -367,34 +367,56 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
       return res.status(500).send('Error updating audit job: ' + err.message);
     }
     
-    console.log('[AUDIT PROCESS] Input updated successfully, queueing pipeline...');
-    
-    // Run pipeline in background (no await - respond immediately)
-    auditPipeline.processAuditJob(id, {
-      settings: {
-        ux_name: req.body.ux_name,
-        ux_model: req.body.ux_model,
-        ux_temperature: Number(req.body.ux_temperature),
-        web_name: req.body.web_name,
-        web_model: req.body.web_model,
-        web_temperature: Number(req.body.web_temperature),
-        email_name: req.body.email_name,
-        email_model: req.body.email_model,
-        email_temperature: Number(req.body.email_temperature)
-      },
-      promptOverrides: {
-        ux: req.body.prompt_ux,
-        web: req.body.prompt_web,
-        email: req.body.prompt_email
+    console.log('[AUDIT PROCESS] Input updated successfully; marking job as scraping...');
+
+    // IMPORTANT: set status immediately so the reloaded admin page shows the loader
+    // and starts polling even if the pipeline starts a moment later.
+    updateAuditJob(id, { status: 'scraping', error_message: null }, (statusErr) => {
+      if (statusErr) {
+        console.error('[AUDIT PROCESS] Failed to set status=scraping for job', id, statusErr);
+        // continue anyway
       }
-    }).then(() => {
-      console.log('[AUDIT PROCESS] Pipeline completed successfully for job', id);
-    }).catch((pipelineErr) => {
-      console.error('[AUDIT PROCESS] Pipeline error for job', id, ':', pipelineErr);
+
+      console.log('[AUDIT PROCESS] Queueing pipeline for job', id);
+
+      const pipelineConfig = {
+        settings: {
+          ux_name: req.body.ux_name,
+          ux_model: req.body.ux_model,
+          ux_temperature: Number(req.body.ux_temperature),
+          web_name: req.body.web_name,
+          web_model: req.body.web_model,
+          web_temperature: Number(req.body.web_temperature),
+          email_name: req.body.email_name,
+          email_model: req.body.email_model,
+          email_temperature: Number(req.body.email_temperature)
+        },
+        promptOverrides: {
+          ux: req.body.prompt_ux,
+          web: req.body.prompt_web,
+          email: req.body.prompt_email
+        }
+      };
+
+      // Run pipeline in a concurrency-limited queue (Playwright + LLM is heavy)
+      auditQueue
+        .enqueue(() => auditPipeline.processAuditJob(id, pipelineConfig), Number(id))
+        .then(() => {
+          console.log('[AUDIT PROCESS] Pipeline completed successfully for job', id);
+        })
+        .catch((pipelineErr) => {
+          console.error('[AUDIT PROCESS] Pipeline error for job', id, ':', pipelineErr);
+          // Best-effort: ensure UI sees failure
+          updateAuditJob(
+            id,
+            { status: 'failed', error_message: String(pipelineErr && pipelineErr.message ? pipelineErr.message : pipelineErr) },
+            () => {}
+          );
+        });
+
+      // Redirect immediately; page will show loader because status is scraping
+      res.redirect(`/admin/audits/${id}`);
     });
-    
-    // Respond immediately (job runs in background)
-    res.redirect(`/admin/audits/${id}`);
   });
 });
 
