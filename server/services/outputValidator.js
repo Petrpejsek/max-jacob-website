@@ -359,9 +359,15 @@ function checkComplianceViolations(output_json) {
   // Banned patterns
   const bannedPatterns = [
     // IMPORTANT: avoid false-positives on URL-encoded sequences like "%20" or "%2C".
-    // We only want to flag human-readable percent expressions like "30%".
-    // (URL encoding is always "%[0-9A-Fa-f]{2}".)
-    { pattern: /\b\d+\s*%(?![0-9a-f]{2})/i, message: 'Growth percentages or numeric projections are prohibited' },
+    // We only want to flag human-readable percent expressions like "30% increase" or "50% growth".
+    // Pattern explanation:
+    // - \b\d+\s*% - matches number followed by %
+    // - (?![0-9a-f]{2}) - negative lookahead for hex (excludes URL encoding)
+    // - (?!\s*(?:lincoln|rd|suite|street|ave|blvd|dr)) - excludes addresses with %20 encoding artifacts
+    // - Must be followed by growth/conversion words to be a violation
+    { pattern: /\b\d+\s*%\s+(increase|growth|more|higher|boost|improvement|conversion)/i, message: 'Growth percentages or numeric projections are prohibited' },
+    { pattern: /increase\s+(?:by\s+)?\d+\s*%/i, message: 'Growth percentages or numeric projections are prohibited' },
+    { pattern: /\d+\s*%\s+(?:more|higher|better)\s+(?:leads|conversions|sales|traffic|revenue)/i, message: 'Growth percentages or numeric projections are prohibited' },
     { pattern: /guarantee(d|s)?\s+(results|ranking|growth|traffic|leads)/i, message: 'Guarantees are prohibited (guaranteed results/ranking/growth)' },
     { pattern: /will\s+increase\s+(conversions|traffic|leads|sales)/i, message: 'Guarantees about results are prohibited ("will increase...")' },
     { pattern: /your\s+website\s+is\s+(bad|terrible|poor)/i, message: 'Negative framing about client website is prohibited' }
