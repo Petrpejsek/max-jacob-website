@@ -600,6 +600,13 @@
             <div>
                 <h1>Audit Job #<%= auditJob.id %></h1>
                 <div class="small">Status: <span class="badge"><%= auditJob.status %></span></div>
+                <% if (String(auditJob.status || '').toLowerCase() === 'failed') { %>
+                    <div style="margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: #2d1f1f; border: 1px solid #5d2d2d; color: #ffb3b3;">
+                        <div style="font-weight: 700; margin-bottom: 6px;">Last run failed</div>
+                        <div style="white-space: pre-wrap; line-height: 1.4;"><%= auditJob.error_message || 'Unknown error (no error_message stored)' %></div>
+                        <div class="small" style="margin-top: 8px; color: #ffcccc;">Tip: scroll to “Pipeline Log” below for details.</div>
+                    </div>
+                <% } %>
             </div>
             <div class="nav-actions">
                 <button class="btn btn-primary" type="button" onclick="copyScrapedAll(event)" title="Copy all scraped data for this job">Copy Scraped All</button>
@@ -2233,8 +2240,16 @@ STYLE:
                     
                     updateLoadingStatus(statusInfo.text, statusInfo.progress);
                     
-                    // If job is done (ready or failed), reload page
-                    if (data.status === 'ready' || data.status === 'failed') {
+                    if (data.status === 'failed') {
+                        // Show the server-stored error to the user (otherwise it looks like "nothing happened")
+                        const msg = (data && data.error_message) ? String(data.error_message) : 'Unknown error';
+                        hideLoading();
+                        alert('Audit failed: ' + msg);
+                        // Reload so the error banner + Pipeline Log reflect the latest failure
+                        window.location.reload();
+                        return;
+                    }
+                    if (data.status === 'ready') {
                         hideLoading();
                         setTimeout(() => {
                             window.location.reload();

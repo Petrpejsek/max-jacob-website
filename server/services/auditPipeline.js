@@ -2765,10 +2765,14 @@ async function processAuditJob(jobId, options = {}) {
           resolve(result);
         });
       });
+
+      if (!preset) {
+        throw new Error(`Selected preset not found (preset_id=${job.preset_id}). Please reselect/create the preset and try again.`);
+      }
       
       // Apply preset niche only (city should ALWAYS be scraped, never from preset)
       const updates = {};
-      if (preset.slug) {
+      if (preset && preset.slug) {
         updates.niche = preset.slug;
       }
       // REMOVED: preset.default_city override - city must be detected from scraped data
