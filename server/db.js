@@ -1073,6 +1073,32 @@ function updateAuditJob(id, updates, callback) {
   });
 }
 
+// Contact Submissions: delete
+function deleteSubmission(id, callback) {
+  db.run('DELETE FROM contact_submissions WHERE id = ?', [id], function(err) {
+    if (err) {
+      console.error('[DB] Error deleting contact_submission', id, ':', err.message);
+      return callback(err);
+    }
+    
+    console.log('[DB] Successfully deleted contact_submission', id, '- changes:', this.changes);
+    callback(null, { changes: this.changes });
+  });
+}
+
+// Web Project Submissions: delete
+function deleteWebProjectSubmission(id, callback) {
+  db.run('DELETE FROM web_project_submissions WHERE id = ?', [id], function(err) {
+    if (err) {
+      console.error('[DB] Error deleting web_project_submission', id, ':', err.message);
+      return callback(err);
+    }
+    
+    console.log('[DB] Successfully deleted web_project_submission', id, '- changes:', this.changes);
+    callback(null, { changes: this.changes });
+  });
+}
+
 // Audit Jobs: delete (cascade delete related data)
 function deleteAuditJob(id, callback) {
   // Delete in sequence to handle foreign keys properly
@@ -1914,9 +1940,11 @@ module.exports = {
   insertSubmission,
   getAllSubmissions,
   getSubmissionById,
+  deleteSubmission,
   insertWebProjectSubmission,
   getAllWebProjectSubmissions,
   getWebProjectSubmissionById,
+  deleteWebProjectSubmission,
   createAuditJob,
   getAuditJobs,
   getAuditJobById,

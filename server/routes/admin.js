@@ -7,8 +7,10 @@ const { getPersistentPublicDir } = require('../runtimePaths');
 const {
   getAllSubmissions,
   getSubmissionById,
+  deleteSubmission,
   getAllWebProjectSubmissions,
   getWebProjectSubmissionById,
+  deleteWebProjectSubmission,
   createAuditJob,
   getAuditJobs,
   getAuditJobById,
@@ -606,6 +608,56 @@ router.delete('/api/audits/:id', requireAdmin, (req, res) => {
     }
     
     console.log('[ADMIN] Successfully deleted audit job', id);
+    res.json({ success: true, deleted_id: Number(id) });
+  });
+});
+
+// DELETE /admin/api/contact-submissions/:id - Delete contact submission
+router.delete('/api/contact-submissions/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  deleteSubmission(id, (err, result) => {
+    if (err) {
+      console.error('Error deleting contact submission:', err);
+      return res.status(500).json({ 
+        error: 'delete_failed',
+        message: 'Failed to delete contact submission: ' + err.message 
+      });
+    }
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ 
+        error: 'not_found',
+        message: 'Contact submission not found' 
+      });
+    }
+    
+    console.log('[ADMIN] Successfully deleted contact submission', id);
+    res.json({ success: true, deleted_id: Number(id) });
+  });
+});
+
+// DELETE /admin/api/web-project-submissions/:id - Delete web project submission
+router.delete('/api/web-project-submissions/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  deleteWebProjectSubmission(id, (err, result) => {
+    if (err) {
+      console.error('Error deleting web project submission:', err);
+      return res.status(500).json({ 
+        error: 'delete_failed',
+        message: 'Failed to delete web project submission: ' + err.message 
+      });
+    }
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ 
+        error: 'not_found',
+        message: 'Web project submission not found' 
+      });
+    }
+    
+    console.log('[ADMIN] Successfully deleted web project submission', id);
     res.json({ success: true, deleted_id: Number(id) });
   });
 });

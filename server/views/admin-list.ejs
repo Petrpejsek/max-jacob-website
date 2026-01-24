@@ -177,6 +177,47 @@
             opacity: 0.5;
         }
 
+        .btn-delete {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(220, 38, 38, 0.1);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            color: #ff6b6b;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .btn-delete:hover {
+            background: rgba(220, 38, 38, 0.2);
+            border-color: rgba(220, 38, 38, 0.5);
+        }
+
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+        }
+
+        tr.deleting {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8rem;
@@ -251,7 +292,7 @@
                     </thead>
                     <tbody>
                         <% contactSubmissions.forEach(submission => { %>
-                            <tr>
+                            <tr id="contact-row-<%= submission.id %>">
                                 <td>#<%= submission.id %></td>
                                 <td><%= new Date(submission.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
                                 <td><%= submission.email %></td>
@@ -267,7 +308,10 @@
                                     <% } %>
                                 </td>
                                 <td>
-                                    <a href="/admin/contact/<%= submission.id %>" class="view-link">View →</a>
+                                    <div class="action-buttons">
+                                        <a href="/admin/contact/<%= submission.id %>" class="view-link">View →</a>
+                                        <button class="btn-delete btn-delete-contact" data-id="<%= submission.id %>" data-email="<%= submission.email || '' %>">Delete</button>
+                                    </div>
                                 </td>
                             </tr>
                         <% }); %>
@@ -298,14 +342,17 @@
                     </thead>
                     <tbody>
                         <% webProjectSubmissions.forEach(submission => { %>
-                            <tr>
+                            <tr id="web-project-row-<%= submission.id %>">
                                 <td>#<%= submission.id %></td>
                                 <td><%= new Date(submission.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
                                 <td><%= submission.company_name || '-' %></td>
                                 <td><%= submission.current_website || '-' %></td>
                                 <td><%= submission.deadline || '-' %></td>
                                 <td>
-                                    <a href="/admin/web-project/<%= submission.id %>" class="view-link">View →</a>
+                                    <div class="action-buttons">
+                                        <a href="/admin/web-project/<%= submission.id %>" class="view-link">View →</a>
+                                        <button class="btn-delete btn-delete-web-project" data-id="<%= submission.id %>" data-company="<%= submission.company_name || '' %>">Delete</button>
+                                    </div>
                                 </td>
                             </tr>
                         <% }); %>
@@ -360,6 +407,157 @@
             <% } %>
         </div>
     </div>
+
+    <script>
+        // Attach event listeners to all delete buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            // Contact submissions delete
+            const deleteContactButtons = document.querySelectorAll('.btn-delete-contact');
+            deleteContactButtons.forEach(button => {
+                button.addEventListener('click', async function() {
+                    const id = this.getAttribute('data-id');
+                    const email = this.getAttribute('data-email');
+                    
+                    // First confirmation
+                    const emailDisplay = email ? `\n\nEmail: ${email}` : '';
+                    const confirmFirst = confirm(`Are you sure you want to delete contact submission #${id}?${emailDisplay}`);
+                    
+                    if (!confirmFirst) {
+                        return;
+                    }
+                    
+                    // Second confirmation
+                    const confirmSecond = confirm(`This will permanently delete contact submission #${id}.\n\nThis action cannot be undone. Continue?`);
+                    
+                    if (!confirmSecond) {
+                        return;
+                    }
+                    
+                    // Show deleting state
+                    const row = document.getElementById('contact-row-' + id);
+                    if (row) {
+                        row.classList.add('deleting');
+                    }
+                    
+                    try {
+                        const response = await fetch('/admin/api/contact-submissions/' + id, {
+                            method: 'DELETE',
+                            headers: {
+                                'Accept': 'application/json'
+                            },
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (response.status === 401) {
+                            alert('Session expired. Please log in again.');
+                            window.location.href = '/admin/login';
+                            return;
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.message || 'Failed to delete contact submission');
+                        }
+                        
+                        // Successfully deleted - remove row after animation
+                        if (row) {
+                            setTimeout(() => {
+                                row.remove();
+                                
+                                // Check if table is now empty
+                                const tbody = row.closest('tbody');
+                                if (tbody && tbody.children.length === 0) {
+                                    window.location.reload();
+                                }
+                            }, 300);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error deleting contact submission:', error);
+                        alert('Failed to delete contact submission: ' + error.message);
+                        
+                        if (row) {
+                            row.classList.remove('deleting');
+                        }
+                    }
+                });
+            });
+
+            // Web project submissions delete
+            const deleteWebProjectButtons = document.querySelectorAll('.btn-delete-web-project');
+            deleteWebProjectButtons.forEach(button => {
+                button.addEventListener('click', async function() {
+                    const id = this.getAttribute('data-id');
+                    const company = this.getAttribute('data-company');
+                    
+                    // First confirmation
+                    const companyDisplay = company ? `\n\nCompany: ${company}` : '';
+                    const confirmFirst = confirm(`Are you sure you want to delete web project submission #${id}?${companyDisplay}`);
+                    
+                    if (!confirmFirst) {
+                        return;
+                    }
+                    
+                    // Second confirmation
+                    const confirmSecond = confirm(`This will permanently delete web project submission #${id}.\n\nThis action cannot be undone. Continue?`);
+                    
+                    if (!confirmSecond) {
+                        return;
+                    }
+                    
+                    // Show deleting state
+                    const row = document.getElementById('web-project-row-' + id);
+                    if (row) {
+                        row.classList.add('deleting');
+                    }
+                    
+                    try {
+                        const response = await fetch('/admin/api/web-project-submissions/' + id, {
+                            method: 'DELETE',
+                            headers: {
+                                'Accept': 'application/json'
+                            },
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (response.status === 401) {
+                            alert('Session expired. Please log in again.');
+                            window.location.href = '/admin/login';
+                            return;
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.message || 'Failed to delete web project submission');
+                        }
+                        
+                        // Successfully deleted - remove row after animation
+                        if (row) {
+                            setTimeout(() => {
+                                row.remove();
+                                
+                                // Check if table is now empty
+                                const tbody = row.closest('tbody');
+                                if (tbody && tbody.children.length === 0) {
+                                    window.location.reload();
+                                }
+                            }, 300);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error deleting web project submission:', error);
+                        alert('Failed to delete web project submission: ' + error.message);
+                        
+                        if (row) {
+                            row.classList.remove('deleting');
+                        }
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
 
