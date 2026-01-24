@@ -434,6 +434,41 @@ function initDatabase() {
           console.log('Column homepage_template_path added to niche_presets');
         }
       });
+
+      // Ensure default presets exist (production parity with local).
+      // This does NOT migrate audits; it only guarantees baseline presets.
+      db.get('SELECT id FROM niche_presets WHERE slug = ?', ['plumbing'], (selErr, existing) => {
+        if (selErr) {
+          console.error('[PRESETS] Error checking for plumbing preset:', selErr);
+          return;
+        }
+        if (existing && existing.id) {
+          console.log('[PRESETS] Default preset plumbing already exists; skipping seed');
+          return;
+        }
+
+        console.log('[PRESETS] Seeding default preset: plumbing');
+        // Local DB currently has exactly one preset: plumbing (empty defaults, bullets [])
+        createNichePreset(
+          {
+            slug: 'plumbing',
+            display_name: 'Plumbing',
+            concept_image_url: null,
+            default_headline: null,
+            default_primary_cta: null,
+            default_secondary_cta: null,
+            default_city: null,
+            default_bullets_json: []
+          },
+          (seedErr, result) => {
+            if (seedErr) {
+              console.error('[PRESETS] Failed to seed default preset plumbing:', seedErr);
+            } else {
+              console.log('[PRESETS] Seeded default preset plumbing with id:', result?.id);
+            }
+          }
+        );
+      });
     }
   });
 

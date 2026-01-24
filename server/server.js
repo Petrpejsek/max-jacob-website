@@ -3,6 +3,8 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const session = require('express-session');
 const fs = require('fs');
+const { validateSessionSecret, getHelmetConfig } = require('./middleware/security');
+const { getSqliteDbPath } = require('./runtimePaths');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +15,12 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('ADMIN_PASSWORD loaded:', process.env.ADMIN_PASSWORD ? 'YES (length: ' + process.env.ADMIN_PASSWORD.length + ')' : 'NO');
 console.log('Working directory:', process.cwd());
 console.log('__dirname:', __dirname);
+
+// Trust proxy (Render / reverse proxy) - must be set BEFORE sessions/cookies
+app.set('trust proxy', 1);
+
+// Validate critical env vars before starting (production)
+validateSessionSecret();
 
 // Security headers (Helmet)
 app.use(getHelmetConfig());
@@ -27,7 +35,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 7 * 24 * 60 * 60 * 1000
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
   }
 }));
 
@@ -37,9 +48,6 @@ app.set('views', path.join(__dirname, 'views'));
 // Force-disable template caching so local edits in .ejs always reflect immediately,
 // even if NODE_ENV or Express defaults change unexpectedly.
 app.set('view cache', false);
-
-// Trust proxy
-app.set('trust proxy', 1);
 
 // Request logging - ÚPLNĚ NA ZAČÁTKU
 app.use((req, res, next) => {
