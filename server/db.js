@@ -1073,6 +1073,72 @@ function updateAuditJob(id, updates, callback) {
   });
 }
 
+// Audit Jobs: delete (cascade delete related data)
+function deleteAuditJob(id, callback) {
+  // Delete in sequence to handle foreign keys properly
+  // 1. Delete assistant runs (uses job_id)
+  db.run('DELETE FROM assistant_runs WHERE job_id = ?', [id], (err1) => {
+    if (err1) {
+      console.error('[DB] Error deleting assistant_runs for job', id, ':', err1.message);
+      return callback(err1);
+    }
+    
+    // 2. Delete lighthouse reports (uses audit_job_id)
+    db.run('DELETE FROM lighthouse_reports WHERE audit_job_id = ?', [id], (err2) => {
+      if (err2) {
+        console.error('[DB] Error deleting lighthouse_reports for job', id, ':', err2.message);
+        return callback(err2);
+      }
+      
+      // 3. Delete crawled pages (uses audit_job_id)
+      db.run('DELETE FROM crawled_pages WHERE audit_job_id = ?', [id], (err3) => {
+        if (err3) {
+          console.error('[DB] Error deleting crawled_pages for job', id, ':', err3.message);
+          return callback(err3);
+        }
+        
+        // 4. Delete audit run logs (uses job_id)
+        db.run('DELETE FROM audit_run_logs WHERE job_id = ?', [id], (err4) => {
+          if (err4) {
+            console.error('[DB] Error deleting audit_run_logs for job', id, ':', err4.message);
+            return callback(err4);
+          }
+          
+          // 5. Finally delete the audit job itself
+          db.run('DELETE FROM audit_jobs WHERE id = ?', [id], function(err5) {
+            if (err5) {
+              console.error('[DB] Error deleting audit_job', id, ':', err5.message);
+              return callback(err5);
+            }
+            
+            console.log('[DB] Successfully deleted audit job', id, '- changes:', this.changes);
+            callback(null, { changes: this.changes });
+          });
+        });
+      });
+    });
+  });
+}
+
+// Audit Jobs: find by URL (for duplicate detection)
+function getAuditJobByUrl(url, callback) {
+  const sql = `
+    SELECT id, niche, city, company_name, created_at, status
+    FROM audit_jobs
+    WHERE input_url = ?
+    ORDER BY created_at DESC
+  `;
+  
+  db.all(sql, [url], (err, rows) => {
+    if (err) {
+      console.error('[DB] Error finding audit jobs by URL:', err.message);
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
 // Audit Run Logs
 function appendAuditRunLog(jobId, step, level, message, callback) {
   const sql = `
@@ -1856,6 +1922,8 @@ module.exports = {
   getAuditJobById,
   getAuditJobBySlug,
   updateAuditJob,
+  deleteAuditJob,
+  getAuditJobByUrl,
   appendAuditRunLog,
   getAuditRunLogs,
   getActivePromptTemplates,

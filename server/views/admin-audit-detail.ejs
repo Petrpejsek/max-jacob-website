@@ -302,6 +302,96 @@
             gap: 8px;
         }
 
+        /* Duplicate Detection Modal */
+        .duplicate-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .duplicate-modal.active {
+            display: flex;
+        }
+
+        .duplicate-modal-content {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .duplicate-modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #ff7ee7;
+            margin-bottom: 16px;
+        }
+
+        .duplicate-modal-text {
+            color: #d1d1e0;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .duplicate-list {
+            background: #23233a;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .duplicate-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #2d2d44;
+            border-radius: 6px;
+            border-left: 3px solid #6a82fb;
+        }
+
+        .duplicate-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .duplicate-item-id {
+            font-weight: 600;
+            color: #6a82fb;
+            margin-bottom: 4px;
+        }
+
+        .duplicate-item-details {
+            font-size: 0.9rem;
+            color: #b6b6d6;
+        }
+
+        .duplicate-modal-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-danger {
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            color: #ff6b6b;
+        }
+
+        .btn-danger:hover {
+            background: rgba(220, 38, 38, 0.25);
+            border-color: rgba(220, 38, 38, 0.5);
+        }
+
         .logs {
             background: #0a0a12;
             border: 1px solid #2d2d44;
@@ -2306,6 +2396,15 @@ STYLE:
                             return;
                         }
 
+                        // Check if duplicate was detected
+                        const data = await resp.json();
+                        
+                        if (data.duplicate_detected) {
+                            hideLoading();
+                            showDuplicateModal(data.duplicate_jobs, data.current_job_id);
+                            return;
+                        }
+
                         // Success: keep loader + polling. The status should become 'scraping' shortly.
                     } catch (err) {
                         hideLoading();
@@ -2363,6 +2462,26 @@ STYLE:
             <div class="lightbox-actions">
                 <button class="btn" id="openNewTabBtn">Open in new tab</button>
                 <button class="btn" onclick="closeLightbox()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Detection Modal -->
+    <div class="duplicate-modal" id="duplicateModal">
+        <div class="duplicate-modal-content">
+            <div class="duplicate-modal-title">⚠️ Duplicate URL Detected</div>
+            <div class="duplicate-modal-text">
+                An audit already exists for this URL:
+            </div>
+            <div class="duplicate-list" id="duplicateList">
+                <!-- Duplicate items will be inserted here -->
+            </div>
+            <div class="duplicate-modal-text" style="margin-bottom: 24px;">
+                Do you want to cancel this audit, or continue anyway and create a duplicate?
+            </div>
+            <div class="duplicate-modal-actions">
+                <button class="btn btn-danger" id="cancelAuditBtn">Cancel & Delete This Audit</button>
+                <button class="btn btn-primary" id="continueAnywayBtn">Continue Anyway</button>
             </div>
         </div>
     </div>
@@ -3438,6 +3557,125 @@ STYLE:
             if (genBtn) genBtn.addEventListener('click', regenerate);
             if (copyBtn) copyBtn.addEventListener('click', copy);
         })();
+
+        // Duplicate Detection Modal Functions
+        function showDuplicateModal(duplicateJobs, currentJobId) {
+            const modal = document.getElementById('duplicateModal');
+            const duplicateList = document.getElementById('duplicateList');
+            
+            // Populate duplicate list
+            duplicateList.innerHTML = '';
+            duplicateJobs.forEach(job => {
+                const item = document.createElement('div');
+                item.className = 'duplicate-item';
+                
+                const idDiv = document.createElement('div');
+                idDiv.className = 'duplicate-item-id';
+                idDiv.textContent = `Audit #${job.id}`;
+                
+                const detailsDiv = document.createElement('div');
+                detailsDiv.className = 'duplicate-item-details';
+                const parts = [];
+                if (job.niche) parts.push(`Niche: ${job.niche}`);
+                if (job.city) parts.push(`City: ${job.city}`);
+                if (job.company_name) parts.push(`Company: ${job.company_name}`);
+                if (job.status) parts.push(`Status: ${job.status}`);
+                detailsDiv.textContent = parts.join(' • ');
+                
+                item.appendChild(idDiv);
+                item.appendChild(detailsDiv);
+                duplicateList.appendChild(item);
+            });
+            
+            // Show modal
+            modal.classList.add('active');
+            
+            // Set up button handlers
+            const cancelBtn = document.getElementById('cancelAuditBtn');
+            const continueBtn = document.getElementById('continueAnywayBtn');
+            
+            // Remove old event listeners by cloning buttons
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            const newContinueBtn = continueBtn.cloneNode(true);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+            continueBtn.parentNode.replaceChild(newContinueBtn, continueBtn);
+            
+            // Cancel & Delete button
+            newCancelBtn.addEventListener('click', async () => {
+                const confirmDelete = confirm(`Delete audit #${currentJobId} and return to audit list?`);
+                if (!confirmDelete) return;
+                
+                modal.classList.remove('active');
+                showLoading('Deleting audit...');
+                
+                try {
+                    const resp = await fetch(`/admin/api/audits/${currentJobId}`, {
+                        method: 'DELETE',
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (resp.status === 401) {
+                        hideLoading();
+                        window.location.href = '/admin/login';
+                        return;
+                    }
+                    
+                    const data = await resp.json();
+                    
+                    if (!resp.ok) {
+                        throw new Error(data.message || 'Failed to delete audit');
+                    }
+                    
+                    // Redirect to audit list
+                    window.location.href = '/admin/audits';
+                } catch (err) {
+                    hideLoading();
+                    alert('Failed to delete audit: ' + err.message);
+                }
+            });
+            
+            // Continue Anyway button
+            newContinueBtn.addEventListener('click', async () => {
+                modal.classList.remove('active');
+                showLoading('Processing audit (forcing)...');
+                
+                try {
+                    const fd = new FormData(processForm);
+                    const body = new URLSearchParams();
+                    for (const [k, v] of fd.entries()) {
+                        body.append(k, String(v));
+                    }
+                    // Add force flag
+                    body.append('force', 'true');
+                    
+                    const resp = await fetch(processForm.action, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json' },
+                        body,
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (resp.status === 401) {
+                        hideLoading();
+                        window.location.href = '/admin/login';
+                        return;
+                    }
+                    
+                    if (!resp.ok) {
+                        const text = await resp.text().catch(() => '');
+                        hideLoading();
+                        alert('Process failed (HTTP ' + resp.status + '): ' + (text || 'Unknown error'));
+                        return;
+                    }
+                    
+                    // Success: keep loader + polling
+                } catch (err) {
+                    hideLoading();
+                    alert('Process failed: ' + err.message);
+                }
+            });
+        }
 
     </script>
 </body>

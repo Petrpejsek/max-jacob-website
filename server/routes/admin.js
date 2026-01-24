@@ -13,6 +13,8 @@ const {
   getAuditJobs,
   getAuditJobById,
   updateAuditJob,
+  deleteAuditJob,
+  getAuditJobByUrl,
   getAuditRunLogs,
   getActivePromptTemplates,
   createPromptTemplateVersion,
@@ -368,7 +370,8 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
   console.log('[AUDIT PROCESS] Body:', {
     input_url: req.body.input_url,
     preset_id: req.body.preset_id,
-    brand_logo_url: req.body.brand_logo_url ? 'provided' : 'empty'
+    brand_logo_url: req.body.brand_logo_url ? 'provided' : 'empty',
+    force: req.body.force || false
   });
 
   const inputUpdate = {
@@ -398,65 +401,116 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
       return res.status(500).send('Error updating audit job: ' + err.message);
     }
     
-    console.log('[AUDIT PROCESS] Input updated successfully; marking job as scraping...');
+    console.log('[AUDIT PROCESS] Input updated successfully');
+    
+    // Check for duplicate URLs (unless force flag is set)
+    const forceProcess = req.body.force === 'true' || req.body.force === true;
+    
+    if (!forceProcess && inputUpdate.input_url) {
+      console.log('[AUDIT PROCESS] Checking for duplicate URLs...');
+      
+      getAuditJobByUrl(inputUpdate.input_url, (dupErr, duplicates) => {
+        if (dupErr) {
+          console.error('[AUDIT PROCESS] Error checking duplicates:', dupErr);
+          // Continue anyway if duplicate check fails
+        } else {
+          // Filter out the current job
+          const otherJobs = (duplicates || []).filter(job => job.id !== parseInt(id));
+          
+          if (otherJobs.length > 0) {
+            console.log('[AUDIT PROCESS] Found', otherJobs.length, 'duplicate(s) for URL:', inputUpdate.input_url);
+            
+            // Return duplicate detection response
+            if (wantsJson) {
+              return res.status(200).json({
+                duplicate_detected: true,
+                duplicate_jobs: otherJobs.map(job => ({
+                  id: job.id,
+                  niche: job.niche,
+                  city: job.city,
+                  company_name: job.company_name,
+                  status: job.status,
+                  created_at: job.created_at
+                })),
+                current_job_id: parseInt(id)
+              });
+            }
+            // For non-JSON requests, just continue (fallback)
+          }
+        }
+        
+        // No duplicates or check failed - proceed with processing
+        proceedWithProcessing();
+      });
+    } else {
+      // Force flag is set or no URL to check - proceed immediately
+      if (forceProcess) {
+        console.log('[AUDIT PROCESS] Force flag set - skipping duplicate check');
+      }
+      proceedWithProcessing();
+    }
+    
+    function proceedWithProcessing() {
+      console.log('[AUDIT PROCESS] Marking job as scraping...');
+      
+      // IMPORTANT: set status immediately so the reloaded admin page shows the loader
+      // and starts polling even if the pipeline starts a moment later.
+      updateAuditJob(id, { status: 'scraping', error_message: null }, (statusErr) => {
+        if (statusErr) {
+          console.error('[AUDIT PROCESS] Failed to set status=scraping for job', id, statusErr);
+          if (wantsJson) {
+            return res.status(500).json({
+              error: 'status_update_failed',
+              message: statusErr.message || String(statusErr)
+            });
+          }
+        }
 
-    // IMPORTANT: set status immediately so the reloaded admin page shows the loader
-    // and starts polling even if the pipeline starts a moment later.
-    updateAuditJob(id, { status: 'scraping', error_message: null }, (statusErr) => {
-      if (statusErr) {
-        console.error('[AUDIT PROCESS] Failed to set status=scraping for job', id, statusErr);
-        if (wantsJson) {
-          return res.status(500).json({
-            error: 'status_update_failed',
-            message: statusErr.message || String(statusErr)
+        console.log('[AUDIT PROCESS] Queueing pipeline for job', id);
+
+        const pipelineConfig = {
+          settings: {
+            ux_name: req.body.ux_name,
+            ux_model: req.body.ux_model,
+            ux_temperature: Number(req.body.ux_temperature),
+            web_name: req.body.web_name,
+            web_model: req.body.web_model,
+            web_temperature: Number(req.body.web_temperature),
+            email_name: req.body.email_name,
+            email_model: req.body.email_model,
+            email_temperature: Number(req.body.email_temperature)
+          },
+          promptOverrides: {
+            ux: req.body.prompt_ux,
+            web: req.body.prompt_web,
+            email: req.body.prompt_email
+          }
+        };
+
+        // Run pipeline in a concurrency-limited queue (Playwright + LLM is heavy)
+        auditQueue
+          .enqueue(() => auditPipeline.processAuditJob(id, pipelineConfig), Number(id))
+          .then(() => {
+            console.log('[AUDIT PROCESS] Pipeline completed successfully for job', id);
+          })
+          .catch((pipelineErr) => {
+            console.error('[AUDIT PROCESS] Pipeline error for job', id, ':', pipelineErr);
+            // Best-effort: ensure UI sees failure
+            updateAuditJob(
+              id,
+              { status: 'failed', error_message: String(pipelineErr && pipelineErr.message ? pipelineErr.message : pipelineErr) },
+              () => {}
+            );
           });
+
+        // Respond immediately (job runs in background)
+        if (wantsJson) {
+          return res.status(202).json({ ok: true, jobId: Number(id), queued: true });
         }
-      }
-
-      console.log('[AUDIT PROCESS] Queueing pipeline for job', id);
-
-      const pipelineConfig = {
-        settings: {
-          ux_name: req.body.ux_name,
-          ux_model: req.body.ux_model,
-          ux_temperature: Number(req.body.ux_temperature),
-          web_name: req.body.web_name,
-          web_model: req.body.web_model,
-          web_temperature: Number(req.body.web_temperature),
-          email_name: req.body.email_name,
-          email_model: req.body.email_model,
-          email_temperature: Number(req.body.email_temperature)
-        },
-        promptOverrides: {
-          ux: req.body.prompt_ux,
-          web: req.body.prompt_web,
-          email: req.body.prompt_email
-        }
-      };
-
-      // Run pipeline in a concurrency-limited queue (Playwright + LLM is heavy)
-      auditQueue
-        .enqueue(() => auditPipeline.processAuditJob(id, pipelineConfig), Number(id))
-        .then(() => {
-          console.log('[AUDIT PROCESS] Pipeline completed successfully for job', id);
-        })
-        .catch((pipelineErr) => {
-          console.error('[AUDIT PROCESS] Pipeline error for job', id, ':', pipelineErr);
-          // Best-effort: ensure UI sees failure
-          updateAuditJob(
-            id,
-            { status: 'failed', error_message: String(pipelineErr && pipelineErr.message ? pipelineErr.message : pipelineErr) },
-            () => {}
-          );
-        });
-
-      // Respond immediately (job runs in background)
-      if (wantsJson) {
-        return res.status(202).json({ ok: true, jobId: Number(id), queued: true });
-      }
-      // Redirect for classic form submits
-      res.redirect(`/admin/audits/${id}`);
-    });
+        // Redirect for classic form submits
+        res.redirect(`/admin/audits/${id}`);
+      });
+    }
   });
 });
 
@@ -528,6 +582,31 @@ router.post('/audits/:id/regenerate-evidence-pack-v2', requireAdmin, async (req,
   }).catch((pipelineErr) => {
     console.error('Regenerate Evidence Pack v2 error:', pipelineErr);
     res.redirect(`/admin/audits/${id}`);
+  });
+});
+
+// DELETE /admin/api/audits/:id - Delete audit job and all related data
+router.delete('/api/audits/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  deleteAuditJob(id, (err, result) => {
+    if (err) {
+      console.error('Error deleting audit job:', err);
+      return res.status(500).json({ 
+        error: 'delete_failed',
+        message: 'Failed to delete audit job: ' + err.message 
+      });
+    }
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ 
+        error: 'not_found',
+        message: 'Audit job not found' 
+      });
+    }
+    
+    console.log('[ADMIN] Successfully deleted audit job', id);
+    res.json({ success: true, deleted_id: Number(id) });
   });
 });
 

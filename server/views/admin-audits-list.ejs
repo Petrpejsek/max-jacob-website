@@ -131,6 +131,47 @@
             opacity: 0.5;
         }
 
+        .btn-delete {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(220, 38, 38, 0.1);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            color: #ff6b6b;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .btn-delete:hover {
+            background: rgba(220, 38, 38, 0.2);
+            border-color: rgba(220, 38, 38, 0.5);
+        }
+
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+        }
+
+        tr.deleting {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8rem;
@@ -200,7 +241,7 @@
                     </thead>
                     <tbody>
                         <% auditJobs.forEach(job => { %>
-                            <tr>
+                            <tr id="row-<%= job.id %>">
                                 <td>#<%= job.id %></td>
                                 <td><%= new Date(job.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
                                 <td><%= job.niche %></td>
@@ -215,7 +256,10 @@
                                     <% } %>
                                 </td>
                                 <td>
-                                    <a href="/admin/audits/<%= job.id %>" class="view-link">View →</a>
+                                    <div class="action-buttons">
+                                        <a href="/admin/audits/<%= job.id %>" class="view-link">View →</a>
+                                        <button class="btn-delete" data-audit-id="<%= job.id %>" data-audit-url="<%= job.input_url || '' %>">Delete</button>
+                                    </div>
                                 </td>
                             </tr>
                         <% }); %>
@@ -224,6 +268,87 @@
             <% } %>
         </div>
     </div>
+
+    <script>
+        // Attach event listeners to all delete buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteButtons = document.querySelectorAll('.btn-delete');
+            
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', async function() {
+                    const id = this.getAttribute('data-audit-id');
+                    const url = this.getAttribute('data-audit-url');
+                    
+                    // First confirmation
+                    const urlDisplay = url ? `\n\nURL: ${url}` : '';
+                    const confirmFirst = confirm(`Are you sure you want to delete audit #${id}?${urlDisplay}`);
+                    
+                    if (!confirmFirst) {
+                        return;
+                    }
+                    
+                    // Second confirmation
+                    const confirmSecond = confirm(`This will permanently delete all data for audit #${id}.\n\nThis action cannot be undone. Continue?`);
+                    
+                    if (!confirmSecond) {
+                        return;
+                    }
+                    
+                    // Show deleting state
+                    const row = document.getElementById('row-' + id);
+                    if (row) {
+                        row.classList.add('deleting');
+                    }
+                    
+                    try {
+                        const response = await fetch('/admin/api/audits/' + id, {
+                            method: 'DELETE',
+                            headers: {
+                                'Accept': 'application/json'
+                            },
+                            credentials: 'same-origin'
+                        });
+                        
+                        // Check if session expired
+                        if (response.status === 401) {
+                            alert('Session expired. Please log in again.');
+                            window.location.href = '/admin/login';
+                            return;
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.message || 'Failed to delete audit');
+                        }
+                        
+                        // Successfully deleted - remove row after animation
+                        if (row) {
+                            setTimeout(() => {
+                                row.remove();
+                                
+                                // Check if table is now empty
+                                const tbody = document.querySelector('tbody');
+                                if (tbody && tbody.children.length === 0) {
+                                    // Reload page to show empty state
+                                    window.location.reload();
+                                }
+                            }, 300);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error deleting audit:', error);
+                        alert('Failed to delete audit: ' + error.message);
+                        
+                        // Remove deleting state if error
+                        if (row) {
+                            row.classList.remove('deleting');
+                        }
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
 
