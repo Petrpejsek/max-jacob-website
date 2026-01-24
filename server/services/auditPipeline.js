@@ -2582,13 +2582,15 @@ async function runEmailPolish(job, miniAudit, options) {
 }
 
 function generatePublicSlug(job) {
-  // NO FALLBACKS - require real data
-  if (!job.niche || !job.city) {
-    throw new Error(`Cannot generate slug without niche (${job.niche}) and city (${job.city})`);
+  // Niche is required, city is optional (fallback to 'local')
+  if (!job.niche) {
+    throw new Error(`Cannot generate slug without niche (${job.niche})`);
   }
   
   const niche = job.niche.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const city = job.city.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const city = job.city 
+    ? job.city.toLowerCase().replace(/[^a-z0-9]/g, '') 
+    : 'local';
   const companySeed = job.company_name
     ? job.company_name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)
     : 'audit';

@@ -129,11 +129,8 @@ function buildHero(job, a6_hero, llm_context) {
     throw new Error('Cannot generate audit view model without niche - niche must be set before running audit');
   }
   const niche = job.niche;
-  // NO FALLBACKS - city is required
-  if (!job.city || job.city.trim() === '') {
-    throw new Error('Cannot generate audit view model without city - city detection failed during scraping');
-  }
-  const city = job.city;
+  // City is optional - use 'your area' as fallback for display
+  const city = (job.city && job.city.trim()) ? job.city.trim() : 'your area';
   
   // Prefer assistant-provided hero copy, but keep a strong, transformational fallback.
   const defaultHeadline = `Grow bigger online. More leads, more bookings.`;
