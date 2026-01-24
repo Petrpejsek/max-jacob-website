@@ -26,8 +26,8 @@ try {
   console.log('[AUDIT PIPELINE] Scraper v3 not available:', err.message);
 }
 
-// Check if Scraper v3 is enabled via environment variable
-const USE_SCRAPER_V3 = process.env.USE_SCRAPER_V3 === 'true' || process.env.USE_SCRAPER_V3 === '1';
+// Check if Scraper v3 is enabled via environment variable (default: true)
+const USE_SCRAPER_V3 = process.env.USE_SCRAPER_V3 !== 'false' && process.env.USE_SCRAPER_V3 !== '0';
 
 // Homepage Builder (dynamic homepage proposals)
 const homepageBuilder = require('./homepageBuilder');
