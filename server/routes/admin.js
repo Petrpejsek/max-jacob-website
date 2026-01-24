@@ -332,8 +332,8 @@ router.post('/audits', requireAdmin, (req, res) => {
   });
 });
 
-// POST /admin/audits/:id/process - full pipeline
-router.post('/audits/:id/process', requireAdmin, async (req, res) => {
+// POST /admin/audits/:id/process - full pipeline (rate-limited, responds immediately)
+router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, res) => {
   const id = req.params.id;
   
   console.log('[AUDIT PROCESS] Starting for job', id);
@@ -367,8 +367,9 @@ router.post('/audits/:id/process', requireAdmin, async (req, res) => {
       return res.status(500).send('Error updating audit job: ' + err.message);
     }
     
-    console.log('[AUDIT PROCESS] Input updated successfully, starting pipeline...');
+    console.log('[AUDIT PROCESS] Input updated successfully, queueing pipeline...');
     
+    // Run pipeline in background (no await - respond immediately)
     auditPipeline.processAuditJob(id, {
       settings: {
         ux_name: req.body.ux_name,
@@ -387,12 +388,13 @@ router.post('/audits/:id/process', requireAdmin, async (req, res) => {
         email: req.body.prompt_email
       }
     }).then(() => {
-      console.log('[AUDIT PROCESS] Pipeline completed successfully');
-      res.redirect(`/admin/audits/${id}`);
+      console.log('[AUDIT PROCESS] Pipeline completed successfully for job', id);
     }).catch((pipelineErr) => {
-      console.error('[AUDIT PROCESS] Pipeline error:', pipelineErr);
-      res.redirect(`/admin/audits/${id}`);
+      console.error('[AUDIT PROCESS] Pipeline error for job', id, ':', pipelineErr);
     });
+    
+    // Respond immediately (job runs in background)
+    res.redirect(`/admin/audits/${id}`);
   });
 });
 
