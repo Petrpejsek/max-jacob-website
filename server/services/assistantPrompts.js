@@ -218,7 +218,7 @@ Return ONLY valid JSON (STRICT JSON: double quotes, no trailing commas, no markd
   "local_signals": {
     "city_mentions": {
       "count": 0,
-      "evidence_ref": ["raw_dump.pages[0].title: (scan for job.city found 0 matches)"],
+      "evidence_ref": ["raw_dump.pages[0].title", "llm_context.city"],
       "recommendation": "Add city name to H1, title, and first paragraph"
     },
     "service_area": {
