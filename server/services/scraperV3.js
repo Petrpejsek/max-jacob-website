@@ -1727,7 +1727,11 @@ async function runLighthouseAudit(url, jobId, crawledPageId, pageType, logFn) {
  * Main crawler function
  */
 async function crawlWebsite(jobId, startUrl, logFn) {
-  const browser = await chromium.launch({ headless: true });
+  const launchArgs = [];
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
+  }
+  const browser = await chromium.launch({ headless: true, args: launchArgs });
   const context = await browser.newContext({ viewport: VIEWPORT_DESKTOP });
   
   const baseUrl = new URL(startUrl);

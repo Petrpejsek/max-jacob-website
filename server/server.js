@@ -1,5 +1,12 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// Render production fix: ensure Playwright uses browsers installed within the app (node_modules),
+// not an external cache path that may be missing at runtime.
+if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
+}
+
 const express = require('express');
 const session = require('express-session');
 const fs = require('fs');

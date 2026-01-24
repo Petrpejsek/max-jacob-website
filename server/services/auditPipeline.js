@@ -693,7 +693,11 @@ function extractHours(page) {
 }
 
 async function scrapeWebsite(url, jobId) {
-  const browser = await chromium.launch({ headless: true });
+  const launchArgs = [];
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
+  }
+  const browser = await chromium.launch({ headless: true, args: launchArgs });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
