@@ -36,11 +36,14 @@ function getHelmetConfig() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for EJS + inline scripts
+        // NOTE: Public audit page uses Tailwind CDN + inline scripts.
+        // If Tailwind CDN is blocked, the audit page renders "unstyled"/broken on production.
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:", "http:"], // Allow external images (screenshots)
-        connectSrc: ["'self'"],
+        // Tailwind CDN may perform additional fetches; allow it.
+        connectSrc: ["'self'", "https://cdn.tailwindcss.com"],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: []

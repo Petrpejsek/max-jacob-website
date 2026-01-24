@@ -358,7 +358,7 @@ Return ONLY valid JSON (STRICT JSON: double quotes, no trailing commas, no markd
   "email_body_plaintext": "Plain text version...",
   "personalization_evidence": [
     {"element": "company_name", "source": "llm_context.company_profile.name"},
-    {"element": "city_mention", "source": "job.city"},
+    {"element": "city_mention", "source": "llm_context.company_profile.address.city"},
     {"element": "specific_issue", "source": "offer_copy_json.deliverables[0]"}
   ],
   "cta_buttons": [
