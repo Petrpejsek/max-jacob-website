@@ -273,6 +273,16 @@ function initDatabase() {
           console.log('Column homepage_proposal_data_json added to audit_jobs');
         }
       });
+
+      // Add error_message column (older DB compatibility)
+      // Required for pipeline status transitions (scraping/evaluating/failed).
+      db.run('ALTER TABLE audit_jobs ADD COLUMN error_message TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column error_message already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column error_message added to audit_jobs');
+        }
+      });
     }
   });
 
