@@ -5,6 +5,8 @@
  * For 20 audits/day with 1 server instance, concurrency=1 is safe.
  */
 
+const { getMemorySnapshot, logMemoryDelta } = require('./memoryMonitor');
+
 class AuditQueue {
   constructor(concurrency = 1) {
     this.concurrency = concurrency;
@@ -37,7 +39,9 @@ class AuditQueue {
     const job = this.queue.shift();
     this.running++;
 
-    console.log(`[AUDIT QUEUE] Starting job ${job.jobId} (${this.running}/${this.concurrency} running, ${this.queue.length} queued)`);
+    // Memory logging: before job starts
+    const memBefore = getMemorySnapshot();
+    console.log(`[AUDIT QUEUE] Starting job ${job.jobId} (${this.running}/${this.concurrency} running, ${this.queue.length} queued) - Memory: ${memBefore.rss}MB RSS, ${memBefore.heapUsed}MB heap`);
 
     try {
       const result = await job.jobFn();
@@ -47,7 +51,23 @@ class AuditQueue {
       job.reject(error);
     } finally {
       this.running--;
-      console.log(`[AUDIT QUEUE] Finished job ${job.jobId} (${this.running}/${this.concurrency} running, ${this.queue.length} queued)`);
+      
+      // Memory logging: after job completes
+      const memAfter = getMemorySnapshot();
+      console.log(`[AUDIT QUEUE] Finished job ${job.jobId} (${this.running}/${this.concurrency} running, ${this.queue.length} queued) - Memory: ${memAfter.rss}MB RSS, ${memAfter.heapUsed}MB heap`);
+      logMemoryDelta(`Job ${job.jobId} delta`, memBefore, memAfter);
+      
+      // OOM Fix: Force garbage collection after heavy audit job (if --expose-gc flag is set)
+      // This immediately frees memory instead of waiting for automatic GC.
+      if (global.gc) {
+        try {
+          global.gc();
+          const memAfterGC = getMemorySnapshot();
+          console.log(`[AUDIT QUEUE] After GC - Memory: ${memAfterGC.rss}MB RSS, ${memAfterGC.heapUsed}MB heap`);
+        } catch (e) {
+          // GC failed, ignore
+        }
+      }
       
       // Process next job in queue
       setImmediate(() => this.processNext());

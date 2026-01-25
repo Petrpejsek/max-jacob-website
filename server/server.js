@@ -271,4 +271,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Public (repo): ${repoPublicDir}`);
   console.log(`Public (persistent): ${persistentPublicDir}`);
   console.log(`========================================\n`);
+  
+  // Start memory monitoring (production diagnostics for OOM issues)
+  const memoryMonitor = require('./services/memoryMonitor');
+  memoryMonitor.startMonitoring();
 });

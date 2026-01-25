@@ -18,6 +18,10 @@ const MAX_URLS = (() => {
 const VIEWPORT_DESKTOP = { width: 1280, height: 720 };
 const VIEWPORT_MOBILE = { width: 375, height: 667 };
 
+// OOM Fix: Full-page screenshots can be 5-20MB each, held in memory before disk write.
+// Set ENABLE_FULLPAGE_SCREENSHOTS=false to disable (saves ~150MB for 50-page crawl).
+const ENABLE_FULLPAGE_SCREENSHOTS = process.env.ENABLE_FULLPAGE_SCREENSHOTS !== 'false';
+
 // URL Blacklist patterns
 const BLACKLIST_PATTERNS = [
   /\.pdf$/i,
@@ -1674,10 +1678,12 @@ async function takeScreenshots(page, url, jobId, pageIndex) {
     await page.screenshot({ path: desktopAboveFoldPath, fullPage: false });
     screenshots.desktop_above_fold = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-above-fold.png`;
 
-    // Desktop full page
-    const desktopFullPath = path.join(screenshotDir, `page${pageIndex}-desktop-full.png`);
-    await page.screenshot({ path: desktopFullPath, fullPage: true });
-    screenshots.desktop_full = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-full.png`;
+    // Desktop full page (OPTIONAL - can be disabled to save memory)
+    if (ENABLE_FULLPAGE_SCREENSHOTS) {
+      const desktopFullPath = path.join(screenshotDir, `page${pageIndex}-desktop-full.png`);
+      await page.screenshot({ path: desktopFullPath, fullPage: true });
+      screenshots.desktop_full = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-full.png`;
+    }
 
     // Mobile above-the-fold
     await page.setViewportSize(VIEWPORT_MOBILE);
@@ -1765,6 +1771,11 @@ async function runLighthouseAudit(url, jobId, crawledPageId, pageType, logFn) {
  * Main crawler function
  */
 async function crawlWebsite(jobId, startUrl, logFn) {
+  // Memory logging: before browser launch
+  const { getMemorySnapshot, logMemoryDelta } = require('./memoryMonitor');
+  const memBeforeBrowser = getMemorySnapshot();
+  console.log(`[SCRAPER V3] Before browser launch - Memory: ${memBeforeBrowser.rss}MB RSS, ${memBeforeBrowser.heapUsed}MB heap`);
+  
   const launchArgs = [];
   if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
     launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
@@ -1774,6 +1785,11 @@ async function crawlWebsite(jobId, startUrl, logFn) {
     viewport: VIEWPORT_DESKTOP,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
+  
+  // Memory logging: after browser launch
+  const memAfterBrowser = getMemorySnapshot();
+  console.log(`[SCRAPER V3] After browser launch - Memory: ${memAfterBrowser.rss}MB RSS, ${memAfterBrowser.heapUsed}MB heap`);
+  logMemoryDelta('Browser launch', memBeforeBrowser, memAfterBrowser);
   
   const baseUrl = new URL(startUrl);
   const baseOrigin = baseUrl.origin;
@@ -1834,8 +1850,10 @@ async function crawlWebsite(jobId, startUrl, logFn) {
     
     await logFn(jobId, 'crawler', `Crawling [${crawledPages.length + 1}/${MAX_URLS}]: ${current.url} (type: ${current.type})`);
 
+    // CRITICAL: page must be closed even if errors occur (OOM fix)
+    let page = null;
     try {
-      const page = await context.newPage();
+      page = await context.newPage();
       await page.goto(current.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       // Wait for page to stabilize before extracting (prevents navigation errors)
       await page.waitForTimeout(1000);
@@ -1885,9 +1903,6 @@ async function crawlWebsite(jobId, startUrl, logFn) {
       if (current.type === 'home') {
         navSeedUrls = await extractNavSeedUrls(page, current.url);
       }
-      
-      // Close page
-      await page.close();
       
       // Add page to crawled list
       crawledPages.push({
@@ -1939,13 +1954,43 @@ async function crawlWebsite(jobId, startUrl, logFn) {
       // Boost nav/menu URLs so we preserve client IA.
       (navSeedUrls || []).forEach((url) => enqueue(url, 80));
       
+      // Memory logging: after each page (every 5 pages to avoid log spam)
+      if (crawledPages.length % 5 === 0) {
+        const memAfterPage = getMemorySnapshot();
+        console.log(`[SCRAPER V3] After page ${crawledPages.length}/${MAX_URLS} - Memory: ${memAfterPage.rss}MB RSS, ${memAfterPage.heapUsed}MB heap`);
+      }
+      
     } catch (err) {
       await logFn(jobId, 'crawler', `Error crawling ${current.url}: ${err.message}`);
       console.error(`[CRAWLER] Error:`, err);
+    } finally {
+      // CRITICAL: Always close page to prevent memory leaks (OOM fix)
+      if (page) {
+        try {
+          await page.close();
+        } catch (closeErr) {
+          console.error(`[SCRAPER V3] Failed to close page for ${current.url}:`, closeErr.message);
+        }
+      }
     }
   }
 
+  // Memory logging: before browser close
+  const memBeforeClose = getMemorySnapshot();
+  
+  // CRITICAL: Close context explicitly before browser (OOM fix)
+  try {
+    await context.close();
+  } catch (contextErr) {
+    console.error('[SCRAPER V3] Failed to close context:', contextErr.message);
+  }
+  
   await browser.close();
+  
+  // Memory logging: after browser close
+  const memAfterClose = getMemorySnapshot();
+  console.log(`[SCRAPER V3] After browser close - Memory: ${memAfterClose.rss}MB RSS, ${memAfterClose.heapUsed}MB heap`);
+  logMemoryDelta('Browser close', memBeforeClose, memAfterClose);
   
   await logFn(jobId, 'crawler', `Crawl complete: ${crawledPages.length} pages processed`);
   

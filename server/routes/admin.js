@@ -36,6 +36,7 @@ const auditPipeline = require('../services/auditPipeline');
 const { collectDiagnostics } = require('../services/diagnostics');
 const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
+const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor');
 
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
@@ -271,6 +272,9 @@ router.get('/audits/:id/status', requireAdmin, (req, res) => {
 // GET /admin/audits/:id - detail audit job
 router.get('/audits/:id', requireAdmin, (req, res) => {
   const id = req.params.id;
+  
+  // Memory logging: before loading large JSON
+  const memBefore = getMemorySnapshot();
 
   getAuditJobById(id, (err, auditJob) => {
     if (err) {
@@ -320,6 +324,10 @@ router.get('/audits/:id', requireAdmin, (req, res) => {
                 assistantRuns = [];
               }
 
+              // Memory logging: after loading all data
+              const memAfter = getMemorySnapshot();
+              logMemoryDelta(`GET /admin/audits/${id}`, memBefore, memAfter);
+
               res.render('admin-audit-detail', {
                 auditJob,
                 runLogs: runLogs || [],
@@ -368,6 +376,8 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
     req.xhr ||
     (req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest';
   
+  // Memory logging: before audit starts
+  const memBefore = getMemorySnapshot();
   console.log('[AUDIT PROCESS] Starting for job', id);
   console.log('[AUDIT PROCESS] Body:', {
     input_url: req.body.input_url,
@@ -506,6 +516,10 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
           });
 
         // Respond immediately (job runs in background)
+        // Memory logging: after queueing (before heavy work starts)
+        const memAfter = getMemorySnapshot();
+        logMemoryDelta(`POST /admin/audits/${id}/process (queued)`, memBefore, memAfter);
+        
         if (wantsJson) {
           return res.status(202).json({ ok: true, jobId: Number(id), queued: true });
         }
@@ -736,6 +750,9 @@ router.post('/audits/:id/run-assistant', requireAdmin, async (req, res) => {
 router.post('/audits/:id/run-full-pipeline', requireAdmin, auditJobLimiter, async (req, res) => {
   const { id } = req.params;
   
+  // Memory logging: before pipeline starts
+  const memBefore = getMemorySnapshot();
+  
   try {
     // Mark job as evaluating and run pipeline in background (do not block request)
     updateAuditJob(id, { status: 'evaluating' }, () => {});
@@ -751,6 +768,10 @@ router.post('/audits/:id/run-full-pipeline', requireAdmin, auditJobLimiter, asyn
         updateAuditJob(id, { status: 'failed', error_message: bgErr.message }, () => {});
       }
     });
+
+    // Memory logging: after queueing
+    const memAfter = getMemorySnapshot();
+    logMemoryDelta(`POST /admin/audits/${id}/run-full-pipeline (queued)`, memBefore, memAfter);
 
     if ((req.headers.accept || '').includes('application/json')) {
       return res.status(202).json({ ok: true, started: true });

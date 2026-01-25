@@ -8,6 +8,15 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # OOM Fix: Set heap limit to 460MB (leave 52MB for system on 512MB tier)
+      # This prevents runaway memory growth and triggers GC more aggressively.
+      # --expose-gc allows manual GC after heavy operations (optional).
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=460 --expose-gc"
+      # OOM Fix: Disable full-page screenshots to save ~150MB (5-20MB per screenshot)
+      # Set to "true" to re-enable if needed for specific audits.
+      - key: ENABLE_FULLPAGE_SCREENSHOTS
+        value: "false"
       # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
       # never committed to git.
       # Required:
