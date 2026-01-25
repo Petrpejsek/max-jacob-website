@@ -6,8 +6,8 @@ const { getPersistentPublicDir } = require('../runtimePaths');
 
 // Configuration
 // Spec: crawl enough pages to preserve menu/IA + key content pages
-// Default bumped to 50 for higher-quality "site snapshot" generation.
-const DEFAULT_MAX_URLS = 50;
+// Reduced to 25 for memory stability on 512MB Render tier (was 50).
+const DEFAULT_MAX_URLS = 25;
 const MAX_URLS = (() => {
   const raw = process.env.SCRAPER_V3_MAX_URLS;
   const n = parseInt(String(raw || ''), 10);

@@ -8,11 +8,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # OOM Fix: Set heap limit to 460MB (leave 52MB for system on 512MB tier)
-      # This prevents runaway memory growth and triggers GC more aggressively.
-      # --expose-gc allows manual GC after heavy operations (optional).
+      # OOM Fix: Set heap limit to 400MB (leave 112MB for system/Chromium on 512MB tier)
+      # Chromium needs ~80-100MB outside Node heap, so we reserve more headroom.
+      # --expose-gc allows manual GC after heavy operations.
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=460 --expose-gc"
+        value: "--max-old-space-size=400 --expose-gc"
       # OOM Fix: Disable full-page screenshots to save ~150MB (5-20MB per screenshot)
       # Set to "true" to re-enable if needed for specific audits.
       - key: ENABLE_FULLPAGE_SCREENSHOTS
