@@ -180,6 +180,20 @@
             flex-wrap: wrap;
         }
 
+        .no-email-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(217, 119, 6, 0.1);
+            border: 1px solid rgba(217, 119, 6, 0.3);
+            color: #fb923c;
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
         @keyframes fadeOut {
             from {
                 opacity: 1;
@@ -258,6 +272,7 @@
                             <th>Niche</th>
                             <th>City</th>
                             <th>URL</th>
+                            <th>Email</th>
                             <th>Status</th>
                             <th>Public URL</th>
                             <th>Action</th>
@@ -271,6 +286,13 @@
                                 <td><%= job.niche %></td>
                                 <td><%= job.city %></td>
                                 <td><%= job.input_url %></td>
+                                <td>
+                                    <% if (!job.hasEmail) { %>
+                                        <span class="no-email-indicator">⚠️ No email</span>
+                                    <% } else { %>
+                                        <span style="color: #4ade80; font-size: 0.9rem;">✓</span>
+                                    <% } %>
+                                </td>
                                 <td><span class="badge badge-status"><%= job.status %></span></td>
                                 <td>
                                     <% if (job.public_page_slug) { %>

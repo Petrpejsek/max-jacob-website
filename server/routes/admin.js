@@ -255,8 +255,22 @@ router.get('/audits', requireAdmin, (req, res) => {
       auditJobs = [];
     }
 
+    // Enrich each job with email info
+    const enrichedJobs = (auditJobs || []).map(job => {
+      let hasEmail = false;
+      try {
+        const scrape = typeof job.scrape_json === 'string' ? JSON.parse(job.scrape_json) : job.scrape_json;
+        hasEmail = !!(scrape && scrape.contacts && scrape.contacts.email);
+      } catch (_) {}
+      
+      return {
+        ...job,
+        hasEmail
+      };
+    });
+
     res.render('admin-audits-list', {
-      auditJobs: auditJobs || []
+      auditJobs: enrichedJobs
     });
   });
 });
