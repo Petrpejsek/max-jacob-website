@@ -260,7 +260,7 @@ router.get('/audits', requireAdmin, (req, res) => {
       let hasEmail = false;
       try {
         const scrape = typeof job.scrape_json === 'string' ? JSON.parse(job.scrape_json) : job.scrape_json;
-        hasEmail = !!(scrape && scrape.contacts && scrape.contacts.email);
+        hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
       } catch (_) {}
       
       return {

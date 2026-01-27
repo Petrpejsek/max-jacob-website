@@ -808,8 +808,10 @@
                     let mjCustomerEmail = null;
                     try {
                         const scrapeContacts = mjScrape && mjScrape.contacts;
-                        if (scrapeContacts && scrapeContacts.email) {
-                            mjCustomerEmail = String(scrapeContacts.email).trim();
+                        if (scrapeContacts && scrapeContacts.emails && scrapeContacts.emails.length > 0) {
+                            const firstEmail = scrapeContacts.emails[0];
+                            mjCustomerEmail = typeof firstEmail === 'object' ? firstEmail.value : String(firstEmail);
+                            mjCustomerEmail = mjCustomerEmail.trim();
                         }
                     } catch (_) {}
                     
