@@ -5,6 +5,12 @@ services:
     # Install deps + ensure Playwright Chromium exists in production
     buildCommand: npm install && npx playwright install --with-deps chromium
     startCommand: npm start
+    # CRITICAL: Persistent disk for database and uploaded files
+    # Without this, database is wiped on every deployment!
+    disk:
+      name: data
+      mountPath: /opt/render/project/data
+      sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,6 +23,12 @@ services:
       # Set to "true" to re-enable if needed for specific audits.
       - key: ENABLE_FULLPAGE_SCREENSHOTS
         value: "false"
+      # CRITICAL: Database and public files MUST be on persistent disk
+      # These paths point to the mounted disk to prevent data loss on deployment
+      - key: DB_PATH
+        value: "/opt/render/project/data/data.db"
+      - key: PUBLIC_DIR
+        value: "/opt/render/project/data/public"
       # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
       # never committed to git.
       # Required:
