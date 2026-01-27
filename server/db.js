@@ -306,6 +306,30 @@ function initDatabase() {
     }
   });
 
+  // Vytvoření tabulky pro email logs (sent emails tracking)
+  const createEmailLogsTableSQL = `
+    CREATE TABLE IF NOT EXISTS email_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      audit_job_id INTEGER NOT NULL,
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      recipient_email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      format TEXT NOT NULL,
+      status TEXT NOT NULL,
+      resend_id TEXT,
+      error_message TEXT,
+      FOREIGN KEY (audit_job_id) REFERENCES audit_jobs(id)
+    )
+  `;
+
+  db.run(createEmailLogsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating email_logs table:', err);
+    } else {
+      console.log('Table email_logs ready');
+    }
+  });
+
   // Vytvoření tabulky pro prompt templates
   const createPromptTemplatesTableSQL = `
     CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -1942,6 +1966,46 @@ function getAssistantRunById(id, callback) {
   });
 }
 
+// Email Logs: CRUD functions for tracking sent emails
+function createEmailLog(data, callback) {
+  const sql = `
+    INSERT INTO email_logs (audit_job_id, recipient_email, subject, format, status, resend_id, error_message)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+  
+  db.run(sql, [
+    data.audit_job_id,
+    data.recipient_email,
+    data.subject,
+    data.format,
+    data.status,
+    data.resend_id || null,
+    data.error_message || null
+  ], function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { id: this.lastID });
+    }
+  });
+}
+
+function getEmailLogsByJobId(jobId, callback) {
+  const sql = `
+    SELECT * FROM email_logs
+    WHERE audit_job_id = ?
+    ORDER BY sent_at DESC
+  `;
+  
+  db.all(sql, [jobId], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
 module.exports = {
   db,
   insertSubmission,
@@ -1985,7 +2049,9 @@ module.exports = {
   getAssistantRunById,
   getSiteSetting,
   getAllSiteSettings,
-  setSiteSetting
+  setSiteSetting,
+  createEmailLog,
+  getEmailLogsByJobId
 };
 
 // Site Settings functions

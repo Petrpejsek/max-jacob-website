@@ -30,13 +30,16 @@ const {
   getAssistantRunsByJobId,
   getAssistantRunById,
   getAllSiteSettings,
-  setSiteSetting
+  setSiteSetting,
+  createEmailLog,
+  getEmailLogsByJobId
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
 const { collectDiagnostics } = require('../services/diagnostics');
 const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
 const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor');
+const { sendEmail } = require('../services/emailService');
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -635,6 +638,93 @@ router.post('/audits/:id/regenerate-email', requireAdmin, async (req, res) => {
     console.error('Regenerate email error:', pipelineErr);
     res.redirect(`/admin/audits/${id}`);
   });
+});
+
+// POST /admin/audits/:id/send-email - Send email to customer
+router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req, res) => {
+  const id = req.params.id;
+  const { recipient, subject, format, html_body, plain_body } = req.body;
+
+  try {
+    // Validation
+    if (!recipient || !subject) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Recipient and subject are required' 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipient)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid email address format' 
+      });
+    }
+
+    // Validate format
+    if (!['html', 'plain'].includes(format)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Format must be "html" or "plain"' 
+      });
+    }
+
+    // Choose body based on format
+    const emailBody = format === 'html' ? html_body : plain_body;
+    
+    if (!emailBody || emailBody.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email body is empty' 
+      });
+    }
+
+    // Send email via Resend
+    const sendResult = await sendEmail({
+      to: recipient,
+      subject: subject,
+      html: format === 'html' ? emailBody : undefined,
+      text: format === 'plain' ? emailBody : undefined
+    });
+
+    // Log to database
+    createEmailLog({
+      audit_job_id: parseInt(id),
+      recipient_email: recipient,
+      subject: subject,
+      format: format,
+      status: sendResult.success ? 'sent' : 'failed',
+      resend_id: sendResult.id || null,
+      error_message: sendResult.error || null
+    }, (logErr, logResult) => {
+      if (logErr) {
+        console.error('Error logging email send:', logErr);
+      }
+    });
+
+    // Return response
+    if (sendResult.success) {
+      res.json({ 
+        success: true, 
+        message: `Email sent successfully to ${recipient}`,
+        resend_id: sendResult.id
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: sendResult.error || 'Failed to send email'
+      });
+    }
+
+  } catch (error) {
+    console.error('Send email error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Internal server error' 
+    });
+  }
 });
 
 // POST /admin/audits/:id/regenerate-public

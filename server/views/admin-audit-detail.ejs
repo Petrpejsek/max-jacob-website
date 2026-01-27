@@ -843,6 +843,44 @@
                     <input type="hidden" id="customerEmail" value="<%= mjCustomerEmail || '' %>">
                     <input type="hidden" id="emailSubject" value="<%= mjEmailSubject %>">
                     
+                    <!-- Email Sending Form -->
+                    <div style="background: #1a1a2e; border: 2px solid #4F46E5; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                        <div style="margin-bottom: 12px;">
+                            <label style="color: #b6b6d6; font-size: 0.9rem; display: block; margin-bottom: 6px; font-weight: 500;">
+                                Recipient Email:
+                            </label>
+                            <input type="email" id="sendEmailRecipient" 
+                                   value="<%= mjCustomerEmail || '' %>"
+                                   placeholder="customer@email.com"
+                                   style="width: 100%; padding: 10px; background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 6px; color: #d1d1e0; font-size: 0.95rem;">
+                        </div>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <label style="color: #b6b6d6; font-size: 0.9rem; display: block; margin-bottom: 6px; font-weight: 500;">
+                                Subject:
+                            </label>
+                            <input type="text" id="sendEmailSubject" 
+                                   value="<%= mjEmailSubject %>"
+                                   placeholder="Email subject"
+                                   style="width: 100%; padding: 10px; background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 6px; color: #d1d1e0; font-size: 0.95rem;">
+                        </div>
+                        
+                        <div style="margin-bottom: 16px; padding: 12px; background: #0f0f1a; border-radius: 6px;">
+                            <label style="color: #b6b6d6; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="sendAsHtml" checked 
+                                       style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>Send as HTML (uncheck for Plain Text)</span>
+                            </label>
+                        </div>
+                        
+                        <button id="sendEmailBtn" type="button"
+                                style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 600; border-radius: 8px; background: linear-gradient(90deg, #4F46E5, #6366F1); color: #fff; border: none; cursor: pointer; transition: all 0.2s;">
+                            📧 Send Email
+                        </button>
+                        
+                        <div id="sendEmailStatus" style="margin-top: 12px; display: none; padding: 12px; border-radius: 6px; font-size: 0.9rem; font-weight: 500;"></div>
+                    </div>
+                    
                     <!-- HTML Version (for email clients) -->
                     <div style="background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 12px;">
@@ -3656,6 +3694,106 @@ STYLE:
             if (copyPlainBtn) copyPlainBtn.addEventListener('click', copyPlain);
             if (copyCustomerEmailBtn) copyCustomerEmailBtn.addEventListener('click', copyCustomerEmail);
             if (copySubjectBtn) copySubjectBtn.addEventListener('click', copySubject);
+        })();
+
+        // Email Sender Module
+        (function emailSenderModule() {
+            function $(id) { return document.getElementById(id); }
+            
+            const formatCheckbox = $('sendAsHtml');
+            const sendBtn = $('sendEmailBtn');
+            const statusDiv = $('sendEmailStatus');
+            
+            if (!formatCheckbox || !sendBtn || !statusDiv) {
+                console.log('Email sender elements not found');
+                return;
+            }
+            
+            // Load saved preference from localStorage
+            const savedFormat = localStorage.getItem('emailFormat') || 'html';
+            formatCheckbox.checked = (savedFormat === 'html');
+            
+            // Save preference on change
+            formatCheckbox.addEventListener('change', () => {
+                localStorage.setItem('emailFormat', formatCheckbox.checked ? 'html' : 'plain');
+            });
+            
+            // Send email handler
+            sendBtn.addEventListener('click', async () => {
+                const recipient = $('sendEmailRecipient').value.trim();
+                const subject = $('sendEmailSubject').value.trim();
+                const format = formatCheckbox.checked ? 'html' : 'plain';
+                const html_body = $('outreachEmailHtml').value;
+                const plain_body = $('outreachEmailText').value;
+                
+                // Validation
+                if (!recipient || !subject) {
+                    showStatus('error', '⚠️ Please fill recipient and subject');
+                    return;
+                }
+                
+                // Email format validation
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(recipient)) {
+                    showStatus('error', '⚠️ Invalid email address format');
+                    return;
+                }
+                
+                // Disable button & show loading
+                sendBtn.disabled = true;
+                sendBtn.textContent = '⏳ Sending...';
+                sendBtn.style.opacity = '0.7';
+                
+                try {
+                    const response = await fetch('/admin/audits/<%= auditJob.id %>/send-email', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ 
+                            recipient, 
+                            subject, 
+                            format, 
+                            html_body, 
+                            plain_body 
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showStatus('success', `✅ Email sent successfully to ${recipient}`);
+                    } else {
+                        showStatus('error', `❌ Failed: ${data.error || 'Unknown error'}`);
+                    }
+                } catch (err) {
+                    console.error('Send email error:', err);
+                    showStatus('error', '❌ Network error - please try again');
+                } finally {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = '📧 Send Email';
+                    sendBtn.style.opacity = '1';
+                }
+            });
+            
+            function showStatus(type, message) {
+                statusDiv.style.display = 'block';
+                if (type === 'success') {
+                    statusDiv.style.background = 'rgba(74, 222, 128, 0.1)';
+                    statusDiv.style.border = '1px solid rgba(74, 222, 128, 0.3)';
+                    statusDiv.style.color = '#4ade80';
+                } else {
+                    statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
+                    statusDiv.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    statusDiv.style.color = '#ff6b6b';
+                }
+                statusDiv.textContent = message;
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
         })();
 
         // Duplicate Detection Modal Functions

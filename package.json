@@ -26,6 +26,7 @@
     "helmet": "^7.1.0",
     "multer": "^2.0.2",
     "playwright": "^1.47.2",
+    "resend": "^4.0.0",
     "sqlite3": "^5.1.6"
   }
 }
