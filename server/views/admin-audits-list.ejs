@@ -219,7 +219,7 @@
         <div class="header">
             <h1>Audit Jobs</h1>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-                <button id="backupBtn" class="backup-btn" onclick="createBackup()">🛡️ Create Backup</button>
+                <button id="backupBtn" class="backup-btn">🛡️ Create Backup</button>
                 <a href="/admin" class="logout-btn">Back to Admin</a>
                 <a href="/admin/logout" class="logout-btn">Logout</a>
             </div>
@@ -294,8 +294,15 @@
     </div>
 
     <script>
-        // Attach event listeners to all delete buttons
+        // Attach event listeners to all buttons
         document.addEventListener('DOMContentLoaded', function() {
+            // Setup backup button
+            const backupBtn = document.getElementById('backupBtn');
+            if (backupBtn) {
+                backupBtn.addEventListener('click', createBackup);
+            }
+
+            // Setup delete buttons
             const deleteButtons = document.querySelectorAll('.btn-delete');
             
             deleteButtons.forEach(button => {
