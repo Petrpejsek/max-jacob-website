@@ -918,7 +918,7 @@ function createAuditJob(data, callback) {
 // Audit Jobs: list
 function getAuditJobs(callback) {
   const sql = `
-    SELECT id, created_at, updated_at, status, input_url, niche, city, public_page_slug
+    SELECT id, created_at, updated_at, status, input_url, niche, city, public_page_slug, scrape_result_json
     FROM audit_jobs
     ORDER BY created_at DESC
   `;
@@ -927,6 +927,13 @@ function getAuditJobs(callback) {
     if (err) {
       callback(err, null);
     } else {
+      // Parse JSON columns
+      if (rows) {
+        rows = rows.map(row => ({
+          ...row,
+          scrape_result_json: safeJsonParse(row.scrape_result_json)
+        }));
+      }
       callback(null, rows);
     }
   });
