@@ -2603,6 +2603,69 @@ function generatePublicSlug(job) {
   return `${niche}${city}/${companySeed}-${randomSuffix}`;
 }
 
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getAuditLandingUrlFromSlug(publicSlug) {
+  if (!publicSlug) return null;
+  return `https://maxandjacob.com/${publicSlug}?v=2`;
+}
+
+/**
+ * Ensures the email contains a clean, human-readable audit link block:
+ * "Audit - Company Name" (bold) + clickable full URL beneath.
+ *
+ * This is deterministic post-processing so we don't rely on LLM formatting.
+ */
+function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, companyLabel }) {
+  if (!emailHtmlRaw) return emailHtmlRaw;
+  if (!auditUrl) return emailHtmlRaw;
+
+  const label = companyLabel ? `Audit - ${companyLabel}` : 'Audit';
+  const block =
+    `<p style="margin: 20px 0;">` +
+    `<strong style="font-size: 16px;">${escapeHtml(label)}</strong><br>` +
+    `<a href="${escapeHtml(auditUrl)}" style="color: #4F46E5; text-decoration: none;">${escapeHtml(auditUrl)}</a>` +
+    `</p>`;
+
+  let html = String(emailHtmlRaw);
+
+  // If the email is plaintext-like, wrap it so it renders as HTML but keeps line breaks.
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(html);
+  if (!looksLikeHtml) {
+    html = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(html)}</div>`;
+  }
+
+  // Replace the first occurrence of the audit URL (or relative slug) with our clean block.
+  const candidates = [];
+  if (publicSlug) {
+    const rel = `/${publicSlug}`;
+    candidates.push(getAuditLandingUrlFromSlug(publicSlug));
+    candidates.push(`https://maxandjacob.com/${publicSlug}`);
+    candidates.push(`${rel}?v=2`);
+    candidates.push(rel);
+  }
+  candidates.push(auditUrl);
+
+  for (const c of candidates) {
+    if (!c) continue;
+    const idx = html.indexOf(c);
+    if (idx !== -1) {
+      html = html.replace(c, block);
+      return html;
+    }
+  }
+
+  // Fallback: append at the end.
+  return `${html}\n${block}`;
+}
+
 /**
  * Download and store logo locally
  * Validates content type and size, stores in public/brand_assets/<jobId>/logo.<ext>
@@ -3247,14 +3310,25 @@ async function processAuditJob(jobId, options = {}) {
     // Generate email and public page from assistant outputs
     const emailPackJson = assistant_outputs.email_pack_json;
     const publicPageJsonFromAssistant = assistant_outputs.public_page_json;
+
+    // Compute public slug early so we can build a stable audit URL for email formatting.
+    const publicSlug = job.public_page_slug || generatePublicSlug(job);
+    const auditUrl = getAuditLandingUrlFromSlug(publicSlug);
+    const companyLabel =
+      (job.company_name && String(job.company_name).trim()) ||
+      (assistant_outputs.llm_context_json && assistant_outputs.llm_context_json.company_profile && assistant_outputs.llm_context_json.company_profile.name) ||
+      '';
     
     // Use email from A5 if available, otherwise fall back to old generator
     let emailHtml;
     if (emailPackJson && emailPackJson.email_body_html) {
-      emailHtml = emailPackJson.email_body_html;
+      emailHtml = ensureAuditLinkBlockInEmailHtml(emailPackJson.email_body_html, { publicSlug, auditUrl, companyLabel });
     } else {
       const emailPolish = await runEmailPolish(job, miniAudit, options);
-      emailHtml = generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset);
+      emailHtml = ensureAuditLinkBlockInEmailHtml(
+        generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset),
+        { publicSlug, auditUrl, companyLabel }
+      );
     }
     
     // Use public page from A6 if available
@@ -3265,8 +3339,6 @@ async function processAuditJob(jobId, options = {}) {
       const conceptPreview = await generateConceptPreview(job, miniAudit, preset);
       publicPageJson = generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset);
     }
-    
-    const publicSlug = job.public_page_slug || generatePublicSlug(job);
 
     await updateJob(jobId, {
       email_html: emailHtml,
@@ -3326,7 +3398,16 @@ async function regenerateEmail(jobId, options = {}) {
     const miniAudit = job.mini_audit_json || {};
     const screenshots = job.screenshots_json || {};
     const emailPolish = await runEmailPolish(job, miniAudit, options);
-    const emailHtml = generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset);
+    const publicSlug = job.public_page_slug || generatePublicSlug(job);
+    const auditUrl = getAuditLandingUrlFromSlug(publicSlug);
+    const companyLabel =
+      (job.company_name && String(job.company_name).trim()) ||
+      (job.llm_context_json && job.llm_context_json.company_profile && job.llm_context_json.company_profile.name) ||
+      '';
+    const emailHtml = ensureAuditLinkBlockInEmailHtml(
+      generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset),
+      { publicSlug, auditUrl, companyLabel }
+    );
     await updateJob(jobId, { email_html: emailHtml, status: 'ready' });
     await logStep(jobId, 'email', 'Email regenerated');
   } catch (err) {

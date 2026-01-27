@@ -38,6 +38,41 @@ const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
 const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor');
 
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel }) {
+  if (!emailHtmlRaw) return emailHtmlRaw;
+  if (!auditUrl) return emailHtmlRaw;
+
+  const label = companyLabel ? `Audit - ${companyLabel}` : 'Audit';
+  const block =
+    `<p style="margin: 20px 0;">` +
+    `<strong style="font-size: 16px;">${escapeHtml(label)}</strong><br>` +
+    `<a href="${escapeHtml(auditUrl)}" style="color: #4F46E5; text-decoration: none;">${escapeHtml(auditUrl)}</a>` +
+    `</p>`;
+
+  let html = String(emailHtmlRaw);
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(html);
+  if (!looksLikeHtml) {
+    html = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(html)}</div>`;
+  }
+
+  // If the email already contains our label, don't duplicate it.
+  if (html.includes('Audit - ') && html.includes(auditUrl)) return html;
+
+  // If a plain URL is present, replace first occurrence; otherwise append.
+  const idx = html.indexOf(auditUrl);
+  if (idx !== -1) return html.replace(auditUrl, block);
+  return `${html}\n${block}`;
+}
+
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -328,12 +363,22 @@ router.get('/audits/:id', requireAdmin, (req, res) => {
               const memAfter = getMemorySnapshot();
               logMemoryDelta(`GET /admin/audits/${id}`, memBefore, memAfter);
 
+              const baseOrigin = `${req.protocol}://${req.get('host')}`;
+              const auditUrl = auditJob.public_page_slug ? `${baseOrigin}/${auditJob.public_page_slug}?v=2` : null;
+              const companyLabel =
+                (auditJob.company_name && String(auditJob.company_name).trim()) ||
+                (auditJob.llm_context_json && auditJob.llm_context_json.company_profile && auditJob.llm_context_json.company_profile.name) ||
+                '';
+              if (auditJob && auditJob.email_html) {
+                auditJob.email_html = ensureAuditLinkBlockInEmailHtml(auditJob.email_html, { auditUrl, companyLabel });
+              }
+
               res.render('admin-audit-detail', {
                 auditJob,
                 runLogs: runLogs || [],
                 promptTemplates: promptsByName,
                 publicUrl: auditJob.public_page_slug ? `/${auditJob.public_page_slug}` : null,
-                baseOrigin: `${req.protocol}://${req.get('host')}`,
+                baseOrigin,
                 crawledPages: crawledPages || [],
                 lighthouseReports: lighthouseReports || [],
                 assistantRuns: assistantRuns || []
