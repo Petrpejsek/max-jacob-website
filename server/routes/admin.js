@@ -1339,6 +1339,34 @@ router.delete('/api/assistants/:id', requireAdmin, (req, res) => {
   });
 });
 
+// POST /admin/api/backup - Create database backup
+router.post('/api/backup', requireAdmin, (req, res) => {
+  const { exec } = require('child_process');
+  const backupScript = path.join(__dirname, '../../scripts/backup-db.sh');
+  
+  console.log('[ADMIN] Manual backup triggered');
+  
+  exec(`bash ${backupScript}`, (error, stdout, stderr) => {
+    if (error) {
+      console.error('[ADMIN] Backup failed:', error);
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        output: stderr || stdout
+      });
+    }
+    
+    console.log('[ADMIN] Backup completed successfully');
+    console.log(stdout);
+    
+    res.json({ 
+      success: true, 
+      message: 'Backup completed successfully',
+      output: stdout
+    });
+  });
+});
+
 module.exports = router;
 
 

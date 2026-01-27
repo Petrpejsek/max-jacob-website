@@ -51,10 +51,33 @@
             text-decoration: none;
             font-size: 0.95rem;
             transition: background 0.2s;
+            cursor: pointer;
         }
 
         .logout-btn:hover {
             background: #2d2d44;
+        }
+
+        .backup-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #16a34a, #15803d);
+            border: none;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .backup-btn:hover {
+            background: linear-gradient(90deg, #15803d, #14532d);
+            transform: translateY(-1px);
+        }
+
+        .backup-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .table-container {
@@ -195,7 +218,8 @@
     <div class="admin-container">
         <div class="header">
             <h1>Audit Jobs</h1>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                <button id="backupBtn" class="backup-btn" onclick="createBackup()">🛡️ Create Backup</button>
                 <a href="/admin" class="logout-btn">Back to Admin</a>
                 <a href="/admin/logout" class="logout-btn">Logout</a>
             </div>
@@ -348,6 +372,76 @@
                 });
             });
         });
+
+        // Create backup function
+        async function createBackup() {
+            const btn = document.getElementById('backupBtn');
+            const originalText = btn.textContent;
+            
+            // Confirm action
+            if (!confirm('Create database backup now?\n\nThis will backup the database and all assets (screenshots, logos, etc.)')) {
+                return;
+            }
+            
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.textContent = '⏳ Creating backup...';
+            
+            try {
+                const response = await fetch('/admin/api/backup', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                // Check if session expired
+                if (response.status === 401) {
+                    alert('Session expired. Please log in again.');
+                    window.location.href = '/admin/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to create backup');
+                }
+                
+                // Success!
+                btn.textContent = '✅ Backup created!';
+                btn.style.background = 'linear-gradient(90deg, #16a34a, #15803d)';
+                
+                // Show detailed output in alert
+                const output = data.output || '';
+                const lines = output.split('\n').filter(l => l.trim());
+                const backupFiles = lines.filter(l => l.includes('.db.gz') || l.includes('.tar.gz'));
+                
+                let message = '✅ Backup created successfully!\n\n';
+                if (backupFiles.length > 0) {
+                    message += 'Files created:\n' + backupFiles.slice(-2).join('\n');
+                } else {
+                    message += 'Check server logs for details.';
+                }
+                
+                alert(message);
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Backup error:', error);
+                alert('❌ Backup failed: ' + error.message);
+                
+                // Reset button
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
     </script>
 </body>
 </html>
