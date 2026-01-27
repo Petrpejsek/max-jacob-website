@@ -20,14 +20,15 @@ async function sendEmail({ to, subject, html, text }) {
     }
 
     // Send email via Resend
-    // Using Resend sandbox email for testing (works without DNS verification)
-    // Change to 'jacob@maxandjacob.com' after DNS is verified
     const result = await resend.emails.send({
-      from: 'onboarding@resend.dev', // Sandbox email - works immediately
+      from: 'jacob@maxandjacob.com',
       to,
       subject,
       html: html || undefined,
-      text: text || undefined
+      text: text || undefined,
+      tags: [
+        { name: 'category', value: 'audit-outreach' }
+      ]
     });
 
     return { success: true, id: result.id };

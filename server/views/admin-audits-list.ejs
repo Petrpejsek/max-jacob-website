@@ -287,7 +287,27 @@
                                 <td><%= job.city %></td>
                                 <td><%= job.input_url %></td>
                                 <td>
-                                    <% if (!job.hasEmail) { %>
+                                    <% if (job.emailSent) { %>
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; font-size: 0.75rem; font-weight: 500;">✅ sent</span>
+                                            <% if (job.emailOpens > 0 || job.emailClicks > 0) { %>
+                                                <div style="display: flex; gap: 8px; font-size: 0.7rem; color: #b6b6d6;">
+                                                    <% if (job.emailOpens > 0) { %>
+                                                        <span style="display: flex; align-items: center; gap: 3px;">
+                                                            <span style="color: #60a5fa;">👁️</span>
+                                                            <span><%= job.emailOpens %></span>
+                                                        </span>
+                                                    <% } %>
+                                                    <% if (job.emailClicks > 0) { %>
+                                                        <span style="display: flex; align-items: center; gap: 3px;">
+                                                            <span style="color: #4ade80;">🔗</span>
+                                                            <span><%= job.emailClicks %></span>
+                                                        </span>
+                                                    <% } %>
+                                                </div>
+                                            <% } %>
+                                        </div>
+                                    <% } else if (!job.hasEmail) { %>
                                         <span class="no-email-indicator">⚠️ No email</span>
                                     <% } else { %>
                                         <span style="color: #4ade80; font-size: 0.9rem;">✓</span>

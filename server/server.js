@@ -144,6 +144,36 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Resend webhook endpoint (must be BEFORE admin routes - public endpoint)
+app.post('/api/webhooks/resend', express.json(), (req, res) => {
+  console.log('[RESEND WEBHOOK] Received event:', req.body.type);
+  
+  const { type, data } = req.body;
+  const { updateEmailTracking } = require('./db');
+  
+  // Process email events (opened, clicked)
+  if (type === 'email.opened' && data && data.email_id) {
+    updateEmailTracking(data.email_id, 'opened', (err) => {
+      if (err) {
+        console.error('[RESEND WEBHOOK] Error updating opened tracking:', err);
+      } else {
+        console.log('[RESEND WEBHOOK] Email opened tracked:', data.email_id);
+      }
+    });
+  } else if (type === 'email.clicked' && data && data.email_id) {
+    updateEmailTracking(data.email_id, 'clicked', (err) => {
+      if (err) {
+        console.error('[RESEND WEBHOOK] Error updating clicked tracking:', err);
+      } else {
+        console.log('[RESEND WEBHOOK] Email clicked tracked:', data.email_id);
+      }
+    });
+  }
+  
+  // Always respond 200 OK to webhook
+  res.status(200).json({ received: true });
+});
+
 // Register API and Admin routes
 app.use('/api', contactRoutes);
 app.use('/api/presets', presetsRoutes);

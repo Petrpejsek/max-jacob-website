@@ -318,6 +318,10 @@ function initDatabase() {
       status TEXT NOT NULL,
       resend_id TEXT,
       error_message TEXT,
+      opened INTEGER DEFAULT 0,
+      clicked INTEGER DEFAULT 0,
+      last_opened_at DATETIME,
+      last_clicked_at DATETIME,
       FOREIGN KEY (audit_job_id) REFERENCES audit_jobs(id)
     )
   `;
@@ -327,6 +331,12 @@ function initDatabase() {
       console.error('Error creating email_logs table:', err);
     } else {
       console.log('Table email_logs ready');
+      
+      // Migration: Add tracking columns if they don't exist
+      db.run(`ALTER TABLE email_logs ADD COLUMN opened INTEGER DEFAULT 0`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN clicked INTEGER DEFAULT 0`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN last_opened_at DATETIME`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN last_clicked_at DATETIME`, [], () => {});
     }
   });
 
@@ -2006,6 +2016,55 @@ function getEmailLogsByJobId(jobId, callback) {
   });
 }
 
+function getAllEmailLogsStatus(callback) {
+  const sql = `
+    SELECT audit_job_id, 
+           MAX(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as has_sent_email,
+           SUM(opened) as total_opens,
+           SUM(clicked) as total_clicks
+    FROM email_logs
+    GROUP BY audit_job_id
+  `;
+  
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      const statusMap = {};
+      (rows || []).forEach(row => {
+        statusMap[row.audit_job_id] = {
+          sent: row.has_sent_email === 1,
+          opens: row.total_opens || 0,
+          clicks: row.total_clicks || 0
+        };
+      });
+      callback(null, statusMap);
+    }
+  });
+}
+
+function updateEmailTracking(resendId, eventType, callback) {
+  if (eventType === 'opened') {
+    const sql = `
+      UPDATE email_logs
+      SET opened = opened + 1,
+          last_opened_at = CURRENT_TIMESTAMP
+      WHERE resend_id = ?
+    `;
+    db.run(sql, [resendId], callback);
+  } else if (eventType === 'clicked') {
+    const sql = `
+      UPDATE email_logs
+      SET clicked = clicked + 1,
+          last_clicked_at = CURRENT_TIMESTAMP
+      WHERE resend_id = ?
+    `;
+    db.run(sql, [resendId], callback);
+  } else {
+    callback(new Error('Invalid event type'));
+  }
+}
+
 module.exports = {
   db,
   insertSubmission,
@@ -2051,7 +2110,9 @@ module.exports = {
   getAllSiteSettings,
   setSiteSetting,
   createEmailLog,
-  getEmailLogsByJobId
+  getEmailLogsByJobId,
+  getAllEmailLogsStatus,
+  updateEmailTracking
 };
 
 // Site Settings functions

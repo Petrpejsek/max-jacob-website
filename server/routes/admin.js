@@ -32,7 +32,8 @@ const {
   getAllSiteSettings,
   setSiteSetting,
   createEmailLog,
-  getEmailLogsByJobId
+  getEmailLogsByJobId,
+  getAllEmailLogsStatus
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
 const { collectDiagnostics } = require('../services/diagnostics');
@@ -258,22 +259,35 @@ router.get('/audits', requireAdmin, (req, res) => {
       auditJobs = [];
     }
 
-    // Enrich each job with email info
-    const enrichedJobs = (auditJobs || []).map(job => {
-      let hasEmail = false;
-      try {
-        const scrape = job.scrape_result_json;
-        hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
-      } catch (_) {}
-      
-      return {
-        ...job,
-        hasEmail
-      };
-    });
+    // Get email sent status for all jobs
+    getAllEmailLogsStatus((emailErr, emailStatusMap) => {
+      if (emailErr) {
+        console.error('Error fetching email status:', emailErr);
+        emailStatusMap = {};
+      }
 
-    res.render('admin-audits-list', {
-      auditJobs: enrichedJobs
+      // Enrich each job with email info
+      const enrichedJobs = (auditJobs || []).map(job => {
+        let hasEmail = false;
+        try {
+          const scrape = job.scrape_result_json;
+          hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
+        } catch (_) {}
+        
+        const emailStatus = emailStatusMap[job.id] || { sent: false, opens: 0, clicks: 0 };
+        
+        return {
+          ...job,
+          hasEmail,
+          emailSent: emailStatus.sent,
+          emailOpens: emailStatus.opens,
+          emailClicks: emailStatus.clicks
+        };
+      });
+
+      res.render('admin-audits-list', {
+        auditJobs: enrichedJobs
+      });
     });
   });
 });
