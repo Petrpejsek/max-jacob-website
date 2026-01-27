@@ -8,7 +8,8 @@ const NICHES = ['plumbing', 'roofing', 'hvac', 'electrician'];
 
 function isValidNicheCity(value) {
   const lower = (value || '').toLowerCase();
-  return NICHES.some((niche) => lower.startsWith(niche));
+  // Support both formats: "niche" and "city-niche" (e.g. "plumbing" or "local-plumbing")
+  return NICHES.some((niche) => lower.includes(niche));
 }
 
 // Privacy Policy route
