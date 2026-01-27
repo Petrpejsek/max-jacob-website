@@ -729,10 +729,7 @@
                 <div id="outreachEmailError" style="display:none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d1f1f; border: 1px solid #5d2d2d; color: #ffb3b3; font-size: 0.95rem;"></div>
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
                     <button class="btn btn-primary" type="button" id="generateOutreachBtn" style="flex: 0 0 auto;">
-                        ✨ Show / Regenerate
-                    </button>
-                    <button class="btn" type="button" id="copyOutreachBtn" style="flex: 0 0 auto; display: none;">
-                        📋 Copy Email
+                        ✨ Show Email
                     </button>
                 </div>
                 
@@ -805,14 +802,43 @@
                     const mjNiche = (auditJob.niche || '').toString().trim() || 'local service';
                     const mjCity = (auditJob.city || '').toString().trim() || 'your area';
                     const mjAuditLink = publicUrl ? `${baseOrigin}${publicUrl}?v=2` : `${baseOrigin}/?v=2`;
-                    const mjDefaultOutreachEmail = `Hi ${mjFirstName} — Jacob here (Max & Jacob).\n\nI found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).\n\nWe put together a quick audit for your site (safe preview — no download, no login):\nAudit - ${mjBusinessName}\n${mjAuditLink}\n\nIf this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.`; 
+                    const mjAuditLinkHtml = `<a href="${mjAuditLink}" style="color: #4F46E5; text-decoration: underline;">Audit - ${mjBusinessName}</a>`;
+                    
+                    // Plaintext version (for copying into tools that don't support HTML)
+                    const mjDefaultOutreachEmailPlain = `Hi ${mjFirstName} — Jacob here (Max & Jacob).\n\nI found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).\n\nWe put together a quick audit for your site (safe preview — no download, no login):\nAudit - ${mjBusinessName}\n${mjAuditLink}\n\nIf this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.`; 
+                    
+                    // HTML version (for email clients - clickable link)
+                    const mjDefaultOutreachEmailHtml = `<p>Hi ${mjFirstName} — Jacob here (Max & Jacob).</p>
+<p>I found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).</p>
+<p>We put together a quick audit for your site (safe preview — no download, no login):<br><strong>${mjAuditLinkHtml}</strong></p>
+<p>If this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.</p>`;
                 %>
 
                 <div id="outreachEmailContainer" style="display: none;">
+                    <!-- HTML Version (for email clients) -->
                     <div style="background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
-                        <div style="color: #b6b6d6; font-size: 0.85rem; margin-bottom: 8px; font-weight: 500;">Email (editable):</div>
-                        <textarea id="outreachEmailText" style="min-height: 240px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.92rem; line-height: 1.6;"><%= mjDefaultOutreachEmail %></textarea>
-                        <textarea id="outreachEmailDefault" style="display:none;"><%= mjDefaultOutreachEmail %></textarea>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="color: #b6b6d6; font-size: 0.85rem; font-weight: 500;">📧 HTML Email (clickable link):</div>
+                            <button class="btn btn-primary" type="button" id="copyHtmlBtn" style="padding: 6px 12px; font-size: 0.85rem;">
+                                📋 Copy HTML
+                            </button>
+                        </div>
+                        <div id="outreachEmailHtmlPreview" style="background: #fff; color: #333; padding: 16px; border-radius: 6px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">
+                            <%- mjDefaultOutreachEmailHtml %>
+                        </div>
+                        <textarea id="outreachEmailHtml" style="display:none;"><%- mjDefaultOutreachEmailHtml %></textarea>
+                    </div>
+                    
+                    <!-- Plaintext Version (for tools that don't support HTML) -->
+                    <div style="background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="color: #b6b6d6; font-size: 0.85rem; font-weight: 500;">📝 Plain Text (editable):</div>
+                            <button class="btn" type="button" id="copyPlainBtn" style="padding: 6px 12px; font-size: 0.85rem;">
+                                📋 Copy Text
+                            </button>
+                        </div>
+                        <textarea id="outreachEmailText" style="min-height: 200px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.92rem; line-height: 1.6;"><%= mjDefaultOutreachEmailPlain %></textarea>
+                        <textarea id="outreachEmailDefault" style="display:none;"><%= mjDefaultOutreachEmailPlain %></textarea>
                     </div>
                     
                     <div style="color: #999; font-size: 0.85rem;">
@@ -3515,47 +3541,54 @@ STYLE:
             function show() {
                 const container = $('outreachEmailContainer');
                 if (container) container.style.display = 'block';
-                const copyBtn = $('copyOutreachBtn');
-                if (copyBtn) copyBtn.style.display = 'inline-block';
             }
 
             function regenerate() {
                 const def = $('outreachEmailDefault');
                 const ta = $('outreachEmailText');
                 if (!ta || !def) return;
-                // Replace __ORIGIN__ placeholder with actual origin at time of generation.
-                const origin = (window && window.location && window.location.origin) ? window.location.origin : '';
-                ta.value = String(def.value || '').replaceAll('__ORIGIN__', origin);
+                ta.value = String(def.value || '');
                 show();
             }
 
-            async function copy() {
-                const ta = $('outreachEmailText');
-                if (!ta) return;
-                const text = String(ta.value || '').trim();
+            async function copyWithFeedback(text, btn, originalText) {
                 if (!text) return;
-                const btn = $('copyOutreachBtn');
-                const original = btn ? btn.textContent : null;
                 try {
                     await navigator.clipboard.writeText(text);
                     if (btn) {
                         btn.textContent = '✓ Copied!';
                         btn.style.background = 'linear-gradient(90deg, #4ade80, #22c55e)';
                         setTimeout(() => {
-                            btn.textContent = original || '📋 Copy Email';
+                            btn.textContent = originalText;
                             btn.style.background = '';
                         }, 1500);
                     }
                 } catch (e) {
-                    // Fallback: select text so user can cmd+c
-                    try { ta.focus(); ta.select(); } catch (_) {}
+                    console.error('Copy failed:', e);
                 }
             }
 
+            async function copyHtml() {
+                const htmlTa = $('outreachEmailHtml');
+                if (!htmlTa) return;
+                const btn = $('copyHtmlBtn');
+                await copyWithFeedback(htmlTa.value.trim(), btn, '📋 Copy HTML');
+            }
+
+            async function copyPlain() {
+                const ta = $('outreachEmailText');
+                if (!ta) return;
+                const btn = $('copyPlainBtn');
+                await copyWithFeedback(ta.value.trim(), btn, '📋 Copy Text');
+            }
+
             const genBtn = $('generateOutreachBtn');
-            const copyBtn = $('copyOutreachBtn');
+            const copyHtmlBtn = $('copyHtmlBtn');
+            const copyPlainBtn = $('copyPlainBtn');
+            
             if (genBtn) genBtn.addEventListener('click', regenerate);
-            if (copyBtn) copyBtn.addEventListener('click', copy);
+            if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', copyHtml);
+            if (copyPlainBtn) copyPlainBtn.addEventListener('click', copyPlain);
         })();
 
         // Duplicate Detection Modal Functions
