@@ -804,6 +804,18 @@
                     const mjAuditLink = publicUrl ? `${baseOrigin}${publicUrl}?v=2` : `${baseOrigin}/?v=2`;
                     const mjAuditLinkHtml = `<a href="${mjAuditLink}" style="color: #4F46E5; text-decoration: underline;">Audit - ${mjBusinessName}</a>`;
                     
+                    // Extract customer email from scrape data
+                    let mjCustomerEmail = null;
+                    try {
+                        const scrapeContacts = mjScrape && mjScrape.contacts;
+                        if (scrapeContacts && scrapeContacts.email) {
+                            mjCustomerEmail = String(scrapeContacts.email).trim();
+                        }
+                    } catch (_) {}
+                    
+                    // Email subject
+                    const mjEmailSubject = `${mjBusinessName} x Max & Jacob`;
+                    
                     // Plaintext version (for copying into tools that don't support HTML)
                     const mjDefaultOutreachEmailPlain = `Hi ${mjFirstName} — Jacob here (Max & Jacob).\n\nI found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).\n\nWe put together a quick audit for your site (safe preview — no download, no login):\nAudit - ${mjBusinessName}\n${mjAuditLink}\n\nIf this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.`; 
                     
@@ -825,14 +837,35 @@
                 %>
 
                 <div id="outreachEmailContainer" style="display: none;">
+                    <!-- Hidden data for JS -->
+                    <input type="hidden" id="customerEmail" value="<%= mjCustomerEmail || '' %>">
+                    <input type="hidden" id="emailSubject" value="<%= mjEmailSubject %>">
+                    
                     <!-- HTML Version (for email clients) -->
                     <div style="background: #0f0f1a; border: 1px solid #3d3d54; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 12px;">
                             <div style="color: #b6b6d6; font-size: 0.85rem; font-weight: 500;">📧 HTML Email (clickable link):</div>
-                            <button class="btn btn-primary" type="button" id="copyHtmlBtn" style="padding: 6px 12px; font-size: 0.85rem;">
-                                📋 Copy HTML
-                            </button>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-primary" type="button" id="copyHtmlBtn" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    📋 Copy HTML
+                                </button>
+                                <button class="btn" type="button" id="copyCustomerEmailBtn" style="padding: 6px 12px; font-size: 0.85rem;" <%= mjCustomerEmail ? '' : 'disabled' %>>
+                                    📧 Copy Email
+                                </button>
+                                <button class="btn" type="button" id="copySubjectBtn" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    📝 Copy Subject
+                                </button>
+                            </div>
                         </div>
+                        <% if (mjCustomerEmail) { %>
+                            <div style="color: #7a7aa0; font-size: 0.8rem; margin-bottom: 8px;">
+                                Customer email: <code style="color: #b6b6d6;"><%= mjCustomerEmail %></code> • Subject: <code style="color: #b6b6d6;"><%= mjEmailSubject %></code>
+                            </div>
+                        <% } else { %>
+                            <div style="color: #d97706; font-size: 0.8rem; margin-bottom: 8px;">
+                                ⚠️ No customer email found in scrape data
+                            </div>
+                        <% } %>
                         <div id="outreachEmailHtmlPreview" style="background: #fff; color: #333; padding: 16px; border-radius: 6px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">
                             <%- mjDefaultOutreachEmailHtml %>
                         </div>
@@ -3592,13 +3625,35 @@ STYLE:
                 await copyWithFeedback(ta.value.trim(), btn, '📋 Copy Text');
             }
 
+            async function copyCustomerEmail() {
+                const emailInput = $('customerEmail');
+                if (!emailInput) return;
+                const email = emailInput.value.trim();
+                if (!email) return;
+                const btn = $('copyCustomerEmailBtn');
+                await copyWithFeedback(email, btn, '📧 Copy Email');
+            }
+
+            async function copySubject() {
+                const subjectInput = $('emailSubject');
+                if (!subjectInput) return;
+                const subject = subjectInput.value.trim();
+                if (!subject) return;
+                const btn = $('copySubjectBtn');
+                await copyWithFeedback(subject, btn, '📝 Copy Subject');
+            }
+
             const genBtn = $('generateOutreachBtn');
             const copyHtmlBtn = $('copyHtmlBtn');
             const copyPlainBtn = $('copyPlainBtn');
+            const copyCustomerEmailBtn = $('copyCustomerEmailBtn');
+            const copySubjectBtn = $('copySubjectBtn');
             
             if (genBtn) genBtn.addEventListener('click', regenerate);
             if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', copyHtml);
             if (copyPlainBtn) copyPlainBtn.addEventListener('click', copyPlain);
+            if (copyCustomerEmailBtn) copyCustomerEmailBtn.addEventListener('click', copyCustomerEmail);
+            if (copySubjectBtn) copySubjectBtn.addEventListener('click', copySubject);
         })();
 
         // Duplicate Detection Modal Functions
