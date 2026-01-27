@@ -20,8 +20,10 @@ async function sendEmail({ to, subject, html, text }) {
     }
 
     // Send email via Resend
+    // Using Resend sandbox email for testing (works without DNS verification)
+    // Change to 'jacob@maxandjacob.com' after DNS is verified
     const result = await resend.emails.send({
-      from: 'jacob@maxandjacob.com', // Must be configured in Resend dashboard
+      from: 'onboarding@resend.dev', // Sandbox email - works immediately
       to,
       subject,
       html: html || undefined,
