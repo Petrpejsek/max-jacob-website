@@ -1386,8 +1386,12 @@ async function scrapeWebsite(url, jobId) {
   await page.waitForTimeout(500);
   await page.screenshot({ path: aboveFoldPath, fullPage: false });
 
-  const fullPagePath = path.join(screenshotDir, 'fullpage.png');
-  await page.screenshot({ path: fullPagePath, fullPage: true });
+  // Desktop full page (OPTIONAL - can be disabled to save memory)
+  const ENABLE_FULLPAGE_SCREENSHOTS = process.env.ENABLE_FULLPAGE_SCREENSHOTS !== 'false';
+  if (ENABLE_FULLPAGE_SCREENSHOTS) {
+    const fullPagePath = path.join(screenshotDir, 'fullpage.png');
+    await page.screenshot({ path: fullPagePath, fullPage: true });
+  }
 
   // Mobile screenshots
   await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE size
@@ -1397,8 +1401,11 @@ async function scrapeWebsite(url, jobId) {
   const mobileAboveFoldPath = path.join(screenshotDir, 'mobile-above-fold.png');
   await page.screenshot({ path: mobileAboveFoldPath, fullPage: false });
 
-  const mobileFullPath = path.join(screenshotDir, 'mobile-full.png');
-  await page.screenshot({ path: mobileFullPath, fullPage: true });
+  // Mobile full page (OPTIONAL - can be disabled to save memory)
+  if (ENABLE_FULLPAGE_SCREENSHOTS) {
+    const mobileFullPath = path.join(screenshotDir, 'mobile-full.png');
+    await page.screenshot({ path: mobileFullPath, fullPage: true });
+  }
 
   await browser.close();
 
@@ -1435,9 +1442,9 @@ async function scrapeWebsite(url, jobId) {
     rawDump: extracted.rawDump || {},
     screenshots: {
       above_fold: path.join(relativeBase, 'above-fold.png'),
-      fullpage: path.join(relativeBase, 'fullpage.png'),
+      fullpage: ENABLE_FULLPAGE_SCREENSHOTS ? path.join(relativeBase, 'fullpage.png') : null,
       mobile: path.join(relativeBase, 'mobile-above-fold.png'),
-      mobile_full: path.join(relativeBase, 'mobile-full.png')
+      mobile_full: ENABLE_FULLPAGE_SCREENSHOTS ? path.join(relativeBase, 'mobile-full.png') : null
     }
   };
 }
@@ -2587,15 +2594,20 @@ function generatePublicSlug(job) {
     throw new Error(`Cannot generate slug without niche (${job.niche})`);
   }
   
-  const niche = job.niche.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Create readable slug parts with dashes
+  const niche = job.niche.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const city = job.city 
-    ? job.city.toLowerCase().replace(/[^a-z0-9]/g, '') 
+    ? job.city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     : 'local';
-  const companySeed = job.company_name
-    ? job.company_name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)
-    : 'audit';
-  const randomSuffix = crypto.randomBytes(3).toString('hex');
-  return `${niche}${city}/${companySeed}-${randomSuffix}`;
+  
+  // Use full company name (or fallback), cleaned up
+  const companyName = job.company_name
+    ? job.company_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    : 'business';
+  
+  // Human-readable format: city-niche/company-audit
+  // Example: orlando-plumbing/mercury-plumbing-audit
+  return `${city}-${niche}/${companyName}-audit`;
 }
 
 /**
