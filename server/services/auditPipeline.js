@@ -2589,25 +2589,18 @@ async function runEmailPolish(job, miniAudit, options) {
 }
 
 function generatePublicSlug(job) {
-  // Niche is required, city is optional (fallback to 'local')
-  if (!job.niche) {
-    throw new Error(`Cannot generate slug without niche (${job.niche})`);
+  // NO FALLBACKS - require real data
+  if (!job.niche || !job.city) {
+    throw new Error(`Cannot generate slug without niche (${job.niche}) and city (${job.city})`);
   }
   
-  // Create readable slug parts with dashes
-  const niche = job.niche.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const city = job.city 
-    ? job.city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    : 'local';
-  
-  // Use full company name (or fallback), cleaned up
-  const companyName = job.company_name
-    ? job.company_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    : 'business';
-  
-  // Human-readable format: city-niche/company-audit
-  // Example: orlando-plumbing/mercury-plumbing-audit
-  return `${city}-${niche}/${companyName}-audit`;
+  const niche = job.niche.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const city = job.city.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const companySeed = job.company_name
+    ? job.company_name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)
+    : 'audit';
+  const randomSuffix = crypto.randomBytes(3).toString('hex');
+  return `${niche}${city}/${companySeed}-${randomSuffix}`;
 }
 
 /**
@@ -4211,7 +4204,7 @@ async function runAssistantsPipeline(jobId, options = {}) {
 
   // Build links for A5 and A6
   payload_data.links = {
-    audit_landing_url: job.public_page_slug ? `/${job.public_page_slug}` : '#',
+    audit_landing_url: job.public_page_slug ? `https://maxandjacob.com/${job.public_page_slug}?v=2` : '#',
     questionnaire_url: 'https://maxandjacob.com/questionnaire' // TODO: Make configurable
   };
 

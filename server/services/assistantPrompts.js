@@ -367,6 +367,13 @@ Return ONLY valid JSON (STRICT JSON: double quotes, no trailing commas, no markd
   ]
 }
 
+URL DISPLAY RULES:
+- In email_body_html, display the audit link cleanly without technical path
+- Format: "Audit - [Company Name]" as bold text, followed by the clickable URL on next line
+- Example HTML: <p style="margin: 20px 0;"><strong style="font-size: 16px;">Audit - Suncoast Plumbing</strong><br><a href="{{audit_landing_url}}" style="color: #4F46E5; text-decoration: none;">{{audit_landing_url}}</a></p>
+- The URL variable {{audit_landing_url}} will be replaced with the actual full URL
+- Do NOT hide the URL behind button text - show the full URL so it looks professional and transparent
+
 EMAIL STRUCTURE:
 Paragraph 1: Brief intro mentioning their business, city, niche (use llm_context.company_profile.name if available)
 Paragraph 2: Reference 1-2 specific findings from offer (be specific, use evidence)
