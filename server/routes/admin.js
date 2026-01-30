@@ -33,9 +33,26 @@ const {
   setSiteSetting,
   createEmailLog,
   getEmailLogsByJobId,
-  getAllEmailLogsStatus
+  getAllEmailLogsStatus,
+
+  // Presets (needed for Preaudits dropdown)
+  getAllNichePresets,
+
+  // Preaudits
+  createPreauditSearch,
+  getPreauditSearchById,
+  getAllPreauditSearches,
+  updatePreauditSearch,
+  deletePreauditSearch,
+  getPreauditResultsBySearchId,
+  getPreauditResultById,
+  updatePreauditResult,
+  getPreauditCountsBySearchId,
+  deletePreauditResult,
+  addToBlacklist
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
+const preauditPipeline = require('../services/preauditPipeline');
 const { collectDiagnostics } = require('../services/diagnostics');
 const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
@@ -1336,37 +1353,6 @@ router.post('/team-photos/upload', requireAdmin, uploadSingleJson('photo'), (req
   });
 });
 
-// GET /admin/:id - detail (fallback - zkusí oba typy)
-router.get('/:id', requireAdmin, (req, res) => {
-  const id = req.params.id;
-
-  // Nejdřív zkusíme contact submission
-  getSubmissionById(id, (err, submission) => {
-    if (err || !submission) {
-      // Pokud nenajdeme, zkusíme web-project
-      getWebProjectSubmissionById(id, (err, webProjectSubmission) => {
-        if (err) {
-          console.error('Error fetching submission:', err);
-          return res.status(500).send('Error loading submission');
-        }
-
-        if (!webProjectSubmission) {
-          return res.status(404).send('Submission not found');
-        }
-
-        res.render('admin-web-project-detail', { 
-          submission: webProjectSubmission 
-        });
-      });
-    } else {
-      res.render('admin-detail', { 
-        submission,
-        submissionType: 'contact'
-      });
-    }
-  });
-});
-
 // ==================== AI ASSISTANTS API ====================
 
 // GET /admin/assistants - Assistant Configuration Management Page
@@ -1526,6 +1512,351 @@ router.post('/api/backup', requireAdmin, (req, res) => {
       success: true, 
       message: 'Backup completed successfully',
       output: stdout
+    });
+  });
+});
+
+// ==================== PREAUDIT ROUTES ====================
+
+// GET /admin/preaudits - Preaudit management page
+router.get('/preaudits', requireAdmin, (req, res) => {
+  getAllPreauditSearches((err, searches) => {
+    if (err) {
+      console.error('Error fetching preaudit searches:', err);
+      searches = [];
+    }
+
+    getAllNichePresets((presetErr, presets) => {
+      if (presetErr) {
+        console.error('Error fetching niche presets:', presetErr);
+        presets = [];
+      }
+
+      res.render('admin-preaudits', {
+        searches: searches || [],
+        presets: presets || []
+      });
+    });
+  });
+});
+
+// POST /admin/api/preaudits/search - Start new preaudit search
+router.post('/api/preaudits/search', requireAdmin, auditJobLimiter, async (req, res) => {
+  const { niche, city, count } = req.body;
+
+  // Validation
+  if (!niche || !count) {
+    return res.status(400).json({
+      success: false,
+      error: 'niche and count are required'
+    });
+  }
+
+  const requestedCount = parseInt(count);
+  if (isNaN(requestedCount) || requestedCount < 1 || requestedCount > 50) {
+    return res.status(400).json({
+      success: false,
+      error: 'count must be between 1 and 50'
+    });
+  }
+
+  console.log('[PREAUDIT] Creating new search:', { niche, city, count: requestedCount });
+
+  try {
+    // Create search record
+    const result = await new Promise((resolve, reject) => {
+      createPreauditSearch({
+        niche,
+        city: city || null,
+        requested_count: requestedCount,
+        status: 'pending'
+      }, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
+    });
+
+    const searchId = result.id;
+    console.log('[PREAUDIT] Search created, ID:', searchId);
+
+    // Run pipeline in background
+    setImmediate(async () => {
+      try {
+        await preauditPipeline.runPreauditSearch(searchId);
+        console.log('[PREAUDIT] Pipeline completed for search', searchId);
+      } catch (pipelineErr) {
+        console.error('[PREAUDIT] Pipeline error for search', searchId, ':', pipelineErr);
+      }
+    });
+
+    // Return immediately
+    res.status(202).json({
+      success: true,
+      searchId: searchId,
+      status: 'pending',
+      message: 'Search started in background'
+    });
+
+  } catch (error) {
+    console.error('[PREAUDIT] Error creating search:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /admin/api/preaudits/:searchId/status - Get search status (for polling)
+router.get('/api/preaudits/:searchId/status', requireAdmin, (req, res) => {
+  const { searchId } = req.params;
+
+  getPreauditSearchById(searchId, (err, search) => {
+    if (err) {
+      console.error('Error fetching preaudit search status:', err);
+      return res.status(500).json({ error: 'Failed to fetch status' });
+    }
+
+    if (!search) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    getPreauditCountsBySearchId(searchId, (cntErr, counts) => {
+      if (cntErr) {
+        console.error('Error fetching preaudit counts:', cntErr);
+      }
+
+      const safeCounts = counts || {
+        total_count: 0,
+        green_count: search.green_count,
+        red_count: search.red_count,
+        skipped_count: 0,
+        error_count: 0
+      };
+
+      res.json({
+        status: search.status,
+        // Target requested by user (for progress/UI)
+        found_count: search.requested_count,
+        green_count: safeCounts.green_count,
+        red_count: safeCounts.red_count,
+        skipped_count: safeCounts.skipped_count,
+        error_count: safeCounts.error_count,
+        total_count: safeCounts.total_count,
+        error_message: search.error_message
+      });
+    });
+  });
+});
+
+// GET /admin/api/preaudits/:searchId/results - Get search results
+router.get('/api/preaudits/:searchId/results', requireAdmin, (req, res) => {
+  const { searchId } = req.params;
+
+  getPreauditResultsBySearchId(searchId, (err, results) => {
+    if (err) {
+      console.error('Error fetching preaudit results:', err);
+      return res.status(500).json({ error: 'Failed to fetch results' });
+    }
+
+    // Separate green and red results
+    // - green: only valid results (exclude converted_to_audit and skipped)
+    // - red: only true no-email results (exclude skipped/errors)
+    const greenResults = (results || []).filter(r => r.has_email === 1 && r.status === 'valid');
+    const redResults = (results || []).filter(r => r.has_email === 0 && r.status === 'no_email');
+    const skippedResults = (results || []).filter(r => (r.status || '').startsWith('skipped_'));
+    const errorResults = (results || []).filter(r => r.status === 'error');
+
+    res.json({
+      green: greenResults,
+      red: redResults,
+      // Diagnostics (optional)
+      skipped: skippedResults,
+      errors: errorResults
+    });
+  });
+});
+
+// POST /admin/api/preaudits/:resultId/proceed - Convert result to audit
+router.post('/api/preaudits/:resultId/proceed', requireAdmin, async (req, res) => {
+  const { resultId } = req.params;
+
+  try {
+    // Get preaudit result
+    const result = await new Promise((resolve, reject) => {
+      getPreauditResultById(resultId, (err, result) => {
+        if (err) reject(err);
+        else if (!result) reject(new Error('Result not found'));
+        else resolve(result);
+      });
+    });
+
+    if (!result.has_email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot proceed with result without email'
+      });
+    }
+
+    // Get search data to get niche and city
+    const search = await new Promise((resolve, reject) => {
+      getPreauditSearchById(result.search_id, (err, search) => {
+        if (err) reject(err);
+        else if (!search) reject(new Error('Search not found'));
+        else resolve(search);
+      });
+    });
+
+    // Get preset ID from niche
+    const preset = await new Promise((resolve, reject) => {
+      getAllNichePresets((err, presets) => {
+        if (err) reject(err);
+        else {
+          const foundPreset = (presets || []).find(p => p.slug === search.niche);
+          resolve(foundPreset);
+        }
+      });
+    });
+
+    console.log('[PREAUDIT] Converting result to audit:', {
+      url: result.url,
+      niche: search.niche,
+      city: search.city,
+      email: result.email
+    });
+
+    // audit_jobs.city is NOT NULL in your DB, but Preaudits city is optional.
+    // If user didn't provide a city, treat it as USA-wide search.
+    const cityForAudit = (search.city && String(search.city).trim()) ? String(search.city).trim() : 'USA';
+
+    // Create audit job
+    const auditJob = await new Promise((resolve, reject) => {
+      createAuditJob({
+        input_url: result.url,
+        niche: search.niche,
+        city: cityForAudit,
+        company_name: result.title || null,
+        brand_logo_url: null,
+        preset_id: preset ? preset.id : null,
+        status: 'ready_to_check'
+      }, (err, job) => {
+        if (err) reject(err);
+        else resolve(job);
+      });
+    });
+
+    console.log('[PREAUDIT] Audit job created, ID:', auditJob.id);
+
+    // Mark preaudit result as processed (DO NOT DELETE - user wants to keep records!)
+    await new Promise((resolve, reject) => {
+      updatePreauditResult(resultId, {
+        status: 'converted_to_audit'
+      }, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    console.log('[PREAUDIT] Preaudit result marked as converted');
+
+    res.json({
+      success: true,
+      auditJobId: auditJob.id,
+      message: 'Audit job created successfully'
+    });
+
+  } catch (error) {
+    console.error('[PREAUDIT] Error in proceed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /admin/api/preaudits/:resultId - Delete preaudit result (move to blacklist)
+router.delete('/api/preaudits/:resultId', requireAdmin, async (req, res) => {
+  const { resultId } = req.params;
+
+  try {
+    // Get result
+    const result = await new Promise((resolve, reject) => {
+      getPreauditResultById(resultId, (err, result) => {
+        if (err) reject(err);
+        else if (!result) reject(new Error('Result not found'));
+        else resolve(result);
+      });
+    });
+
+    // Get search data
+    const search = await new Promise((resolve, reject) => {
+      getPreauditSearchById(result.search_id, (err, search) => {
+        if (err) reject(err);
+        else resolve(search);
+      });
+    });
+
+    // Add to blacklist
+    const { addToBlacklist } = require('../db');
+    await new Promise((resolve, reject) => {
+      addToBlacklist(result.url, {
+        niche: search ? search.niche : null,
+        city: search ? search.city : null,
+        reason: 'manually_removed'
+      }, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Delete result
+    await new Promise((resolve, reject) => {
+      deletePreauditResult(resultId, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    console.log('[PREAUDIT] Result deleted and blacklisted:', result.url);
+
+    res.json({
+      success: true,
+      message: 'Result deleted and added to blacklist'
+    });
+
+  } catch (error) {
+    console.error('[PREAUDIT] Error deleting result:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /admin/api/preaudits/search/:searchId - Delete entire search
+router.delete('/api/preaudits/search/:searchId', requireAdmin, (req, res) => {
+  const { searchId } = req.params;
+
+  deletePreauditSearch(searchId, (err, result) => {
+    if (err) {
+      console.error('Error deleting preaudit search:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to delete search'
+      });
+    }
+
+    if (result.changes === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Search not found'
+      });
+    }
+
+    console.log('[PREAUDIT] Search deleted:', searchId);
+
+    res.json({
+      success: true,
+      message: 'Search deleted successfully'
     });
   });
 });

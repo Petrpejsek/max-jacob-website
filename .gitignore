@@ -4,3 +4,23 @@ data.db
 .DS_Store
 *.log
 
+# SQLite runtime files
+data.db-wal
+data.db-shm
+data.db-journal
+
+# Dev/runtime artifacts
+*.pid
+.dev.pid
+mj-dev.pid
+
+# Backups
+*.backup
+*.bak
+*.bak2
+*.bak3
+
+# Generated screenshots / crawls (should live on persistent disk in prod)
+public/preaudit_screenshots/
+public/audit_screenshots/
+

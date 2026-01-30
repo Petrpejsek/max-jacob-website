@@ -739,6 +739,85 @@ function initDatabase() {
       console.log('Table site_settings ready');
     }
   });
+
+  // ==================== PREAUDIT TABLES ====================
+
+  // Preaudit searches table - history of search operations
+  const createPreauditSearchesTableSQL = `
+    CREATE TABLE IF NOT EXISTS preaudit_searches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      niche TEXT NOT NULL,
+      city TEXT,
+      requested_count INTEGER NOT NULL,
+      found_count INTEGER DEFAULT 0,
+      green_count INTEGER DEFAULT 0,
+      red_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      error_message TEXT
+    )
+  `;
+
+  db.run(createPreauditSearchesTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating preaudit_searches table:', err);
+    } else {
+      console.log('Table preaudit_searches ready');
+    }
+  });
+
+  // Preaudit results table - individual website results
+  const createPreauditResultsTableSQL = `
+    CREATE TABLE IF NOT EXISTS preaudit_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      search_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      url TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      email TEXT,
+      has_email INTEGER DEFAULT 0,
+      screenshot_hero_path TEXT,
+      screenshot_full_path TEXT,
+      status TEXT DEFAULT 'pending',
+      search_position INTEGER,
+      FOREIGN KEY (search_id) REFERENCES preaudit_searches(id) ON DELETE CASCADE
+    )
+  `;
+
+  db.run(createPreauditResultsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating preaudit_results table:', err);
+    } else {
+      console.log('Table preaudit_results ready');
+    }
+  });
+
+  // Preaudit blacklist table - global blacklist of URLs without emails
+  const createPreauditBlacklistTableSQL = `
+    CREATE TABLE IF NOT EXISTS preaudit_blacklist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT NOT NULL UNIQUE,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      niche TEXT,
+      city TEXT,
+      reason TEXT DEFAULT 'no_email'
+    )
+  `;
+
+  db.run(createPreauditBlacklistTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating preaudit_blacklist table:', err);
+    } else {
+      console.log('Table preaudit_blacklist ready');
+    }
+  });
+
+  // Indexes for performance (safe IF NOT EXISTS)
+  db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_search_id ON preaudit_results(search_id)', () => {});
+  db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_status ON preaudit_results(status)', () => {});
+  db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_blacklist_url ON preaudit_blacklist(url)', () => {});
   
   // Test zápisu do databáze
   db.run('SELECT 1', (err) => {
@@ -930,11 +1009,14 @@ function createAuditJob(data, callback) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
 
+  // Some DBs enforce NOT NULL on audit_jobs.city; keep it safe.
+  const safeCity = (data.city === undefined || data.city === null) ? 'USA' : data.city;
+
   const params = [
     data.status || 'draft',
     data.input_url,
     data.niche,
-    data.city,
+    safeCity,
     data.company_name || null,
     data.brand_logo_url || null,
     data.preset_id || null
@@ -2065,6 +2147,310 @@ function updateEmailTracking(resendId, eventType, callback) {
   }
 }
 
+// ==================== PREAUDIT FUNCTIONS ====================
+
+// Preaudit Searches
+function createPreauditSearch(data, callback) {
+  const sql = `
+    INSERT INTO preaudit_searches (niche, city, requested_count, status)
+    VALUES (?, ?, ?, ?)
+  `;
+  
+  db.run(sql, [
+    data.niche,
+    data.city || null,
+    data.requested_count,
+    data.status || 'pending'
+  ], function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { id: this.lastID });
+    }
+  });
+}
+
+function getPreauditSearchById(id, callback) {
+  const sql = 'SELECT * FROM preaudit_searches WHERE id = ?';
+  db.get(sql, [id], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, row);
+    }
+  });
+}
+
+function getAllPreauditSearches(callback) {
+  const sql = `
+    SELECT * FROM preaudit_searches 
+    ORDER BY created_at DESC
+  `;
+  
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
+function updatePreauditSearch(id, updates, callback) {
+  const fields = [];
+  const values = [];
+  
+  if (updates.found_count !== undefined) {
+    fields.push('found_count = ?');
+    values.push(updates.found_count);
+  }
+  if (updates.green_count !== undefined) {
+    fields.push('green_count = ?');
+    values.push(updates.green_count);
+  }
+  if (updates.red_count !== undefined) {
+    fields.push('red_count = ?');
+    values.push(updates.red_count);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.error_message !== undefined) {
+    fields.push('error_message = ?');
+    values.push(updates.error_message);
+  }
+  
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+  
+  const sql = `UPDATE preaudit_searches SET ${fields.join(', ')} WHERE id = ?`;
+  
+  db.run(sql, values, function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
+    }
+  });
+}
+
+function deletePreauditSearch(id, callback) {
+  const sql = 'DELETE FROM preaudit_searches WHERE id = ?';
+  db.run(sql, [id], function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
+    }
+  });
+}
+
+// Preaudit Results
+function createPreauditResult(data, callback) {
+  const sql = `
+    INSERT INTO preaudit_results (
+      search_id, url, title, description, email, has_email,
+      screenshot_hero_path, screenshot_full_path, status, search_position
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  
+  db.run(sql, [
+    data.search_id,
+    data.url,
+    data.title || null,
+    data.description || null,
+    data.email || null,
+    data.has_email ? 1 : 0,
+    data.screenshot_hero_path || null,
+    data.screenshot_full_path || null,
+    data.status || 'pending',
+    data.search_position || null
+  ], function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { id: this.lastID });
+    }
+  });
+}
+
+function getPreauditResultsBySearchId(searchId, callback) {
+  const sql = `
+    SELECT * FROM preaudit_results 
+    WHERE search_id = ? 
+    ORDER BY search_position ASC, created_at ASC
+  `;
+  
+  db.all(sql, [searchId], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
+function getPreauditResultById(id, callback) {
+  const sql = 'SELECT * FROM preaudit_results WHERE id = ?';
+  db.get(sql, [id], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, row);
+    }
+  });
+}
+
+function getPreauditCountsBySearchId(searchId, callback) {
+  const sql = `
+    SELECT
+      COUNT(*) as total_count,
+      SUM(CASE WHEN has_email = 1 AND status = 'valid' THEN 1 ELSE 0 END) as green_count,
+      SUM(CASE WHEN has_email = 0 AND status = 'no_email' THEN 1 ELSE 0 END) as red_count,
+      SUM(CASE WHEN status LIKE 'skipped_%' THEN 1 ELSE 0 END) as skipped_count,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error_count
+    FROM preaudit_results
+    WHERE search_id = ?
+  `;
+
+  db.get(sql, [searchId], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, {
+        total_count: row?.total_count || 0,
+        green_count: row?.green_count || 0,
+        red_count: row?.red_count || 0,
+        skipped_count: row?.skipped_count || 0,
+        error_count: row?.error_count || 0
+      });
+    }
+  });
+}
+
+function updatePreauditResult(id, updates, callback) {
+  const fields = [];
+  const values = [];
+  
+  if (updates.email !== undefined) {
+    fields.push('email = ?');
+    values.push(updates.email);
+  }
+  if (updates.has_email !== undefined) {
+    fields.push('has_email = ?');
+    values.push(updates.has_email ? 1 : 0);
+  }
+  if (updates.screenshot_hero_path !== undefined) {
+    fields.push('screenshot_hero_path = ?');
+    values.push(updates.screenshot_hero_path);
+  }
+  if (updates.screenshot_full_path !== undefined) {
+    fields.push('screenshot_full_path = ?');
+    values.push(updates.screenshot_full_path);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  
+  values.push(id);
+  
+  const sql = `UPDATE preaudit_results SET ${fields.join(', ')} WHERE id = ?`;
+  
+  db.run(sql, values, function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
+    }
+  });
+}
+
+function deletePreauditResult(id, callback) {
+  const sql = 'DELETE FROM preaudit_results WHERE id = ?';
+  db.run(sql, [id], function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
+    }
+  });
+}
+
+// Preaudit Blacklist
+function addToBlacklist(url, data, callback) {
+  const sql = `
+    INSERT OR IGNORE INTO preaudit_blacklist (url, niche, city, reason)
+    VALUES (?, ?, ?, ?)
+  `;
+  
+  db.run(sql, [
+    url,
+    data.niche || null,
+    data.city || null,
+    data.reason || 'no_email'
+  ], function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { id: this.lastID, changes: this.changes });
+    }
+  });
+}
+
+function isUrlBlacklisted(url, callback) {
+  const sql = 'SELECT id FROM preaudit_blacklist WHERE url = ? LIMIT 1';
+  db.get(sql, [url], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, !!row);
+    }
+  });
+}
+
+function isUrlAlreadyProcessed(url, callback) {
+  const sql = `
+    SELECT id FROM preaudit_results 
+    WHERE url = ? AND has_email = 1 
+    LIMIT 1
+  `;
+  db.get(sql, [url], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, !!row);
+    }
+  });
+}
+
+function getBlacklistedUrls(callback) {
+  const sql = `
+    SELECT * FROM preaudit_blacklist 
+    ORDER BY added_at DESC
+  `;
+  
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
+function removeFromBlacklist(url, callback) {
+  const sql = 'DELETE FROM preaudit_blacklist WHERE url = ?';
+  db.run(sql, [url], function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
+    }
+  });
+}
+
 module.exports = {
   db,
   insertSubmission,
@@ -2112,7 +2498,24 @@ module.exports = {
   createEmailLog,
   getEmailLogsByJobId,
   getAllEmailLogsStatus,
-  updateEmailTracking
+  updateEmailTracking,
+  // Preaudit functions
+  createPreauditSearch,
+  getPreauditSearchById,
+  getAllPreauditSearches,
+  updatePreauditSearch,
+  deletePreauditSearch,
+  createPreauditResult,
+  getPreauditResultsBySearchId,
+  getPreauditResultById,
+  updatePreauditResult,
+  deletePreauditResult,
+  addToBlacklist,
+  isUrlBlacklisted,
+  isUrlAlreadyProcessed,
+  getPreauditCountsBySearchId,
+  getBlacklistedUrls,
+  removeFromBlacklist
 };
 
 // Site Settings functions

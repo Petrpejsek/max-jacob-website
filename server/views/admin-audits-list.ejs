@@ -142,6 +142,24 @@
             color: #a5b4fc;
         }
 
+        .badge-ready-to-check {
+            background: linear-gradient(90deg, rgba(34, 197, 94, 0.22), rgba(74, 222, 128, 0.18));
+            border: 1px solid rgba(74, 222, 128, 0.6);
+            color: #bbf7d0;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+        }
+
+        .row-ready-to-check td {
+            background: rgba(34, 197, 94, 0.06);
+        }
+
+        .row-ready-to-check td:first-child {
+            border-left: 3px solid rgba(74, 222, 128, 0.9);
+        }
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -233,6 +251,7 @@
         <div class="header">
             <h1>Audit Jobs</h1>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                <a href="/admin/preaudits" class="logout-btn" style="background: linear-gradient(90deg, rgba(74,222,128,0.1), rgba(34,197,94,0.1)); border-color: rgba(74,222,128,0.3); color: #4ade80; font-weight: 600;">🔍 Preaudits</a>
                 <button id="backupBtn" class="backup-btn">🛡️ Create Backup</button>
                 <a href="/admin" class="logout-btn">Back to Admin</a>
                 <a href="/admin/logout" class="logout-btn">Logout</a>
@@ -280,7 +299,7 @@
                     </thead>
                     <tbody>
                         <% auditJobs.forEach(job => { %>
-                            <tr id="row-<%= job.id %>">
+                            <tr id="row-<%= job.id %>" class="<%= job.status === 'ready_to_check' ? 'row-ready-to-check' : '' %>">
                                 <td>#<%= job.id %></td>
                                 <td><%= new Date(job.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
                                 <td><%= job.niche %></td>
@@ -313,7 +332,11 @@
                                         <span style="color: #4ade80; font-size: 0.9rem;">✓</span>
                                     <% } %>
                                 </td>
-                                <td><span class="badge badge-status"><%= job.status %></span></td>
+                                <td>
+                                    <span class="badge <%= job.status === 'ready_to_check' ? 'badge-ready-to-check' : 'badge-status' %>">
+                                        <%= job.status %>
+                                    </span>
+                                </td>
                                 <td>
                                     <% if (job.public_page_slug) { %>
                                         <a href="/<%= job.public_page_slug %>?v=2" class="view-link" target="_blank">Open →</a>

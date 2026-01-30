@@ -29,6 +29,9 @@ services:
         value: "/opt/render/project/data/data.db"
       - key: PUBLIC_DIR
         value: "/opt/render/project/data/public"
+      # Preaudits: fullpage screenshots for modal review (can be toggled off if memory is tight)
+      - key: ENABLE_PREAUDIT_FULLPAGE_SCREENSHOTS
+        value: "true"
       # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
       # never committed to git.
       # Required:
