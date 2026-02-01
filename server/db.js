@@ -347,6 +347,7 @@ function initDatabase() {
   });
 
   // Create table for tracking audit page views (Clarity integration)
+  // NOTE: No FOREIGN KEY constraint - we want to track views even if audit is deleted (historical data)
   const createPageViewsTableSQL = `
     CREATE TABLE IF NOT EXISTS audit_page_views (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -354,8 +355,7 @@ function initDatabase() {
       viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       clarity_session_id TEXT,
       user_agent TEXT,
-      ip_address TEXT,
-      FOREIGN KEY (audit_job_id) REFERENCES audit_jobs(id)
+      ip_address TEXT
     )
   `;
 
