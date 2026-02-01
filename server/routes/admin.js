@@ -283,27 +283,40 @@ router.get('/audits', requireAdmin, (req, res) => {
         emailStatusMap = {};
       }
 
-      // Enrich each job with email info
-      const enrichedJobs = (auditJobs || []).map(job => {
-        let hasEmail = false;
-        try {
-          const scrape = job.scrape_result_json;
-          hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
-        } catch (_) {}
-        
-        const emailStatus = emailStatusMap[job.id] || { sent: false, opens: 0, clicks: 0 };
-        
-        return {
-          ...job,
-          hasEmail,
-          emailSent: emailStatus.sent,
-          emailOpens: emailStatus.opens,
-          emailClicks: emailStatus.clicks
-        };
-      });
+      // Get page views status
+      const { getAllPageViewsStatus } = require('../db');
+      getAllPageViewsStatus((pageViewErr, pageViewStatusMap) => {
+        if (pageViewErr) {
+          console.error('Error fetching page views:', pageViewErr);
+          pageViewStatusMap = {};
+        }
 
-      res.render('admin-audits-list', {
-        auditJobs: enrichedJobs
+        // Enrich each job with email info and page views
+        const enrichedJobs = (auditJobs || []).map(job => {
+          let hasEmail = false;
+          try {
+            const scrape = job.scrape_result_json;
+            hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
+          } catch (_) {}
+          
+          const emailStatus = emailStatusMap[job.id] || { sent: false, opens: 0, clicks: 0 };
+          const pageViewStatus = pageViewStatusMap[job.id] || { views: 0, lastViewed: null, claritySessionId: null };
+          
+          return {
+            ...job,
+            hasEmail,
+            emailSent: emailStatus.sent,
+            emailOpens: emailStatus.opens,
+            emailClicks: emailStatus.clicks,
+            pageViews: pageViewStatus.views,
+            lastPageView: pageViewStatus.lastViewed,
+            claritySessionId: pageViewStatus.claritySessionId
+          };
+        });
+
+        res.render('admin-audits-list', {
+          auditJobs: enrichedJobs
+        });
       });
     });
   });

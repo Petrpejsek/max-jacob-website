@@ -346,6 +346,27 @@ function initDatabase() {
     }
   });
 
+  // Create table for tracking audit page views (Clarity integration)
+  const createPageViewsTableSQL = `
+    CREATE TABLE IF NOT EXISTS audit_page_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      audit_job_id INTEGER NOT NULL,
+      viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      clarity_session_id TEXT,
+      user_agent TEXT,
+      ip_address TEXT,
+      FOREIGN KEY (audit_job_id) REFERENCES audit_jobs(id)
+    )
+  `;
+
+  db.run(createPageViewsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating audit_page_views table:', err);
+    } else {
+      console.log('Table audit_page_views ready');
+    }
+  });
+
   // Vytvoření tabulky pro prompt templates
   const createPromptTemplatesTableSQL = `
     CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -2154,6 +2175,71 @@ function updateEmailTracking(resendId, eventType, callback) {
   }
 }
 
+// Page Views: Track audit page visits (Clarity integration)
+function createPageView(data, callback) {
+  const sql = `
+    INSERT INTO audit_page_views (audit_job_id, clarity_session_id, user_agent, ip_address)
+    VALUES (?, ?, ?, ?)
+  `;
+  
+  db.run(sql, [
+    data.audit_job_id,
+    data.clarity_session_id || null,
+    data.user_agent || null,
+    data.ip_address || null
+  ], function(err) {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, { id: this.lastID });
+    }
+  });
+}
+
+function getPageViewsByJobId(jobId, callback) {
+  const sql = `
+    SELECT * FROM audit_page_views
+    WHERE audit_job_id = ?
+    ORDER BY viewed_at DESC
+  `;
+  
+  db.all(sql, [jobId], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
+function getAllPageViewsStatus(callback) {
+  const sql = `
+    SELECT 
+      audit_job_id,
+      COUNT(*) as total_views,
+      MAX(viewed_at) as last_viewed_at,
+      (SELECT clarity_session_id FROM audit_page_views WHERE audit_job_id = apv.audit_job_id ORDER BY viewed_at DESC LIMIT 1) as latest_clarity_session_id
+    FROM audit_page_views apv
+    GROUP BY audit_job_id
+  `;
+  
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      callback(err, null);
+    } else {
+      const statusMap = {};
+      (rows || []).forEach(row => {
+        statusMap[row.audit_job_id] = {
+          views: row.total_views || 0,
+          lastViewed: row.last_viewed_at,
+          claritySessionId: row.latest_clarity_session_id
+        };
+      });
+      callback(null, statusMap);
+    }
+  });
+}
+
 // ==================== PREAUDIT FUNCTIONS ====================
 
 // Preaudit Searches
@@ -2432,6 +2518,52 @@ function isUrlAlreadyProcessed(url, callback) {
   });
 }
 
+/**
+ * Get email from preaudit results by URL (normalized matching)
+ * Used as fallback when audit scraping doesn't find email
+ * @param {string} url - URL to search for (will be normalized)
+ * @param {function} callback - Callback(err, email)
+ */
+function getPreauditEmailByUrl(url, callback) {
+  // Normalize URL for matching (remove trailing slash, www, lowercase)
+  let normalized = url;
+  try {
+    const urlObj = new URL(url);
+    normalized = urlObj.href.toLowerCase();
+    normalized = normalized.replace(/^https?:\/\/(www\.)?/, 'https://');
+    normalized = normalized.replace(/\/$/, '');
+  } catch (e) {
+    // If URL parsing fails, use as-is
+  }
+
+  const sql = `
+    SELECT email, url, title, created_at
+    FROM preaudit_results 
+    WHERE (url = ? OR url = ?) 
+      AND has_email = 1 
+      AND email IS NOT NULL
+      AND email != ''
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  
+  // Try both original and normalized URL
+  db.get(sql, [url, normalized], (err, row) => {
+    if (err) {
+      callback(err, null);
+    } else if (row && row.email) {
+      console.log('[DB] Found preaudit email fallback:', {
+        url: row.url,
+        email: row.email,
+        title: row.title
+      });
+      callback(null, row.email);
+    } else {
+      callback(null, null);
+    }
+  });
+}
+
 function getBlacklistedUrls(callback) {
   const sql = `
     SELECT * FROM preaudit_blacklist 
@@ -2506,6 +2638,10 @@ module.exports = {
   getEmailLogsByJobId,
   getAllEmailLogsStatus,
   updateEmailTracking,
+  // Page views (Clarity tracking)
+  createPageView,
+  getPageViewsByJobId,
+  getAllPageViewsStatus,
   // Preaudit functions
   createPreauditSearch,
   getPreauditSearchById,
@@ -2520,6 +2656,7 @@ module.exports = {
   addToBlacklist,
   isUrlBlacklisted,
   isUrlAlreadyProcessed,
+  getPreauditEmailByUrl,
   getPreauditCountsBySearchId,
   getBlacklistedUrls,
   removeFromBlacklist

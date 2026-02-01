@@ -227,6 +227,13 @@
             animation: fadeOut 0.3s ease-out forwards;
         }
 
+        /* Clarity play button styles - must be at bottom to override inline styles */
+        a[href*="clarity.microsoft.com"]:hover {
+            background: rgba(147, 51, 234, 0.2) !important;
+            border-color: rgba(147, 51, 234, 0.5) !important;
+            transform: scale(1.05);
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8rem;
@@ -321,6 +328,24 @@
                                                         <span style="display: flex; align-items: center; gap: 3px;">
                                                             <span style="color: #4ade80;">🔗</span>
                                                             <span><%= job.emailClicks %></span>
+                                                        </span>
+                                                    <% } %>
+                                                </div>
+                                            <% } %>
+                                            <% if (job.pageViews > 0) { %>
+                                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                                                    <% if (job.claritySessionId) { %>
+                                                        <a href="https://clarity.microsoft.com/projects/view/vaor3tcykv/sessions/<%= job.claritySessionId %>" 
+                                                           target="_blank" 
+                                                           title="Watch session recording in Microsoft Clarity"
+                                                           style="display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #a78bfa; font-size: 0.7rem; text-decoration: none; transition: all 0.2s;">
+                                                            <span>▶️</span>
+                                                            <span><%= job.pageViews %></span>
+                                                        </a>
+                                                    <% } else { %>
+                                                        <span style="display: flex; align-items: center; gap: 3px; font-size: 0.7rem; color: #b6b6d6;">
+                                                            <span style="color: #a78bfa;">👀</span>
+                                                            <span><%= job.pageViews %></span>
                                                         </span>
                                                     <% } %>
                                                 </div>

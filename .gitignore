@@ -24,3 +24,6 @@ mj-dev.pid
 public/preaudit_screenshots/
 public/audit_screenshots/
 
+# Token analytics logs
+logs/token-analytics/
+

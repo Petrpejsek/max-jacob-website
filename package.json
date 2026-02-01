@@ -7,7 +7,7 @@
     "start": "node server/server.js",
     "dev": "node server/server.js",
     "postinstall": "node scripts/postinstall-playwright.js",
-    "test": "node tests/evidence-pack-empire.test.js && node tests/evidence-pack-wm.test.js && node tests/assistant-validator.test.js && node tests/payload-builders.test.js && node tests/contact-extraction.test.js"
+    "test": "node tests/evidence-pack-empire.test.js && node tests/evidence-pack-wm.test.js && node tests/assistant-validator.test.js && node tests/payload-builders.test.js && node tests/contact-extraction.test.js && node tests/company-name.test.js"
   },
   "keywords": [
     "website",

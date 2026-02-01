@@ -17,6 +17,7 @@ const {
 } = require('../db');
 const { getDefaultPromptTemplates } = require('./promptTemplates');
 const { getPersistentPublicDir } = require('../runtimePaths');
+const { pickCompanyNameFromSignals } = require('../helpers/companyName');
 
 // Scraper v3 (multi-page crawler)
 let scraperV3 = null;
@@ -1342,7 +1343,33 @@ async function scrapeWebsite(url, jobId) {
   
   const bodyText = extracted.bodyText || '';
   const phoneMatch = bodyText.match(/(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
-  const emailMatch = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  let emailMatch = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  
+  // CRITICAL FALLBACK: If no email found in merged contacts or body text, try preaudit results
+  if (!emailMatch && mergedContacts.emails.length === 0 && job.input_url) {
+    console.log('[AUDIT V2] No email found in scraped data, checking preaudit fallback...');
+    const { getPreauditEmailByUrl } = require('../db');
+    const preauditEmail = await new Promise((resolve, reject) => {
+      getPreauditEmailByUrl(job.input_url, (err, email) => {
+        if (err) {
+          console.error('[AUDIT V2] Preaudit email fallback error:', err);
+          resolve(null);
+        } else {
+          resolve(email);
+        }
+      });
+    });
+    
+    if (preauditEmail) {
+      console.log('[AUDIT V2] ✓ Found email from preaudit fallback:', preauditEmail);
+      // Simulate emailMatch result for backward compatibility
+      emailMatch = [preauditEmail];
+      // Also add to mergedContacts for consistency
+      mergedContacts.emails.push({ value: preauditEmail, source: 'preaudit_fallback' });
+    } else {
+      console.log('[AUDIT V2] No email found in preaudit either');
+    }
+  }
 
   const ctas = extracted.ctaCandidates
     .filter((text) => /call|contact|get|estimate|quote|schedule|book|request/i.test(text))
@@ -1623,24 +1650,16 @@ function generateEvidencePackV2(job, crawledPages, screenshots) {
   };
 
   // Company name
-  let company_name = null;
-  let company_name_source = null;
-  const orgName = sanitizeName(jsonldExtracted.organization?.name);
-  const localName = sanitizeName(jsonldExtracted.localbusiness?.name);
-  const webName = sanitizeName(jsonldExtracted.website?.name);
-  const htmlTitle = sanitizeName(homepage.title ? homepage.title.split('|')[0].trim() : null);
-  const ogSiteName = sanitizeName(homepage.og_site_name || null);
-
-  if (orgName) { company_name = orgName; company_name_source = 'jsonld_organization'; }
-  else if (localName) { company_name = localName; company_name_source = 'jsonld_localbusiness'; }
-  else if (webName) { company_name = webName; company_name_source = 'jsonld_website'; }
-  else if (htmlTitle) { company_name = htmlTitle; company_name_source = 'html_title'; }
-  else if (ogSiteName) { company_name = ogSiteName; company_name_source = 'og_site_name'; }
-  else {
-    const fallback = sanitizeName(deriveDomainFallback(job.input_url));
-    company_name = fallback;
-    company_name_source = 'domain_fallback';
-  }
+  const pickedV2 = pickCompanyNameFromSignals({
+    orgName: jsonldExtracted.organization?.name,
+    localName: jsonldExtracted.localbusiness?.name,
+    webName: jsonldExtracted.website?.name,
+    ogSiteName: homepage.og_site_name || null,
+    htmlTitle: homepage.title || null,
+    inputUrl: job.input_url
+  });
+  const company_name = pickedV2.name;
+  const company_name_source = pickedV2.source;
 
   // Address (allow partial, warn if no street)
   let address = null;
@@ -2138,20 +2157,16 @@ function generateEvidencePack(job, scrapeResult, rawDump, screenshots) {
   };
   const jsonldBlocks = rawDump.structured_data_jsonld || [];
   const jsonldMeta = parseJsonLdContacts(jsonldBlocks) || {};
-  const orgName = sanitizeName(jsonldMeta.organization_name);
-  const localName = sanitizeName(jsonldMeta.localbusiness_name);
-  const webName = sanitizeName(jsonldMeta.website_name);
-  const htmlTitle = sanitizeName(scrapeResult.title ? String(scrapeResult.title).split('|')[0].trim() : null);
-  const ogSiteName = sanitizeName(scrapeResult.og_site_name || scrapeResult.ogSiteName || null);
-
-  let company_name = null;
-  let company_name_source = null;
-  if (orgName) { company_name = orgName; company_name_source = 'jsonld_organization'; }
-  else if (localName) { company_name = localName; company_name_source = 'jsonld_localbusiness'; }
-  else if (webName) { company_name = webName; company_name_source = 'jsonld_website'; }
-  else if (htmlTitle) { company_name = htmlTitle; company_name_source = 'html_title'; }
-  else if (ogSiteName) { company_name = ogSiteName; company_name_source = 'og_site_name'; }
-  else { company_name = sanitizeName(deriveDomainFallback(job.input_url)); company_name_source = 'domain_fallback'; }
+  const pickedV1 = pickCompanyNameFromSignals({
+    orgName: jsonldMeta.organization_name,
+    localName: jsonldMeta.localbusiness_name,
+    webName: jsonldMeta.website_name,
+    ogSiteName: scrapeResult.og_site_name || scrapeResult.ogSiteName || null,
+    htmlTitle: scrapeResult.title || null,
+    inputUrl: job.input_url
+  });
+  const company_name = pickedV1.name;
+  const company_name_source = pickedV1.source;
 
   companyProfile.name = company_name;
 
@@ -2618,9 +2633,13 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function getAuditLandingUrlFromSlug(publicSlug) {
+function getAuditLandingUrlFromSlug(publicSlug, auditId = null) {
   if (!publicSlug) return null;
-  return `https://maxandjacob.com/${publicSlug}?v=2`;
+  let url = `https://maxandjacob.com/${publicSlug}?v=2`;
+  if (auditId) {
+    url += `&audit_id=${auditId}`;
+  }
+  return url;
 }
 
 /**
@@ -2967,6 +2986,8 @@ async function processAuditJob(jobId, options = {}) {
 
       // Collect best-available email from v3 pages (prefer contact page, then homepage, then any page).
       const emailByKey = new Map();
+      
+      console.log('[AUDIT V3] Email extraction - checking scraped pages...');
       const pushEmailCandidate = (raw, source) => {
         const s = String(raw || '').trim();
         if (!s) return;
@@ -2997,6 +3018,29 @@ async function processAuditJob(jobId, options = {}) {
           (homepage && (homepage.content_text || homepage.text_snippet)) || ''
         ].join('\n');
         pushEmailCandidate(blob, 'text_fallback');
+      }
+      
+      // CRITICAL FALLBACK: If no email found, try preaudit results (preaudit has better email detection)
+      if (emailByKey.size === 0 && job.input_url) {
+        console.log('[AUDIT V3] No email found in scraped pages, checking preaudit fallback...');
+        const { getPreauditEmailByUrl } = require('../db');
+        const preauditEmail = await new Promise((resolve, reject) => {
+          getPreauditEmailByUrl(job.input_url, (err, email) => {
+            if (err) {
+              console.error('[AUDIT V3] Preaudit email fallback error:', err);
+              resolve(null);
+            } else {
+              resolve(email);
+            }
+          });
+        });
+        
+        if (preauditEmail) {
+          console.log('[AUDIT V3] ✓ Found email from preaudit fallback:', preauditEmail);
+          pushEmailCandidate(preauditEmail, 'preaudit_fallback');
+        } else {
+          console.log('[AUDIT V3] No email found in preaudit either');
+        }
       }
 
       const emailCandidatesV3 = Array.from(emailByKey.values());
@@ -3319,7 +3363,7 @@ async function processAuditJob(jobId, options = {}) {
 
     // Compute public slug early so we can build a stable audit URL for email formatting.
     const publicSlug = job.public_page_slug || generatePublicSlug(job);
-    const auditUrl = getAuditLandingUrlFromSlug(publicSlug);
+    const auditUrl = getAuditLandingUrlFromSlug(publicSlug, jobId);
     const companyLabel =
       (job.company_name && String(job.company_name).trim()) ||
       (assistant_outputs.llm_context_json && assistant_outputs.llm_context_json.company_profile && assistant_outputs.llm_context_json.company_profile.name) ||
@@ -3405,7 +3449,7 @@ async function regenerateEmail(jobId, options = {}) {
     const screenshots = job.screenshots_json || {};
     const emailPolish = await runEmailPolish(job, miniAudit, options);
     const publicSlug = job.public_page_slug || generatePublicSlug(job);
-    const auditUrl = getAuditLandingUrlFromSlug(publicSlug);
+    const auditUrl = getAuditLandingUrlFromSlug(publicSlug, jobId);
     const companyLabel =
       (job.company_name && String(job.company_name).trim()) ||
       (job.llm_context_json && job.llm_context_json.company_profile && job.llm_context_json.company_profile.name) ||
@@ -3522,6 +3566,7 @@ async function regenerateEvidencePackV2(jobId) {
 const { sendOpenRouterRequest, retryOnTransientError } = require('./openRouterClient');
 const { validateAssistantOutput } = require('./outputValidator');
 const { buildPayload, checkAssistantDependencies } = require('./payloadBuilders');
+const { trackPayload, trackResponse, generateJobReport } = require('./tokenAnalytics');
 const { 
   insertAssistantRun, 
   updateAssistantRun,
@@ -3984,6 +4029,9 @@ async function runSingleAssistant(jobId, assistant_key, payload_data = {}, optio
 
   // 4. Call OpenRouter with retry logic
   try {
+    // Track payload before sending (token analytics)
+    trackPayload(jobId, assistant_key, user_content, { model, temperature });
+
     const response = await retryOnTransientError(async () => {
       return await sendOpenRouterRequest({
         model,
@@ -3999,6 +4047,9 @@ async function runSingleAssistant(jobId, assistant_key, payload_data = {}, optio
     }, 1, 2000); // Max 1 retry, 2s delay
 
     await logStep(jobId, `assistant_${assistant_key}`, `LLM response received (${response.token_usage?.total_tokens || 'unknown'} tokens)`);
+
+    // Track actual token usage (token analytics)
+    trackResponse(jobId, assistant_key, response.token_usage);
 
     // 5. Validate output
     let parsed = response.parsed_json;
@@ -4291,7 +4342,7 @@ async function runAssistantsPipeline(jobId, options = {}) {
 
   // Build links for A5 and A6
   payload_data.links = {
-    audit_landing_url: job.public_page_slug ? `https://maxandjacob.com/${job.public_page_slug}?v=2` : '#',
+    audit_landing_url: job.public_page_slug ? `https://maxandjacob.com/${job.public_page_slug}?v=2&audit_id=${jobId}` : '#',
     questionnaire_url: 'https://maxandjacob.com/questionnaire' // TODO: Make configurable
   };
 
@@ -4335,6 +4386,9 @@ async function runAssistantsPipeline(jobId, options = {}) {
   const failed = results.filter(r => r.status === 'failed').length;
   
   await logStep(jobId, 'assistants_pipeline', `Summary: ${succeeded}/6 succeeded, ${failed}/6 failed`);
+
+  // Generate token analytics report
+  generateJobReport(jobId);
 }
 
 /**

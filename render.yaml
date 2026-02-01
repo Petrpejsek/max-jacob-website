@@ -35,9 +35,10 @@ services:
       # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
       # never committed to git.
       # Required:
-      # - ADMIN_PASSWORD
-      # - SESSION_SECRET
-      # - OPENROUTER_API_KEY (for audits)
+      # - ADMIN_PASSWORD (for /admin access)
+      # - SESSION_SECRET (for session security)
+      # - OPENROUTER_API_KEY (for LLM audit pipeline)
+      # - RESEND_API_KEY (for email sending & tracking)
       # PORT je automaticky nastavený Renderem, nepotřebujeme ho explicitně nastavovat
     healthCheckPath: /health
     autoDeploy: true

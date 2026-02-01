@@ -174,6 +174,34 @@ app.post('/api/webhooks/resend', express.json(), (req, res) => {
   res.status(200).json({ received: true });
 });
 
+// Page view tracking endpoint (public)
+app.post('/api/track-page-view', express.json(), (req, res) => {
+  const { audit_id, clarity_session_id } = req.body;
+  
+  if (!audit_id) {
+    return res.status(400).json({ error: 'audit_id is required' });
+  }
+  
+  const { createPageView } = require('./db');
+  
+  const pageViewData = {
+    audit_job_id: parseInt(audit_id, 10),
+    clarity_session_id: clarity_session_id || null,
+    user_agent: req.headers['user-agent'] || null,
+    ip_address: req.ip || req.headers['x-forwarded-for'] || null
+  };
+  
+  createPageView(pageViewData, (err, result) => {
+    if (err) {
+      console.error('[PAGE VIEW TRACKING] Error:', err);
+      return res.status(500).json({ error: 'Failed to track page view' });
+    }
+    
+    console.log('[PAGE VIEW TRACKING] Tracked view for audit #' + audit_id + (clarity_session_id ? ' (Clarity: ' + clarity_session_id + ')' : ''));
+    res.status(200).json({ success: true, id: result.id });
+  });
+});
+
 // Register API and Admin routes
 app.use('/api', contactRoutes);
 app.use('/api/presets', presetsRoutes);
