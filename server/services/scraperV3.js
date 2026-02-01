@@ -1820,14 +1820,32 @@ async function crawlWebsite(jobId, startUrl, logFn) {
     });
   };
 
-  // Add start URL to queue
+  // Add homepage/root URL to queue.
+  // IMPORTANT: Users sometimes paste deep URLs like "/about".
+  // We still want the real homepage to be treated as "home" so company name / NAP
+  // and hero layout extraction don't accidentally lock onto "About ..." pages.
+  const canonicalHomeUrl = `${baseOrigin}/`;
+  const canonicalHomeNormalized = normalizeUrl(canonicalHomeUrl);
   const startNormalized = normalizeUrl(startUrl);
-  urlQueue.push({
-    url: startUrl,
-    normalized: startNormalized,
-    priority: 1000, // Homepage has highest priority
-    type: 'home'
-  });
+
+  if (startNormalized !== canonicalHomeNormalized) {
+    urlQueue.push({
+      url: canonicalHomeUrl,
+      normalized: canonicalHomeNormalized,
+      priority: 1000, // Homepage has highest priority
+      type: 'home'
+    });
+
+    // Also crawl the originally provided URL (about/contact/services pages are still useful).
+    enqueue(startUrl, 900);
+  } else {
+    urlQueue.push({
+      url: startUrl,
+      normalized: startNormalized,
+      priority: 1000, // Homepage has highest priority
+      type: 'home'
+    });
+  }
 
   await logFn(jobId, 'crawler', `Starting crawl from ${startUrl} (max ${MAX_URLS} pages)`);
 
