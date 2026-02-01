@@ -5,6 +5,98 @@ function sanitizeName(s, maxLen = 200) {
   return cleaned || null;
 }
 
+function stripMaxJacobSuffix(s) {
+  const t = sanitizeName(s, 400);
+  if (!t) return null;
+  // Remove outreach-subject style suffixes like "x Max & Jacob" (and common variants)
+  return t
+    .replace(/\s*[x×]\s*max\s*&\s*jacob\s*$/i, '')
+    .replace(/\s*-\s*max\s*&\s*jacob\s*$/i, '')
+    .replace(/\s*—\s*max\s*&\s*jacob\s*$/i, '')
+    .replace(/\s*\|\s*max\s*&\s*jacob\s*$/i, '')
+    .trim();
+}
+
+function stripPhoneLikeText(s) {
+  const t = sanitizeName(s, 400);
+  if (!t) return null;
+  // Remove telephone emoji and common phone patterns.
+  // Examples: "📞 (813) 443-5820", "(813)443-5820", "813-443-5820", "813.443.5820"
+  const phoneRe = /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+  return t
+    .replace(/📞/g, ' ')
+    .replace(phoneRe, ' ')
+    // Clean up dangling punctuation left after phone removal
+    .replace(/\(\s*\)/g, ' ')
+    .replace(/\[\s*\]/g, ' ')
+    .replace(/[()]+$/g, ' ')
+    .replace(/[-–—|•·]+$/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripAfterCommonSeparators(s) {
+  const t = sanitizeName(s, 400);
+  if (!t) return null;
+  // Split on common marketing separators (spaced versions only).
+  // Keep only the first segment, which is typically the brand name.
+  const parts = t.split(/\s+\|\s+|\s+—\s+|\s+–\s+|\s+-\s+|\s+•\s+|\s+·\s+/);
+  return sanitizeName(parts[0], 240);
+}
+
+function stripDirectoryStylePrefix(s) {
+  const t = sanitizeName(s, 400);
+  if (!t) return null;
+  // Directory/listing titles often look like "Plumbers Tampa: Olin Plumbing ..."
+  // If left side looks like a service/location phrase, prefer the right side.
+  const idx = t.indexOf(':');
+  if (idx <= 0 || idx > 50) return t;
+  const left = t.slice(0, idx).trim();
+  const right = t.slice(idx + 1).trim();
+  if (!right) return t;
+
+  const leftLower = left.toLowerCase();
+  const serviceTerms = [
+    'plumber',
+    'plumbers',
+    'plumbing',
+    'hvac',
+    'electric',
+    'electrical',
+    'roof',
+    'roofing',
+    'pest',
+    'landscaping',
+    'contractor',
+    'contractors',
+  ];
+  const looksServicey = serviceTerms.some((term) => leftLower.includes(term));
+  const looksDirectoryy = /\b(best|top|near me|in\s+[a-z]|[a-z]+\s+[a-z]+)\b/i.test(left);
+  if (looksServicey || looksDirectoryy) return right;
+  return t;
+}
+
+function normalizeCompanyNameCandidate(raw) {
+  let s = sanitizeName(raw, 400);
+  if (!s) return null;
+
+  // Remove obvious outreach suffix leakage first
+  s = stripMaxJacobSuffix(s) || s;
+
+  // Prefer brand-only segment over location/service suffixes
+  s = stripAfterCommonSeparators(s) || s;
+
+  // Handle directory-style prefixes ("Plumbers Tampa: ...")
+  s = stripDirectoryStylePrefix(s) || s;
+
+  // Remove phone-like text last (so it doesn't break separator detection)
+  s = stripPhoneLikeText(s) || s;
+
+  // Final cleanup
+  s = sanitizeName(s, 200);
+  return s || null;
+}
+
 function titleCaseWords(s) {
   const str = (s || '').toString().trim();
   if (!str) return str;
@@ -29,7 +121,7 @@ function normalizeHtmlTitleCandidate(rawTitle) {
       .split(' — ')[0]
       .split(' - ')[0]
       .trim();
-  return sanitizeName(first, 200);
+  return normalizeCompanyNameCandidate(first);
 }
 
 function prettyNameFromDomainLabel(label) {
@@ -66,11 +158,17 @@ function deriveDomainFallbackName(inputUrl) {
 }
 
 function isLikelyBusinessName(name) {
-  const s = sanitizeName(name, 240);
+  const s = normalizeCompanyNameCandidate(name);
   if (!s) return false;
 
   // Hard limits: titles and service lists tend to be very long.
   if (s.length > 110) return false;
+
+  // Reject obvious non-company artifacts
+  if (/\bmax\s*&\s*jacob\b/i.test(s)) return false;
+  if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(s)) return false;
+  if (/[|]/.test(s)) return false;
+  if (/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/.test(s)) return false;
 
   // Service-list titles often contain multiple commas.
   const commaCount = (s.match(/,/g) || []).length;
@@ -120,11 +218,11 @@ function isLikelyBusinessName(name) {
 
 function pickCompanyNameFromSignals({ orgName, localName, webName, ogSiteName, htmlTitle, inputUrl }) {
   const candidates = [
-    { value: sanitizeName(orgName), source: 'jsonld_organization' },
-    { value: sanitizeName(localName), source: 'jsonld_localbusiness' },
+    { value: normalizeCompanyNameCandidate(orgName), source: 'jsonld_organization' },
+    { value: normalizeCompanyNameCandidate(localName), source: 'jsonld_localbusiness' },
     // Prefer OG site name over WebSite.name (OG is often curated brand)
-    { value: sanitizeName(ogSiteName), source: 'og_site_name' },
-    { value: sanitizeName(webName), source: 'jsonld_website' },
+    { value: normalizeCompanyNameCandidate(ogSiteName), source: 'og_site_name' },
+    { value: normalizeCompanyNameCandidate(webName), source: 'jsonld_website' },
     // Domain fallback is safer than a long marketing title
     { value: deriveDomainFallbackName(inputUrl), source: 'domain_fallback' },
     { value: normalizeHtmlTitleCandidate(htmlTitle), source: 'html_title' },
@@ -142,6 +240,7 @@ function pickCompanyNameFromSignals({ orgName, localName, webName, ogSiteName, h
 
 module.exports = {
   sanitizeName,
+  normalizeCompanyNameCandidate,
   normalizeHtmlTitleCandidate,
   prettyNameFromDomainLabel,
   deriveDomainFallbackName,

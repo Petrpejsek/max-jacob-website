@@ -3,6 +3,11 @@ const path = require('path');
 const ejs = require('ejs');
 const crypto = require('crypto');
 const { getPersistentPublicDir } = require('../runtimePaths');
+const {
+  normalizeCompanyNameCandidate,
+  isLikelyBusinessName,
+  deriveDomainFallbackName,
+} = require('../helpers/companyName');
 
 /**
  * Homepage Builder Service
@@ -108,15 +113,20 @@ async function buildBranding(homepage, job, companyProfile) {
     (homepage.nap_json && homepage.nap_json.name) ||
     null;
 
-  let companyName = scrapedName || companyProfile.name || job.company_name;
+  const rawCompanyName = scrapedName || companyProfile.name || job.company_name;
+  const normalized = normalizeCompanyNameCandidate(rawCompanyName);
+  let companyName = (normalized && isLikelyBusinessName(normalized)) ? normalized : null;
   
   if (!companyName && job.input_url) {
-    try {
-      const url = new URL(job.input_url);
-      companyName = url.hostname.replace('www.', '').replace(/\.[^.]+$/, '');
-      companyName = companyName.charAt(0).toUpperCase() + companyName.slice(1);
-    } catch (e) {
-      companyName = 'Your Company';
+    companyName = deriveDomainFallbackName(job.input_url);
+    if (!companyName) {
+      try {
+        const url = new URL(job.input_url);
+        companyName = url.hostname.replace('www.', '').replace(/\.[^.]+$/, '');
+        companyName = companyName.charAt(0).toUpperCase() + companyName.slice(1);
+      } catch (e) {
+        companyName = 'Your Company';
+      }
     }
   }
   

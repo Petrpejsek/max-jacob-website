@@ -4,6 +4,7 @@ const {
   pickCompanyNameFromSignals,
   isLikelyBusinessName,
   deriveDomainFallbackName,
+  normalizeCompanyNameCandidate,
 } = require('../server/helpers/companyName');
 
 function run() {
@@ -47,6 +48,27 @@ function run() {
   assert.strictEqual(isLikelyBusinessName('ACME Plumbing'), true);
   assert.strictEqual(isLikelyBusinessName('Emergency Miami Dade Plumbing, Gas Line, Sink Installation, Water Heater Repair'), false);
   assert.strictEqual(deriveDomainFallbackName('https://foo-bar-baz.com'), 'Foo Bar Baz');
+
+  // 5) Normalize "directory-style" titles with colon + phone
+  {
+    const raw = 'Plumbers Tampa: Olin Plumbing 📞 (813) 443-5820';
+    assert.strictEqual(normalizeCompanyNameCandidate(raw), 'Olin Plumbing');
+    assert.strictEqual(isLikelyBusinessName(raw), true);
+  }
+
+  // 6) Normalize pipe-separated marketing titles
+  {
+    const raw = 'Bay 2 Bay Plumbing & Drains LLC | Tampa, FL | Plumbing Company';
+    assert.strictEqual(normalizeCompanyNameCandidate(raw), 'Bay 2 Bay Plumbing & Drains LLC');
+    assert.strictEqual(isLikelyBusinessName(raw), true);
+  }
+
+  // 7) Strip outreach subject suffix leakage
+  {
+    const raw = 'Olin Plumbing (813) 443-5820 x Max & Jacob';
+    assert.strictEqual(normalizeCompanyNameCandidate(raw), 'Olin Plumbing');
+    assert.strictEqual(isLikelyBusinessName(raw), true);
+  }
 
   console.log('OK: company-name.test.js');
 }

@@ -10,6 +10,11 @@
  */
 
 const { buildDashboardMetrics } = require('./dashboardMetrics');
+const {
+  normalizeCompanyNameCandidate,
+  isLikelyBusinessName,
+  deriveDomainFallbackName,
+} = require('./companyName');
 
 /**
  * Build View Model V2 from audit job data
@@ -124,14 +129,22 @@ function buildViewModelV2(job, siteSettings = {}) {
  * Build hero section with dynamic, personalized copy
  */
 function buildHero(job, a6_hero, llm_context) {
-  const company_name = llm_context.company_profile?.name || job.company_name || null;
+  const rawCompanyName = llm_context.company_profile?.name || job.company_name || null;
+  const normalizedCompanyName = normalizeCompanyNameCandidate(rawCompanyName);
+  const company_name = (normalizedCompanyName && isLikelyBusinessName(normalizedCompanyName))
+    ? normalizedCompanyName
+    : null;
+
   let display_name = company_name;
   
   if (!display_name && job.input_url) {
-    try {
-      display_name = new URL(job.input_url).hostname.replace('www.', '');
-    } catch (e) {
-      display_name = job.input_url;
+    display_name = deriveDomainFallbackName(job.input_url);
+    if (!display_name) {
+      try {
+        display_name = new URL(job.input_url).hostname.replace('www.', '');
+      } catch (e) {
+        display_name = job.input_url;
+      }
     }
   }
   

@@ -754,7 +754,7 @@
                             .replace(/\/+$/, '');
                         // If it still contains a slash, it's probably a URL/path — ignore as a company name
                         if (/[\/\\]/.test(stripped)) return null;
-                        return stripped.slice(0, 120);
+                        return stripped.slice(0, 240);
                     }
 
                     function mjTitleCase(s) {
@@ -765,6 +765,98 @@
                             .map(w => w.length ? (w[0].toUpperCase() + w.slice(1)) : w)
                             .join(' ')
                             .trim();
+                    }
+
+                    function mjStripMaxJacobSuffix(s) {
+                        const t = mjSanitizeName(s);
+                        if (!t) return null;
+                        return t
+                            .replace(/\s*[x×]\s*max\s*&\s*jacob\s*$/i, '')
+                            .replace(/\s*-\s*max\s*&\s*jacob\s*$/i, '')
+                            .replace(/\s*—\s*max\s*&\s*jacob\s*$/i, '')
+                            .replace(/\s*\|\s*max\s*&\s*jacob\s*$/i, '')
+                            .trim();
+                    }
+
+                    function mjStripAfterSeparators(s) {
+                        const t = mjSanitizeName(s);
+                        if (!t) return null;
+                        const parts = t.split(/\s+\|\s+|\s+—\s+|\s+–\s+|\s+-\s+|\s+•\s+|\s+·\s+/);
+                        return mjSanitizeName(parts[0]);
+                    }
+
+                    function mjStripDirectoryStylePrefix(s) {
+                        const t = mjSanitizeName(s);
+                        if (!t) return null;
+                        const idx = t.indexOf(':');
+                        if (idx <= 0 || idx > 50) return t;
+                        const left = t.slice(0, idx).trim();
+                        const right = t.slice(idx + 1).trim();
+                        if (!right) return t;
+                        const leftLower = left.toLowerCase();
+                        const serviceTerms = ['plumber', 'plumbers', 'plumbing', 'hvac', 'electric', 'electrical', 'roof', 'roofing', 'pest', 'landscaping', 'contractor', 'contractors'];
+                        const looksServicey = serviceTerms.some(term => leftLower.includes(term));
+                        const looksDirectoryy = /\b(best|top|near me|in\s+[a-z])\b/i.test(left);
+                        return (looksServicey || looksDirectoryy) ? right : t;
+                    }
+
+                    function mjStripPhoneLikeText(s) {
+                        const t = mjSanitizeName(s);
+                        if (!t) return null;
+                        const phoneRe = /\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+                        return t
+                            .replace(/📞/g, ' ')
+                            .replace(phoneRe, ' ')
+                            .replace(/\(\s*\)/g, ' ')
+                            .replace(/[()]+$/g, ' ')
+                            .replace(/[-–—|•·]+$/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+
+                    function mjNormalizeCompanyNameCandidate(raw) {
+                        let s = mjSanitizeName(raw);
+                        if (!s) return null;
+                        s = mjStripMaxJacobSuffix(s) || s;
+                        s = mjStripAfterSeparators(s) || s;
+                        s = mjStripDirectoryStylePrefix(s) || s;
+                        s = mjStripPhoneLikeText(s) || s;
+                        return mjSanitizeName(s);
+                    }
+
+                    // Guard against "page title" being used as business name (service-list titles, etc.).
+                    // This is a LAST-LINE-OF-DEFENSE so existing bad rows don't leak into outreach emails.
+                    function mjIsLikelyBusinessName(name) {
+                        const s = mjNormalizeCompanyNameCandidate(name);
+                        if (!s) return false;
+                        if (s.length > 110) return false;
+                        if (/\bmax\s*&\s*jacob\b/i.test(s)) return false;
+                        if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(s)) return false;
+                        if (/[|]/.test(s)) return false;
+                        if (/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/.test(s)) return false;
+                        const commaCount = (s.match(/,/g) || []).length;
+                        if (commaCount >= 2) return false;
+                        const words = s.split(/\s+/).filter(Boolean);
+                        const lower = s.toLowerCase();
+                        const serviceTerms = [
+                            'emergency',
+                            'same day',
+                            'service',
+                            'services',
+                            'repair',
+                            'repairs',
+                            'installation',
+                            'install',
+                            'replacement',
+                            'plumbing',
+                            'plumber',
+                            'hvac',
+                            'electric',
+                            'electrical',
+                        ];
+                        const hitCount = serviceTerms.reduce((acc, term) => acc + (lower.includes(term) ? 1 : 0), 0);
+                        if (words.length >= 7 && hitCount >= 2) return false;
+                        return true;
                     }
 
                     function mjNameFromUrl(inputUrl) {
@@ -792,18 +884,23 @@
                     // 2) Evidence Pack v2 company_profile.name
                     // 3) OG site name / title from scrape_result_json
                     // 4) Derived from domain
-                    const mjCompanyNameDirect = mjSanitizeName(auditJob.company_name);
+                    const mjCompanyNameDirectRaw = mjNormalizeCompanyNameCandidate(auditJob.company_name);
+                    const mjCompanyNameDirect = (mjCompanyNameDirectRaw && mjIsLikelyBusinessName(mjCompanyNameDirectRaw)) ? mjCompanyNameDirectRaw : null;
                     let mjEvidenceName = null;
                     try {
                         let epv2 = auditJob.evidence_pack_v2_json || null;
                         if (typeof epv2 === 'string') epv2 = JSON.parse(epv2);
-                        mjEvidenceName = mjSanitizeName(epv2 && epv2.company_profile && epv2.company_profile.name);
+                        const ev = mjNormalizeCompanyNameCandidate(epv2 && epv2.company_profile && epv2.company_profile.name);
+                        mjEvidenceName = (ev && mjIsLikelyBusinessName(ev)) ? ev : null;
                     } catch (_) {}
 
                     const mjScrape = auditJob.scrape_result_json || {};
-                    const mjOgName = mjSanitizeName(mjScrape.og_site_name || mjScrape.ogSiteName || null);
+                    const og = mjNormalizeCompanyNameCandidate(mjScrape.og_site_name || mjScrape.ogSiteName || null);
+                    const mjOgName = (og && mjIsLikelyBusinessName(og)) ? og : null;
                     const mjTitleRaw = (mjScrape.title || '').toString();
-                    const mjTitleName = mjSanitizeName(mjTitleRaw ? mjTitleRaw.split('|')[0].split(' - ')[0].trim() : null);
+                    const titleCandidateRaw = mjTitleRaw ? mjTitleRaw.split('|')[0].split(' - ')[0].split(' — ')[0].trim() : null;
+                    const titleCandidate = mjNormalizeCompanyNameCandidate(titleCandidateRaw);
+                    const mjTitleName = (titleCandidate && mjIsLikelyBusinessName(titleCandidate)) ? titleCandidate : null;
 
                     const mjDerivedName = mjNameFromUrl(auditJob.input_url);
 
