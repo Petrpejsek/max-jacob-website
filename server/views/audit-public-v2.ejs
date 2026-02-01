@@ -2403,7 +2403,9 @@
         (function() {
             // Get audit_id from URL parameter
             const urlParams = new URLSearchParams(window.location.search);
-            const auditId = urlParams.get('audit_id');
+            // Prefer explicit audit_id from URL (email links), fall back to server job id
+            // so direct visits like /plumbinglocal/audit-xxxx?v=2 are still tracked/tagged.
+            const auditId = urlParams.get('audit_id') || String(<%= job.id %>);
             
             if (auditId) {
                 // Set Clarity custom tag for easier filtering in Recordings
