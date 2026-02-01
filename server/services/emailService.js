@@ -20,6 +20,7 @@ async function sendEmail({ to, subject, html, text }) {
     }
 
     // Send email via Resend
+    // NOTE: Resend Node SDK returns { data, error } (v4+).
     const result = await resend.emails.send({
       from: 'jacob@maxandjacob.com',
       to,
@@ -31,7 +32,23 @@ async function sendEmail({ to, subject, html, text }) {
       ]
     });
 
-    return { success: true, id: result.id };
+    // Normalize response shape across SDK versions
+    const data = (result && result.data) ? result.data : result;
+    const err = (result && result.error) ? result.error : null;
+
+    if (err) {
+      const msg = (typeof err === 'string')
+        ? err
+        : (err.message || err.name || 'Unknown Resend error');
+      throw new Error(msg);
+    }
+
+    const id = data && data.id ? String(data.id) : null;
+    if (!id) {
+      throw new Error('Resend did not return an email id (cannot track opens/clicks)');
+    }
+
+    return { success: true, id };
   } catch (error) {
     console.error('Email sending error:', error);
     return { 

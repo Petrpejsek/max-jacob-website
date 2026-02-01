@@ -10,6 +10,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* Prevent horizontal scroll / "white edges" on mobile (Safari overscroll) */
+        html, body {
+            width: 100%;
+            overflow-x: hidden;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
         }
@@ -132,7 +138,8 @@
 
         /* iPhone frame mockup for mobile-first preview */
         .phone-frame {
-            width: 390px;
+            /* Fit within viewport on small phones so it stays centered (no horizontal overflow) */
+            width: min(390px, calc(100vw - 48px));
             aspect-ratio: 9/19.5;
             background: linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 100%);
             border-radius: 52px;
@@ -196,7 +203,7 @@
         /* (Removed) mobile desktop-toggle styles — mobile must show only mobile preview */
     </style>
 </head>
-<body class="bg-[#fcfdfe] text-slate-900 antialiased">
+<body class="bg-[#fcfdfe] text-slate-900 antialiased overflow-x-hidden">
     
     <!-- HEADER -->
     <header class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-2xl border-b border-slate-100">
@@ -204,7 +211,7 @@
             <div class="font-black text-2xl tracking-tighter text-blue-600">
                 Max & Jacob
             </div>
-            <a href="#form" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
+            <a href="#template-preview" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
                 New Website Preview
             </a>
         </div>
@@ -877,7 +884,6 @@
                             <p class="text-sm font-black uppercase tracking-wider text-orange-400 mb-3">You're Losing Every Month</p>
                             <div class="flex flex-col items-center justify-center gap-2 mb-2">
                                 <div class="flex items-center gap-3">
-                                    <span class="text-5xl font-black text-red-500">-</span>
                                     <p class="text-5xl font-black text-red-500" id="revenueRange">
                                         $1,350/mo
                                     </p>
@@ -1592,6 +1598,7 @@
         </div>
 
         <!-- Mobile-first preview section -->
+        <div id="template-preview"></div>
         <div class="max-w-7xl mx-auto px-6">
             <!-- Mobile preview with phone frame (Desktop) / Full-width (Mobile) -->
             <div class="relative">
@@ -1639,10 +1646,10 @@
                             </div>
                             <div class="flex flex-col gap-4">
                                 <% statCards.forEach((card) => { %>
-                                    <div class="bg-gradient-to-br from-white to-slate-50/90 border-2 border-slate-200/80 rounded-2xl px-6 py-5 shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 backdrop-blur-sm w-full group">
-                                        <div class="flex items-center justify-between gap-6">
+                                    <div class="bg-gradient-to-br from-white to-slate-50/90 border-2 border-slate-200/80 rounded-2xl px-6 py-5 shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 backdrop-blur-sm w-full group overflow-hidden">
+                                        <div class="flex items-center justify-between gap-4 min-w-0">
                                             <!-- Left: Tag + Text -->
-                                            <div class="flex-1">
+                                            <div class="flex-1 min-w-0">
                                                 <div class="mb-2">
                                                     <div class="stat-card__tag <%= card.tagClass %> !text-[8px] !px-3 !py-1.5 shadow-sm inline-block"><%= card.tag %></div>
                                                 </div>
@@ -1650,8 +1657,8 @@
                                                 <div class="text-slate-500 text-[11px] font-medium leading-snug"><%= card.tooltip %></div>
                                             </div>
                                             <!-- Right: Big Number -->
-                                            <div class="flex items-center gap-2 flex-shrink-0">
-                                                <div class="text-4xl font-black bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent group-hover:from-emerald-500 group-hover:to-emerald-400 transition-all"><%= card.number %></div>
+                                            <div class="flex items-center gap-2 flex-shrink-0 min-w-0">
+                                                <div class="text-3xl sm:text-4xl font-black bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent group-hover:from-emerald-500 group-hover:to-emerald-400 transition-all tracking-tight leading-none text-right break-words max-w-[9ch]"><%= card.number %></div>
                                                 <div class="text-xl text-emerald-500 group-hover:scale-110 transition-transform"><%= card.arrow %></div>
                                             </div>
                                         </div>
@@ -1687,10 +1694,10 @@
                     </div>
                     <div class="flex flex-col gap-5 px-4">
                         <% statCards.forEach(card => { %>
-                        <div class="bg-gradient-to-br from-white to-slate-50/90 rounded-3xl px-6 py-5 shadow-xl hover:shadow-2xl border-2 border-slate-200/80 w-full transform hover:scale-[1.02] transition-all duration-300 group">
-                            <div class="flex items-center justify-between gap-6">
+                        <div class="bg-gradient-to-br from-white to-slate-50/90 rounded-3xl px-6 py-5 shadow-xl hover:shadow-2xl border-2 border-slate-200/80 w-full transform hover:scale-[1.02] transition-all duration-300 group overflow-hidden">
+                            <div class="flex items-center justify-between gap-4 min-w-0">
                                 <!-- Left: Tag + Text -->
-                                <div class="flex-1">
+                                <div class="flex-1 min-w-0">
                                     <div class="mb-3">
                                         <div class="stat-card__tag <%= card.tagClass %> !text-[9px] !px-3 !py-1.5 !rounded-lg shadow-sm inline-block"><%= card.tag %></div>
                                     </div>
@@ -1698,8 +1705,8 @@
                                     <div class="text-slate-500 text-xs font-medium leading-relaxed"><%= card.tooltip %></div>
                                 </div>
                                 <!-- Right: Big Number -->
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <div class="text-5xl font-black bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent group-hover:from-emerald-500 group-hover:to-emerald-400 transition-all"><%= card.number %></div>
+                                <div class="flex items-center gap-2 flex-shrink-0 min-w-0">
+                                    <div class="text-4xl sm:text-5xl font-black bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent group-hover:from-emerald-500 group-hover:to-emerald-400 transition-all tracking-tight leading-none text-right break-words max-w-[9ch]"><%= card.number %></div>
                                     <div class="text-2xl text-emerald-500 group-hover:scale-110 transition-transform"><%= card.arrow %></div>
                                 </div>
                             </div>
