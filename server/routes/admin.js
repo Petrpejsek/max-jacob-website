@@ -716,13 +716,34 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
     }
 
     // Choose body based on format
-    const emailBody = format === 'html' ? html_body : plain_body;
+    let emailBody = format === 'html' ? html_body : plain_body;
     
     if (!emailBody || emailBody.trim() === '') {
       return res.status(400).json({ 
         success: false, 
         error: 'Email body is empty' 
       });
+    }
+
+    // Add unsubscribe footer (REQUIRED for deliverability & CAN-SPAM compliance)
+    if (format === 'html') {
+      const encodedEmail = encodeURIComponent(recipient);
+      const unsubscribeFooter = `
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: Arial, sans-serif;">
+          <p style="font-size: 11px; color: #6b7280; line-height: 1.5; margin: 0;">
+            Tento email jste dostali, protože jsme provedli analýzu vaší webové stránky a chtěli vám nabídnout bezplatný audit.
+            <br>Pokud si nepřejete dostávat další zprávy, můžete se <a href="https://maxandjacob.com/unsubscribe?email=${encodedEmail}" style="color: #4b5563; text-decoration: underline;">odhlásit zde</a>.
+          </p>
+          <p style="font-size: 11px; color: #9ca3af; margin: 8px 0 0 0;">
+            Max & Jacob - <a href="https://maxandjacob.com" style="color: #9ca3af; text-decoration: none;">maxandjacob.com</a>
+          </p>
+        </div>
+      `;
+      emailBody = emailBody + unsubscribeFooter;
+    } else {
+      // Plain text footer
+      const unsubscribeFooter = `\n\n---\n\nTento email jste dostali, protože jsme provedli analýzu vaší webové stránky.\nPokud si nepřejete dostávat další zprávy, odhlaste se zde:\nhttps://maxandjacob.com/unsubscribe?email=${encodeURIComponent(recipient)}\n\nMax & Jacob - maxandjacob.com`;
+      emailBody = emailBody + unsubscribeFooter;
     }
 
     // Send email via Resend

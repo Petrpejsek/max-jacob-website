@@ -391,12 +391,21 @@ PROHIBITED:
 - Pressure tactics
 - Generic template language
 - Medical/legal claims
+- Spam trigger words: "Free", "Guaranteed", "Risk-free", "Save money", "Click here"
+- ALL CAPS or excessive punctuation (!!!)
 
 PERSONALIZATION:
 - Use company name if detected
 - Reference their city explicitly
 - Mention specific issue from offer_copy_json.deliverables[0]
 - Keep it under 150 words total
+
+DELIVERABILITY REQUIREMENTS:
+- Professional, conversational tone (not salesy)
+- No spam trigger words or phrases
+- Unsubscribe link will be added automatically (do NOT include it in email_body_html)
+- Keep subject line under 60 characters
+- Avoid excessive links (max 2-3 in body)
 
 HTML FORMATTING:
 - Use <p> for paragraphs
@@ -427,7 +436,7 @@ Return ONLY valid JSON (STRICT JSON: double quotes, no trailing commas, no markd
   },
   "hero": {
     "headline": "Grow bigger online. More leads, more bookings.",
-    "subheadline": "We build conversion-focused websites with AI follow-up and smart automation—so you book more calls without the manual work.",
+    "subheadline": "We rebuild your website in 7 days into a lead magnet that books more calls — mobile-first, trust-heavy, and AI/SEO-ready.",
     "screenshot_ref": "screenshots.refs.above_fold"
   },
   "findings_section": {

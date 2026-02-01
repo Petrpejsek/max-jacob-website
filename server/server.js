@@ -202,6 +202,73 @@ app.post('/api/track-page-view', express.json(), (req, res) => {
   });
 });
 
+// Unsubscribe endpoint (public, must be before other routes)
+app.get('/unsubscribe', (req, res) => {
+  const email = req.query.email;
+  
+  if (!email) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="cs">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Chyba - Max & Jacob</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+          .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
+          h1 { color: #dc2626; margin: 0 0 16px 0; }
+          p { color: #4b5563; line-height: 1.6; }
+          a { color: #4F46E5; text-decoration: none; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>⚠️ Chyba</h1>
+          <p>Email nebyl specifikován. Prosím použijte odkaz z emailu.</p>
+          <p><a href="https://maxandjacob.com">← Zpět na hlavní stránku</a></p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  
+  // TODO: Add email to unsubscribe list in database (future implementation)
+  // For now, just show confirmation page
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Odhlášení úspěšné - Max & Jacob</title>
+      <style>
+        body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
+        h1 { color: #16a34a; margin: 0 0 16px 0; }
+        p { color: #4b5563; line-height: 1.6; margin: 12px 0; }
+        .email { font-weight: 600; color: #1f2937; background: #f3f4f6; padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 8px 0; }
+        a { color: #4F46E5; text-decoration: none; font-weight: 600; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>✅ Odhlášení úspěšné</h1>
+        <p>Email <span class="email">${email}</span> byl odhlášen z našeho mailing listu.</p>
+        <p>Již nebudete dostávat zprávy od Max & Jacob.</p>
+        <p style="margin-top: 32px; font-size: 14px; color: #6b7280;">
+          Pokud jste se odhlásili omylem, můžete nás kontaktovat na <a href="mailto:jacob@maxandjacob.com">jacob@maxandjacob.com</a>
+        </p>
+        <p style="margin-top: 24px;">
+          <a href="https://maxandjacob.com">← Zpět na hlavní stránku</a>
+        </p>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
 // Register API and Admin routes
 app.use('/api', contactRoutes);
 app.use('/api/presets', presetsRoutes);
