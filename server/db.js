@@ -85,6 +85,12 @@ function initDatabase() {
           console.error('Error adding selected_week column:', alterErr);
         }
       });
+      
+      db.run('ALTER TABLE contact_submissions ADD COLUMN preferred_start_date TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding preferred_start_date column:', alterErr);
+        }
+      });
     }
   });
 
@@ -835,8 +841,8 @@ function insertSubmission(data, callback) {
     INSERT INTO contact_submissions (
       email, name, phone, website, 
       industry, timeline, message, 
-      ip_address, selected_package, selected_week
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ip_address, selected_package, selected_week, preferred_start_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -849,7 +855,8 @@ function insertSubmission(data, callback) {
     data.message,
     data.ip_address || null,
     data.selected_package || null,
-    data.selected_week || null
+    data.selected_week || null,
+    data.preferred_start_date || null
   ];
 
   db.run(sql, params, function(err) {

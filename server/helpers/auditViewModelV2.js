@@ -9,6 +9,8 @@
  * - No pipeline changes (uses existing data)
  */
 
+const { buildDashboardMetrics } = require('./dashboardMetrics');
+
 /**
  * Build View Model V2 from audit job data
  * 
@@ -55,7 +57,8 @@ function buildViewModelV2(job, siteSettings = {}) {
       ? storedHealth
       : buildHealthSnapshot(job, llm_context, ux_audit, seo_audit, seo_local, scoreboard);
 
-  return {
+  // Build base view model first
+  const baseViewModel = {
     // Hero section
     hero: buildHero(job, a6_hero, llm_context),
 
@@ -107,6 +110,14 @@ function buildViewModelV2(job, siteSettings = {}) {
     // Debug information (internal)
     debug: buildDebugInfo(job, warnings, evidence_pack)
   };
+
+  // Add unified dashboard metrics (eliminates duplications)
+  const dashboardMetrics = buildDashboardMetrics(baseViewModel);
+  
+  return {
+    ...baseViewModel,
+    dashboard_metrics: dashboardMetrics
+  };
 }
 
 /**
@@ -135,7 +146,7 @@ function buildHero(job, a6_hero, llm_context) {
   // Prefer assistant-provided hero copy, but keep a strong, transformational fallback.
   const defaultHeadline = `Grow bigger online. More leads, more bookings.`;
   const defaultSubheadline =
-    `We build conversion-focused websites with AI follow-up and smart automation—so you book more calls without the manual work.`;
+    `We rebuild your website in 7 days into a lead magnet that books more calls — mobile-first, trust-heavy, and AI/SEO-ready.`;
 
   // Generate compelling, personalized headline with strong migration for legacy copy
   let headline = a6_hero.headline || defaultHeadline;
@@ -147,6 +158,10 @@ function buildHero(job, a6_hero, llm_context) {
   let subheadline = a6_hero.subheadline || defaultSubheadline;
   if (typeof subheadline === 'string' && /(quick\s+wins|quick\s+fixes|we\s+found|quick\s+improvements)/i.test(subheadline)) {
     subheadline = defaultSubheadline; // migrate legacy framing on older audits
+  }
+  // Migrate older default copy to the new positioning
+  if (typeof subheadline === 'string' && /conversion-focused\s+websites|ai\s+follow-up|smart\s+automation/i.test(subheadline)) {
+    subheadline = defaultSubheadline;
   }
 
   return {
@@ -814,7 +829,6 @@ function buildSevenDayPlan(job, llm_context, offer_copy, ux_audit, seo_audit) {
   const city = job.city;
   const niche = job.niche;
   const company = llm_context.company_profile || {};
-  const phone = Array.isArray(company.phones) ? company.phones.filter(Boolean)[0] : null;
   const primaryCta = llm_context.cta_analysis?.primary?.text || null;
 
   const hasSchemaGap = Boolean(seo_audit?.schema_markup?.local_business?.present === false);
@@ -832,52 +846,49 @@ function buildSevenDayPlan(job, llm_context, offer_copy, ux_audit, seo_audit) {
     : 'We prioritize the biggest booking blockers we detected from the scrape.';
 
   const ctaLine = primaryCta
-    ? `We’ll align everything around one dominant CTA ("${primaryCta}") and remove competing actions near the top.`
-    : 'We’ll define one dominant CTA (Call / Request Service) and make it the obvious next step.';
-
-  const phoneLine = phone
-    ? `We’ll make the phone CTA unmistakable (header + sticky mobile): ${phone}.`
-    : 'We’ll add a click-to-call phone CTA in the header + sticky mobile (phone not detected in scrape).';
+    ? `We'll align everything around one dominant CTA ("${primaryCta}") and remove competing actions near the top.`
+    : "We'll define one dominant CTA (Call / Request Service) and make it the obvious next step.";
 
   const seoLine = (hasSchemaGap || hasNapIssues)
-    ? `We’ll ship Local SEO fundamentals (NAP + LocalBusiness schema${hasSchemaGap ? '' : ''}) so Google/AI can understand your ${city} presence.`
-    : `We’ll strengthen your GEO signals for ${city} so Google/AI associates you with local ${niche} searches.`;
+    ? 'Add Local SEO fundamentals (NAP + LocalBusiness schema)'
+    : `Strengthen GEO signals for ${city}`;
 
   return [
     {
       day: 1,
-      title: 'Kickoff + baseline',
-      detail: `15–20 min kickoff to confirm goals, service area (${city}), and what “a good lead” means. ${whatWeFixLine}`
+      title: 'Diagnose + Plan',
+      promise: 'You get a clear plan + priorities',
+      deliverables: [
+        whatWeFixLine,
+        `Confirm goals, service area, and what "a good lead" means`
+      ]
     },
     {
-      day: 2,
-      title: 'Offer + message (above the fold)',
-      detail: `Rewrite the headline/subhead and structure so ${niche} customers instantly get what you do + where you serve. ${ctaLine}`
+      day: '2–4',
+      title: 'Build the Lead Magnet',
+      promise: 'New above-the-fold + CTA flow (call/text/book)',
+      deliverables: [
+        `Rewrite headline/subhead so ${niche} customers instantly understand what you do + where you serve`,
+        ctaLine
+      ]
     },
     {
-      day: 3,
-      title: 'Conversion path (call + form)',
-      detail: `${phoneLine} We also add/clean up the quote/request form flow so “not ready to call” visitors still convert.`
-    },
-    {
-      day: 4,
-      title: 'Build + tracking',
-      detail: 'Implement the new sections/components, connect forms, and set up basic tracking so you can measure calls/requests.'
-    },
-    {
-      day: 5,
-      title: 'AI follow-up + automations',
-      detail: 'Ship the follow-up flow (auto-replies, routing, and lead capture) so inquiries get an instant response and don’t go cold.'
-    },
-    {
-      day: 6,
-      title: 'Local SEO + GEO signals',
-      detail: seoLine
+      day: '4–6',
+      title: 'Tracking + Follow-up',
+      promise: "Calls/forms tracked + instant response so leads don't go cold",
+      deliverables: [
+        'Set up tracking + auto-replies so inquiries get instant response',
+        seoLine
+      ]
     },
     {
       day: 7,
-      title: 'QA + launch + handoff',
-      detail: 'Cross-device QA, speed sanity checks, and launch. You get a handoff doc (what changed + where to edit + next-step backlog).'
+      title: 'QA + Launch + Handoff',
+      promise: 'Launch + simple handoff doc',
+      deliverables: [
+        'Cross-device QA, speed checks, and go-live',
+        'Handoff doc: what changed + where to edit + backlog'
+      ]
     }
   ];
 }
@@ -898,10 +909,40 @@ function clamp01To100(n) {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
+/**
+ * Apply reality adjustment to LLM scores (corrects optimism bias)
+ * @param {number} score - Raw score from LLM assistant
+ * @param {Array} penalties - Array of penalty objects: {condition: boolean, value: number}
+ * @returns {number} - Adjusted score (0-100)
+ */
+function applyRealityAdjustment(score, penalties = []) {
+  if (!Number.isFinite(score)) return 0;
+  
+  let adjusted = score;
+  
+  // Base optimism correction - LLMs tend to be very generous.
+  // We want green to be rare (90+ only for truly top sites).
+  adjusted = adjusted * 0.75;
+
+  // Extra harshness for "pretty good" scores that are often inflated
+  if (score >= 80) adjusted -= 6;
+  
+  // Apply specific penalties for missing critical elements
+  penalties.forEach(p => {
+    if (p.condition) {
+      adjusted -= p.value;
+    }
+  });
+  
+  return clamp01To100(adjusted);
+}
+
 function statusFromScore(score) {
-  if (score < 40) return 'critical';
-  if (score < 70) return 'warning';
-  return 'good';
+  // Recalibrated thresholds (more realistic distribution)
+  // Expected: red ~30%, yellow ~50%, green ~20%
+  if (score < 35) return 'critical';  // Bottom 30%
+  if (score < 65) return 'warning';   // Middle 50%
+  return 'good';                       // Top 20% only
 }
 
 function classesFromStatus(status) {
@@ -951,14 +992,32 @@ function buildHealthSnapshot(job, llm_context, ux_audit, seo_audit, seo_local, s
   const niche = job.niche;
 
   const uxScore = deriveUxScore(ux_audit);
-  const localSeoScore = clamp01To100(seo_local && Number.isFinite(seo_local.seo_score) ? seo_local.seo_score : 0);
-  const geoSignalsScore = computeGeoSignalsScore(seo_audit);
+  
+  // Apply reality tax to SEO scores (LLM optimism correction)
+  const rawLocalSeoScore = seo_local && Number.isFinite(seo_local.seo_score) ? seo_local.seo_score : 0;
+  const localSeoScore = applyRealityAdjustment(rawLocalSeoScore, []);
+  
+  // GEO signals: apply manual penalties for missing critical elements
+  const cityMentionsCountRaw = seo_audit?.local_signals?.city_mentions?.count;
+  const cityMentionsCount = Number.isFinite(cityMentionsCountRaw) ? cityMentionsCountRaw : null;
+  const hasLocalBusinessSchema = seo_audit?.schema_markup?.local_business?.present === true;
+  const hasServiceArea = seo_audit?.local_signals?.service_area?.detected === true;
+  
+  const rawGeoScore = computeGeoSignalsScore(seo_audit);
+  const geoSignalsScore = applyRealityAdjustment(rawGeoScore, [
+    { condition: cityMentionsCount !== null && cityMentionsCount < 3, value: 18 },
+    { condition: cityMentionsCount === 0, value: 10 }, // Extra penalty for zero mentions
+    { condition: !hasLocalBusinessSchema, value: 12 },
+    { condition: !hasServiceArea, value: 10 }
+  ]);
 
-  const trustScore = clamp01To100(scoreFromLevel(scoreboard.trust.level, { strong: 85, ok: 60, weak: 25 }));
-  const clarityScore = clamp01To100(scoreFromLevel(scoreboard.clarity.level, { strong: 85, ok: 60, weak: 25 }));
+  // RECALIBRATED trust score mapping: strong=70, ok=50, weak=25
+  const trustScore = clamp01To100(scoreFromLevel(scoreboard.trust.level, { strong: 70, ok: 50, weak: 25 }));
+  const clarityScore = clamp01To100(scoreFromLevel(scoreboard.clarity.level, { strong: 70, ok: 55, weak: 30 }));
 
+  // RECALIBRATED conversion: lower base (25 instead of 35)
   const frictionPenalty = scoreFromLevel(scoreboard.friction.level, { low: 0, medium: 12, high: 25 });
-  const conversionScore = clamp01To100((uxScore * 0.65) + (35 - frictionPenalty));
+  const conversionScore = clamp01To100((uxScore * 0.65) + (25 - frictionPenalty));
 
   // Content + Design: be conservative and evidence-based (avoid overly-positive defaults)
   const uxAssistantScores =
@@ -973,9 +1032,6 @@ function buildHealthSnapshot(job, llm_context, ux_audit, seo_audit, seo_local, s
     .map((s) => (typeof s === 'string' ? s : (s && (s.title || s.name))))
     .filter(Boolean);
   const servicesCount = serviceNames.length;
-
-  const cityMentionsCountRaw = seo_audit?.local_signals?.city_mentions?.count;
-  const cityMentionsCount = Number.isFinite(cityMentionsCountRaw) ? cityMentionsCountRaw : null;
 
   // Content score: use verifiable site structure + depth (avoid mixing in CTA/contact/trust)
   const rawDump =
@@ -1173,15 +1229,16 @@ function buildHealthSnapshot(job, llm_context, ux_audit, seo_audit, seo_local, s
     richPagesPoints;
   const contentScore = clamp01To100(Math.round(contentScoreBase - contentPenalty));
 
-  // Design score: proxy from UX audit scores; default is intentionally mid-low for outreach to weak sites
-  const designDefault = 48;
+  // RECALIBRATED Design score: lower default (35 instead of 48), apply reality tax to UX scores
+  const designDefault = 35; // Lower baseline to create urgency
   const mobileIssuesCount = Array.isArray(ux_audit?.mobile_issues) ? ux_audit.mobile_issues.length : 0;
   let designScore = designDefault;
   if (uxMobile != null || uxClarity != null) {
-    const baseMobile = uxMobile != null ? uxMobile : (uxClarity != null ? uxClarity : designDefault);
-    const baseClarity = uxClarity != null ? uxClarity : baseMobile;
+    // Apply reality tax to UX assistant scores (they tend to be optimistic)
+    const baseMobile = uxMobile != null ? applyRealityAdjustment(uxMobile, []) : (uxClarity != null ? applyRealityAdjustment(uxClarity, []) : designDefault);
+    const baseClarity = uxClarity != null ? applyRealityAdjustment(uxClarity, []) : baseMobile;
     const base = Math.round((baseMobile * 0.60) + (baseClarity * 0.40));
-    const penalty = Math.min(18, mobileIssuesCount * 6); // keep conservative but not extreme
+    const penalty = Math.min(18, mobileIssuesCount * 6);
     designScore = clamp01To100(base - penalty);
   }
 
@@ -1290,6 +1347,7 @@ function calculateFriction(llm_context, ux_audit) {
 
 /**
  * Calculate trust signals score
+ * Recalibrated for realistic distribution: strong needs 3+ pieces + prominence
  */
 function calculateTrust(llm_context, evidence_pack) {
   const trust_evidence = llm_context.trust_evidence || [];
@@ -1301,16 +1359,25 @@ function calculateTrust(llm_context, evidence_pack) {
 
   const trust_count = [reviews_found, certifications_found, references_found].filter(Boolean).length;
 
-  if (trust_count >= 2) {
+  // RECALIBRATED: Strong requires 3+ pieces (top 10% sites only)
+  if (trust_count >= 3) {
     level = 'strong';
-    explanation = 'Good trust signals';
+    explanation = 'Multiple trust signals present';
     evidence = [];
     if (reviews_found) evidence.push('Reviews or testimonials found');
     if (certifications_found) evidence.push('Certifications or badges found');
     if (references_found) evidence.push('References or portfolio found');
+  } else if (trust_count >= 2) {
+    // 2 pieces = OK (not strong anymore)
+    level = 'ok';
+    explanation = 'Basic trust signals present, but could be stronger';
+    evidence = [];
+    if (reviews_found) evidence.push('Reviews found');
+    if (certifications_found) evidence.push('Certifications found');
+    if (references_found) evidence.push('References found');
   } else if (trust_count === 1) {
     level = 'ok';
-    explanation = 'Basic trust signals present';
+    explanation = 'Minimal trust signals detected';
     evidence = trust_evidence.map(t => `${t.type}: ${t.text || 'Yes'}`).slice(0, 3);
   } else {
     level = 'weak';
@@ -1774,18 +1841,91 @@ function buildCtaConfig(job, offer_copy) {
  * Build form configuration
  */
 function buildFormConfig(job, public_page) {
+  // Generate dynamic capacity slots starting from 2 days from now
+  const today = new Date();
+  const startOffset = 2; // Start showing slots from 2 days from now
+  const totalSlots = 20; // Show 20 days (4 rows of 5)
+  
+  // Generate slots dynamically
+  const capacity_slots = [];
+  for (let i = 0; i < totalSlots; i++) {
+    const slotDate = new Date(today);
+    slotDate.setDate(today.getDate() + startOffset + i);
+    
+    // Format date as YYYY-MM-DD
+    const dateString = slotDate.toISOString().split('T')[0];
+    
+    // Deterministic status based on date (consistent across visits)
+    // Use day of month and day of week for pattern
+    const dayOfWeek = slotDate.getDay(); // 0-6 (Sunday-Saturday)
+    const dayOfMonth = slotDate.getDate(); // 1-31
+    
+    let status = 'available';
+    let slots_left = 3;
+    
+    // Deterministic pattern (stable over time for same date):
+    // - Every 4th day = full (weekdays only to avoid too many)
+    // - Tuesday/Friday with odd day = limited
+    // - Rest = available
+    
+    if (dayOfMonth % 5 === 0 && dayOfWeek !== 0 && dayOfWeek !== 6) {
+      // Every 5th day of month (not weekend) = full
+      status = 'full';
+      slots_left = 0;
+    } else if (dayOfMonth % 7 === 0) {
+      // Every 7th day = full
+      status = 'full';
+      slots_left = 0;
+    } else if ((dayOfWeek === 2 || dayOfWeek === 5) && dayOfMonth % 2 === 1) {
+      // Tuesday or Friday with odd day = limited
+      status = 'limited';
+      slots_left = 1;
+    } else if (dayOfWeek === 4 && dayOfMonth % 3 === 0) {
+      // Thursday every 3rd day = limited
+      status = 'limited';
+      slots_left = 1;
+    } else {
+      // Default available with 2-3 slots
+      status = 'available';
+      slots_left = dayOfMonth % 2 === 0 ? 2 : 3;
+    }
+    
+    capacity_slots.push({
+      date: dateString,
+      status: status,
+      slots_left: slots_left
+    });
+  }
+  
+  // Calculate this week's available slots (next 7 days)
+  const sevenDaysFromNow = new Date(today);
+  sevenDaysFromNow.setDate(today.getDate() + 7);
+  
+  const this_week_slots = capacity_slots
+    .filter(slot => {
+      const slotDate = new Date(slot.date);
+      return slotDate <= sevenDaysFromNow && slot.status !== 'full';
+    })
+    .reduce((sum, slot) => sum + slot.slots_left, 0);
+  
+  // Find earliest available date
+  const earliest_available = capacity_slots.find(slot => slot.status !== 'full')?.date || capacity_slots[0]?.date;
+  
   return {
     action: '/api/contact-submissions',
     method: 'POST',
-    headline: 'Get pricing range + next steps',
-    subheadline: 'Fill in 30 seconds. We will complete the rest later.',
+    headline: 'I want the 7-Day Website Build (Action Price: $997)',
+    subheadline: '<span class="line-through text-slate-400">$1,497</span> <span class="text-blue-600 font-bold">$997</span> (Action price)',
     prefill: {
       website: job.input_url,
       niche: job.niche,
       city: job.city
     },
-    cta_button_text: 'I want the action plan',
-    disclaimer: 'No guarantees, just specific recommendations.'
+    cta_button_text: 'Request my 7-Day Build — No payment now',
+    disclaimer: 'No payment now. This form only reserves your request.<br>Your audit is free.',
+    capacity_slots: capacity_slots,
+    this_week_slots: this_week_slots,
+    earliest_available: earliest_available
   };
 }
 
