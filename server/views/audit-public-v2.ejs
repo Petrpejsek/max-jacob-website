@@ -16,6 +16,14 @@
             overflow-x: hidden;
         }
 
+        /* Anchor offset for fixed header */
+        #template-preview {
+            scroll-margin-top: 88px;
+        }
+        #form {
+            scroll-margin-top: 88px;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
         }
@@ -211,8 +219,8 @@
             <div class="font-black text-2xl tracking-tighter text-blue-600">
                 Max & Jacob
             </div>
-            <a href="#template-preview" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
-                New Website Preview
+            <a href="#form" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
+                Get 7-Day Build
             </a>
         </div>
     </header>
@@ -255,7 +263,7 @@
                 </p>
                 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="#homepage-proposal" class="px-12 py-6 bg-blue-600 text-white rounded-[2rem] font-black text-2xl hover:bg-blue-700 shadow-2xl shadow-blue-200 transition-all transform hover:-translate-y-2 active:scale-95">
+                    <a href="#template-preview" class="px-12 py-6 bg-blue-600 text-white rounded-[2rem] font-black text-2xl hover:bg-blue-700 shadow-2xl shadow-blue-200 transition-all transform hover:-translate-y-2 active:scale-95">
                         <%= vm.hero.primary_cta_text %>
                     </a>
                 </div>
@@ -1670,7 +1678,7 @@
                 </div>
 
                 <!-- Mobile (< lg): show ONLY mobile template preview -->
-                <div class="lg:hidden">
+                <div class="lg:hidden flex justify-center">
                     <div class="phone-frame">
                         <div class="phone-notch"></div>
                         <div class="phone-screen">
@@ -1808,8 +1816,23 @@
                                 <span id="form-selected-date-text">Select a start date from the calendar →</span>
                             </div>
 
-                            <button type="submit" id="audit-submit-btn" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
-                                <%= vm.form_config.cta_button_text %>
+                            <%
+                                const _ctaRaw = String(vm.form_config.cta_button_text || '').trim();
+                                // Split around em dash for nicer mobile layout: "Request my 7-Day Build — No payment now"
+                                const _ctaParts = _ctaRaw.split('—');
+                                const _ctaMain = (_ctaParts[0] || _ctaRaw).trim();
+                                const _ctaSub = (_ctaParts.length > 1 ? _ctaParts.slice(1).join('—') : '').trim();
+                            %>
+                            <button type="submit" id="audit-submit-btn" class="w-full px-8 sm:px-12 py-4 sm:py-5 bg-blue-600 text-white rounded-[2rem] font-black text-lg sm:text-xl leading-tight sm:leading-none hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
+                                <!-- Mobile: force clean 2-line layout -->
+                                <span class="block sm:hidden">
+                                    <span class="block"><%= _ctaMain %></span>
+                                    <% if (_ctaSub) { %>
+                                        <span class="block mt-1"><%= _ctaSub %></span>
+                                    <% } %>
+                                </span>
+                                <!-- Desktop: keep original single-line -->
+                                <span class="hidden sm:inline"><%= _ctaRaw %></span>
                             </button>
 
                             <p class="text-center text-slate-400 text-sm mt-6">
