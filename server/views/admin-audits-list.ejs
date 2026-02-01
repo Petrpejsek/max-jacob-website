@@ -395,20 +395,13 @@
                                         <%# Page views - show independently of email status %>
                                         <% if (job.pageViews > 0) { %>
                                             <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                                                <% if (job.claritySessionId) { %>
-                                                    <a href="https://clarity.microsoft.com/projects/view/vaor3tcykv/sessions/<%= job.claritySessionId %>" 
-                                                       target="_blank" 
-                                                       title="Watch session recording in Microsoft Clarity"
-                                                       style="display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #a78bfa; font-size: 0.7rem; text-decoration: none; transition: all 0.2s;">
-                                                        <span>▶️</span>
-                                                        <span><%= job.pageViews %></span>
-                                                    </a>
-                                                <% } else { %>
-                                                    <span style="display: flex; align-items: center; gap: 3px; font-size: 0.7rem; color: #b6b6d6;">
-                                                        <span style="color: #a78bfa;">👀</span>
-                                                        <span><%= job.pageViews %></span>
-                                                    </span>
-                                                <% } %>
+                                                <a href="https://clarity.microsoft.com/projects/view/vaor3tcykv/sessions" 
+                                                   target="_blank" 
+                                                   title="Open Clarity recordings (filter by Custom tags → audit_id = <%= job.id %>)"
+                                                   style="display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #a78bfa; font-size: 0.7rem; text-decoration: none; transition: all 0.2s;">
+                                                    <span>▶</span>
+                                                    <span><%= job.pageViews %></span>
+                                                </a>
                                             </div>
                                         <% } %>
                                     </div>

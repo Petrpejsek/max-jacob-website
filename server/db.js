@@ -2232,7 +2232,8 @@ function getAllPageViewsStatus(callback) {
         statusMap[row.audit_job_id] = {
           views: row.total_views || 0,
           lastViewed: row.last_viewed_at,
-          claritySessionId: row.latest_clarity_session_id
+          // Backward compat: admin UI no longer deep-links to sessions/<id>
+          claritySessionId: row.latest_clarity_session_id || null
         };
       });
       callback(null, statusMap);

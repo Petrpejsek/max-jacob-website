@@ -2406,43 +2406,22 @@
             const auditId = urlParams.get('audit_id');
             
             if (auditId) {
-                // Wait for Clarity to initialize and get session ID
-                function getClaritySessionId() {
-                    return new Promise((resolve) => {
-                        let attempts = 0;
-                        const checkClarity = setInterval(() => {
-                            attempts++;
-                            if (window.clarity && typeof window.clarity.getSessionId === 'function') {
-                                clearInterval(checkClarity);
-                                resolve(window.clarity.getSessionId());
-                            } else if (attempts > 20) { // Max 10 seconds
-                                clearInterval(checkClarity);
-                                resolve(null);
-                            }
-                        }, 500);
-                    });
-                }
-                
-                // Send page view tracking
-                getClaritySessionId().then(claritySessionId => {
-                    fetch('/api/track-page-view', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            audit_id: auditId,
-                            clarity_session_id: claritySessionId
-                        })
-                    }).catch(err => {
-                        console.error('Page view tracking failed:', err);
-                    });
+                // Set Clarity custom tag for easier filtering in Recordings
+                try {
+                    if (window.clarity) {
+                        window.clarity('set', 'audit_id', String(auditId));
+                    }
+                } catch (_) {}
+
+                // Send page view tracking (do NOT attempt to link a "Clarity session id" —
+                // Clarity doesn't expose a stable recording id on the client we can deep-link to.)
+                fetch('/api/track-page-view', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audit_id: auditId })
+                }).catch(err => {
+                    console.error('Page view tracking failed:', err);
                 });
-                
-                // Set Clarity custom tag for easier filtering
-                if (window.clarity) {
-                    window.clarity('set', 'audit_id', auditId);
-                }
             }
         })();
     </script>
