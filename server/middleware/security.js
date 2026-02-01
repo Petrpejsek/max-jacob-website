@@ -38,12 +38,21 @@ function getHelmetConfig() {
         defaultSrc: ["'self'"],
         // NOTE: Public audit page uses Tailwind CDN + inline scripts.
         // If Tailwind CDN is blocked, the audit page renders "unstyled"/broken on production.
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
+        // Microsoft Clarity must be allowed here, otherwise recordings never appear.
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://cdn.tailwindcss.com",
+          "https://www.clarity.ms",
+          "https://clarity.ms"
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:", "http:"], // Allow external images (screenshots)
         // Tailwind CDN may perform additional fetches; allow it.
-        connectSrc: ["'self'", "https://cdn.tailwindcss.com"],
+        // Clarity sends events via network calls; must be allowed in connect-src.
+        connectSrc: ["'self'", "https://cdn.tailwindcss.com", "https://www.clarity.ms", "https://clarity.ms"],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: []
