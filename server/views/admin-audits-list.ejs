@@ -20,8 +20,9 @@
         }
 
         .admin-container {
-            max-width: 1200px;
+            max-width: 1800px;
             margin: 0 auto;
+            width: 95%;
         }
 
         .header {
@@ -91,22 +92,49 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 1400px;
         }
 
         th {
             text-align: left;
-            padding: 12px 16px;
+            padding: 10px 12px;
             color: #b6b6d6;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             border-bottom: 1px solid #2d2d44;
             white-space: nowrap;
         }
 
+        /* Column widths */
+        th:nth-child(1) { width: 60px; }   /* ID */
+        th:nth-child(2) { width: 100px; }  /* Date */
+        th:nth-child(3) { width: 90px; }   /* Niche */
+        th:nth-child(4) { width: 100px; }  /* City */
+        th:nth-child(5) { width: 200px; }  /* URL */
+        th:nth-child(6) { width: 140px; }  /* Email */
+        th:nth-child(7) { width: 100px; }  /* Status */
+        th:nth-child(8) { width: 80px; }   /* Public URL */
+        th:nth-child(9) { width: 140px; }  /* Action */
+
         td {
-            padding: 16px;
+            padding: 12px;
             border-bottom: 1px solid #2d2d44;
             color: #d1d1e0;
+            font-size: 0.9rem;
+        }
+
+        /* Truncate long URLs */
+        td:nth-child(5) {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        td:nth-child(5):hover {
+            overflow: visible;
+            white-space: normal;
+            word-break: break-all;
         }
 
         tr:last-child td {
@@ -234,6 +262,22 @@
             transform: scale(1.05);
         }
 
+        @media (min-width: 1920px) {
+            .admin-container {
+                max-width: 90%;
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .admin-container {
+                width: 98%;
+            }
+            
+            table {
+                min-width: 1200px;
+            }
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8rem;
@@ -244,11 +288,12 @@
             }
 
             table {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
+                min-width: 1000px;
             }
 
             th, td {
-                padding: 10px 12px;
+                padding: 8px 10px;
             }
         }
     </style>
@@ -311,7 +356,16 @@
                                 <td><%= new Date(job.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
                                 <td><%= job.niche %></td>
                                 <td><%= job.city %></td>
-                                <td><%= job.input_url %></td>
+                                <td title="<%= job.input_url %>">
+                                    <% 
+                                    let displayUrl = job.input_url;
+                                    try {
+                                        const urlObj = new URL(job.input_url);
+                                        displayUrl = urlObj.hostname.replace('www.', '');
+                                    } catch(e) {}
+                                    %>
+                                    <%= displayUrl %>
+                                </td>
                                 <td>
                                     <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <% if (job.emailSent) { %>
