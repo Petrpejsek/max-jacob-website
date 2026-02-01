@@ -45,14 +45,23 @@ function getHelmetConfig() {
           "'unsafe-eval'",
           "https://cdn.tailwindcss.com",
           "https://www.clarity.ms",
-          "https://clarity.ms"
+          "https://clarity.ms",
+          "https://*.clarity.ms",
+          "https://c.bing.com"
         ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:", "http:"], // Allow external images (screenshots)
         // Tailwind CDN may perform additional fetches; allow it.
         // Clarity sends events via network calls; must be allowed in connect-src.
-        connectSrc: ["'self'", "https://cdn.tailwindcss.com", "https://www.clarity.ms", "https://clarity.ms"],
+        connectSrc: [
+          "'self'", 
+          "https://cdn.tailwindcss.com", 
+          "https://www.clarity.ms", 
+          "https://clarity.ms",
+          "https://*.clarity.ms",
+          "https://c.bing.com"
+        ],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: []
