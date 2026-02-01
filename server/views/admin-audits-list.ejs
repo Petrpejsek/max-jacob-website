@@ -313,8 +313,8 @@
                                 <td><%= job.city %></td>
                                 <td><%= job.input_url %></td>
                                 <td>
-                                    <% if (job.emailSent) { %>
-                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <% if (job.emailSent) { %>
                                             <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; font-size: 0.75rem; font-weight: 500;">✅ sent</span>
                                             <% if (job.emailOpens > 0 || job.emailClicks > 0) { %>
                                                 <div style="display: flex; gap: 8px; font-size: 0.7rem; color: #b6b6d6;">
@@ -332,30 +332,32 @@
                                                     <% } %>
                                                 </div>
                                             <% } %>
-                                            <% if (job.pageViews > 0) { %>
-                                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                                                    <% if (job.claritySessionId) { %>
-                                                        <a href="https://clarity.microsoft.com/projects/view/vaor3tcykv/sessions/<%= job.claritySessionId %>" 
-                                                           target="_blank" 
-                                                           title="Watch session recording in Microsoft Clarity"
-                                                           style="display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #a78bfa; font-size: 0.7rem; text-decoration: none; transition: all 0.2s;">
-                                                            <span>▶️</span>
-                                                            <span><%= job.pageViews %></span>
-                                                        </a>
-                                                    <% } else { %>
-                                                        <span style="display: flex; align-items: center; gap: 3px; font-size: 0.7rem; color: #b6b6d6;">
-                                                            <span style="color: #a78bfa;">👀</span>
-                                                            <span><%= job.pageViews %></span>
-                                                        </span>
-                                                    <% } %>
-                                                </div>
-                                            <% } %>
-                                        </div>
-                                    <% } else if (!job.hasEmail) { %>
-                                        <span class="no-email-indicator">⚠️ No email</span>
-                                    <% } else { %>
-                                        <span style="color: #4ade80; font-size: 0.9rem;">✓</span>
-                                    <% } %>
+                                        <% } else if (!job.hasEmail) { %>
+                                            <span class="no-email-indicator">⚠️ No email</span>
+                                        <% } else { %>
+                                            <span style="color: #4ade80; font-size: 0.9rem;">✓</span>
+                                        <% } %>
+                                        
+                                        <%# Page views - show independently of email status %>
+                                        <% if (job.pageViews > 0) { %>
+                                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                                                <% if (job.claritySessionId) { %>
+                                                    <a href="https://clarity.microsoft.com/projects/view/vaor3tcykv/sessions/<%= job.claritySessionId %>" 
+                                                       target="_blank" 
+                                                       title="Watch session recording in Microsoft Clarity"
+                                                       style="display: flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #a78bfa; font-size: 0.7rem; text-decoration: none; transition: all 0.2s;">
+                                                        <span>▶️</span>
+                                                        <span><%= job.pageViews %></span>
+                                                    </a>
+                                                <% } else { %>
+                                                    <span style="display: flex; align-items: center; gap: 3px; font-size: 0.7rem; color: #b6b6d6;">
+                                                        <span style="color: #a78bfa;">👀</span>
+                                                        <span><%= job.pageViews %></span>
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                        <% } %>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="badge <%= job.status === 'ready_to_check' ? 'badge-ready-to-check' : 'badge-status' %>">

@@ -209,11 +209,11 @@ app.get('/unsubscribe', (req, res) => {
   if (!email) {
     return res.status(400).send(`
       <!DOCTYPE html>
-      <html lang="cs">
+      <html lang="en">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Chyba - Max & Jacob</title>
+        <title>Error - Max & Jacob</title>
         <style>
           body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
           .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
@@ -224,9 +224,9 @@ app.get('/unsubscribe', (req, res) => {
       </head>
       <body>
         <div class="container">
-          <h1>⚠️ Chyba</h1>
-          <p>Email nebyl specifikován. Prosím použijte odkaz z emailu.</p>
-          <p><a href="https://maxandjacob.com">← Zpět na hlavní stránku</a></p>
+          <h1>⚠️ Error</h1>
+          <p>Email address was not specified. Please use the link from the email.</p>
+          <p><a href="https://maxandjacob.com">← Back to homepage</a></p>
         </div>
       </body>
       </html>
@@ -238,11 +238,11 @@ app.get('/unsubscribe', (req, res) => {
   
   res.send(`
     <!DOCTYPE html>
-    <html lang="cs">
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Odhlášení úspěšné - Max & Jacob</title>
+      <title>Unsubscribe Successful - Max & Jacob</title>
       <style>
         body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
         .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
@@ -254,14 +254,14 @@ app.get('/unsubscribe', (req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1>✅ Odhlášení úspěšné</h1>
-        <p>Email <span class="email">${email}</span> byl odhlášen z našeho mailing listu.</p>
-        <p>Již nebudete dostávat zprávy od Max & Jacob.</p>
+        <h1>✅ Unsubscribe Successful</h1>
+        <p>Email <span class="email">${email}</span> has been unsubscribed from our mailing list.</p>
+        <p>You will no longer receive messages from Max & Jacob.</p>
         <p style="margin-top: 32px; font-size: 14px; color: #6b7280;">
-          Pokud jste se odhlásili omylem, můžete nás kontaktovat na <a href="mailto:jacob@maxandjacob.com">jacob@maxandjacob.com</a>
+          If you unsubscribed by mistake, you can contact us at <a href="mailto:jacob@maxandjacob.com">jacob@maxandjacob.com</a>
         </p>
         <p style="margin-top: 24px;">
-          <a href="https://maxandjacob.com">← Zpět na hlavní stránku</a>
+          <a href="https://maxandjacob.com">← Back to homepage</a>
         </p>
       </div>
     </body>
