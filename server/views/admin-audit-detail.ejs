@@ -102,6 +102,16 @@
             opacity: 0.9;
         }
 
+        /* Main Process Button */
+        #processForm button[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(106, 130, 251, 0.6) !important;
+        }
+
+        #processForm button[type="submit"]:active {
+            transform: translateY(0);
+        }
+
         .view-link {
             color: #6a82fb;
             text-decoration: none;
@@ -819,13 +829,13 @@
                     const mjEmailSubject = `${mjBusinessName} x Max & Jacob`;
                     
                     // Plaintext version (for copying into tools that don't support HTML)
-                    const mjDefaultOutreachEmailPlain = `Hi ${mjFirstName} — Jacob here (Max & Jacob).\n\nI found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).\n\nWe put together a quick audit for your site (safe preview — no download, no login):\nAudit - ${mjBusinessName}\n${mjAuditLink}\n\nIf this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.`; 
+                    const mjDefaultOutreachEmailPlain = `Hi ${mjBusinessName} — Jacob here (Max & Jacob).\n\nWe're a small team of devs. We turn local sites into traffic + lead magnets.\n\nI made a quick audit for ${mjBusinessName} (safe preview, no login):\n${mjAuditLink}\n\nIf it looks useful, we can rebuild it in 7 days — mobile-first, higher conversions, and AI/SEO-ready, more traffic and more leads.`; 
                     
                     // HTML version (for email clients - clickable link)
-                    const mjDefaultOutreachEmailHtml = `<p>Hi ${mjFirstName} — Jacob here (Max & Jacob).</p>
-<p>I found ${mjBusinessName} while looking for ${mjNiche} services in ${mjCity}. We build/improve websites for local businesses — and we also add simple AI + automation so fewer leads fall through (instant replies, follow-ups, booking flow).</p>
-<p>We put together a quick audit for your site (safe preview — no download, no login):<br><strong>${mjAuditLinkHtml}</strong></p>
-<p>If this looks useful, we can package the key fixes into a simple 7-day roadmap and a preview template you can hand to your current web person. Fast turnaround, high quality, fair pricing.</p>
+                    const mjDefaultOutreachEmailHtml = `<p>Hi ${mjBusinessName} — Jacob here (Max & Jacob).</p>
+<p>We're a small team of devs. We turn local sites into traffic + lead magnets.</p>
+<p>I made a quick audit for ${mjBusinessName} (safe preview, no login):<br><strong>${mjAuditLinkHtml}</strong></p>
+<p>If it looks useful, we can rebuild it in 7 days — mobile-first, higher conversions, and AI/SEO-ready, more traffic and more leads.</p>
 <br>
 <p style="margin-top: 20px;">
 <strong>Jacob Liesner</strong><br>
@@ -965,7 +975,8 @@
                     </select>
                     <div class="small" style="margin-top: 4px;">Preset determines the niche, city, CTA, headline, and concept image</div>
                 </div>
-                <div class="field-group">
+                <!-- Brand Logo section hidden -->
+                <div class="field-group" style="display: none;">
                     <div class="field-label">Brand Logo (optional)</div>
                     <div class="upload-area" id="logoUploadArea" onclick="document.getElementById('logoFileInput').click()">
                         <div>📤 Click or drag & drop logo here</div>
@@ -979,6 +990,7 @@
                         <% } %>
                     </div>
                 </div>
+                <!-- Preset Preview section hidden -->
                 <div id="presetPreview" style="margin-top: 16px; display: none;">
                     <div class="field-label">Preset Preview</div>
                     <div class="card" style="padding: 16px;">
@@ -986,8 +998,10 @@
                     </div>
                 </div>
 
-                <div class="actions-row">
-                    <button class="btn btn-primary" type="submit">Process</button>
+                <div class="actions-row" style="margin-top: 24px;">
+                    <button class="btn btn-primary" type="submit" style="width: 100%; padding: 16px 24px; font-size: 16px; font-weight: 600; background: linear-gradient(135deg, #6a82fb 0%, #fc5c7d 100%); border: none; border-radius: 12px; color: white; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 12px rgba(106, 130, 251, 0.4);">
+                        Process
+                    </button>
                 </div>
                 
                 <!-- Progress Bar -->
@@ -2771,7 +2785,7 @@ STYLE:
                 }
                 html += '</div></div>';
                 content.innerHTML = html;
-                preview.style.display = 'block';
+                // preview.style.display = 'block'; // Hidden - preset preview disabled
             }
 
             async function loadPresetsForDropdown() {
