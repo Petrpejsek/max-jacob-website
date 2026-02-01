@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 const { getPersistentPublicDir } = require('../runtimePaths');
+const { normalizeWebsiteUrl } = require('../helpers/urlUtils');
 
 // Configuration
 // Spec: crawl enough pages to preserve menu/IA + key content pages
@@ -1791,6 +1792,13 @@ async function crawlWebsite(jobId, startUrl, logFn) {
   console.log(`[SCRAPER V3] After browser launch - Memory: ${memAfterBrowser.rss}MB RSS, ${memAfterBrowser.heapUsed}MB heap`);
   logMemoryDelta('Browser launch', memBeforeBrowser, memAfterBrowser);
   
+  // Be defensive: audits often start from human-entered URLs (missing scheme, spaces).
+  try {
+    startUrl = normalizeWebsiteUrl(startUrl);
+  } catch (_) {
+    // Let the URL constructor throw a consistent error below.
+  }
+
   const baseUrl = new URL(startUrl);
   const baseOrigin = baseUrl.origin;
 

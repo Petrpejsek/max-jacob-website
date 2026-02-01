@@ -18,6 +18,7 @@ const {
 const { getDefaultPromptTemplates } = require('./promptTemplates');
 const { getPersistentPublicDir } = require('../runtimePaths');
 const { pickCompanyNameFromSignals } = require('../helpers/companyName');
+const { normalizeWebsiteUrl } = require('../helpers/urlUtils');
 
 // Scraper v3 (multi-page crawler)
 let scraperV3 = null;
@@ -2891,9 +2892,20 @@ async function processAuditJob(jobId, options = {}) {
       }
     }
     
-    // Validate required fields
+    // Validate + normalize website URL (prevents scraper "Invalid URL" crashes).
     if (!job.input_url || job.input_url.trim() === '') {
       throw new Error('Website URL is required');
+    }
+    try {
+      const normalized = normalizeWebsiteUrl(job.input_url);
+      if (!normalized) throw new Error('Website URL is required');
+      if (normalized !== job.input_url) {
+        await updateJob(jobId, { input_url: normalized });
+        job.input_url = normalized;
+      }
+    } catch (e) {
+      const message = (e && e.message) ? String(e.message) : 'Invalid website URL';
+      throw new Error(message);
     }
     if (!job.niche || job.niche.trim() === '') {
       throw new Error('Niche is required - please select a preset');

@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { getPersistentPublicDir } = require('../runtimePaths');
+const { normalizeWebsiteUrl } = require('../helpers/urlUtils');
 const {
   getAllSubmissions,
   getSubmissionById,
@@ -507,6 +508,19 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
       delete inputUpdate[key];
     }
   });
+
+  // Normalize/validate the website URL early (prevents scraper "Invalid URL" failures).
+  if (inputUpdate.input_url) {
+    try {
+      inputUpdate.input_url = normalizeWebsiteUrl(inputUpdate.input_url);
+    } catch (e) {
+      const message = (e && e.message) ? String(e.message) : 'Invalid website URL';
+      if (wantsJson) {
+        return res.status(400).json({ error: 'invalid_url', message });
+      }
+      return res.status(400).send(message);
+    }
+  }
 
   console.log('[AUDIT PROCESS] Input update:', inputUpdate);
 
