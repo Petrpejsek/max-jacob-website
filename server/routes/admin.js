@@ -123,7 +123,48 @@ function generatePlainTextFromHtml(html, recipientEmail) {
   text = text.replace(/  +/g, ' '); // Multiple spaces to single
   text = text.trim();
   
+  // Add unsubscribe link at the end (REQUIRED for deliverability!)
+  if (recipientEmail) {
+    const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
+    const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
+    text += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · maxandjacob.com`;
+  }
+  
   return text;
+}
+
+// Add unsubscribe footer to HTML email (REQUIRED for deliverability!)
+function addUnsubscribeFooterToHtml(html, recipientEmail) {
+  if (!html || !recipientEmail) return html;
+  
+  const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
+  const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
+  
+  // Check if unsubscribe link already exists
+  if (html.includes('unsubscribe') || html.includes('Unsubscribe')) {
+    return html; // Already has unsubscribe, don't duplicate
+  }
+  
+  // Footer HTML (Gmail-friendly, simple design)
+  const footer = `
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: Arial, sans-serif;">
+      <p style="font-size: 12px; line-height: 1.5; color: #999; margin: 0 0 8px 0;">
+        You received this email because we analyzed your website and wanted to share a complimentary audit.
+        <a href="${unsubscribeUrl}" style="color: #6a82fb; text-decoration: underline;">Unsubscribe</a>
+      </p>
+      <p style="font-size: 12px; color: #999; margin: 0;">
+        Max &amp; Jacob · <a href="https://maxandjacob.com" style="color: #6a82fb; text-decoration: none;">maxandjacob.com</a>
+      </p>
+    </div>`;
+  
+  // Try to insert before </body> or </html>, or just append
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${footer}</body>`);
+  } else if (html.includes('</html>')) {
+    return html.replace('</html>', `${footer}</html>`);
+  } else {
+    return html + footer;
+  }
 }
 
 function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel }) {
@@ -809,12 +850,21 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
       });
     }
 
-    // IMPORTANT: Unsubscribe footer should be in the HTML template (generateEmailHtml)
-    // Do NOT add it here to avoid duplication
+    // CRITICAL: Add unsubscribe footer to HTML (REQUIRED for deliverability!)
+    // This ensures ALL emails have unsubscribe link, even custom ones from admin UI
+    if (htmlBody) {
+      htmlBody = addUnsubscribeFooterToHtml(htmlBody, recipient);
+    }
     
     // Generate plain text version from HTML if not provided (improves deliverability)
+    // This function also adds unsubscribe link to plain text
     if (!textBody && htmlBody) {
       textBody = generatePlainTextFromHtml(htmlBody, recipient);
+    } else if (textBody && !textBody.includes('unsubscribe')) {
+      // If plain text is provided but doesn't have unsubscribe, add it
+      const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
+      const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipient)}`;
+      textBody += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · maxandjacob.com`;
     }
 
     // Send email via Resend (with BOTH html and text for best deliverability)
