@@ -60,6 +60,7 @@ const { auditQueue } = require('../services/auditQueue');
 const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor');
 const { sendEmail } = require('../services/emailService');
 const { checkEmailHealth } = require('../services/emailHealthCheck');
+const { getTestEmail, getTestResults } = require('../services/mailTesterService');
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -369,6 +370,116 @@ router.get('/api/diagnostics', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[DIAGNOSTICS] Failed to collect diagnostics:', err);
     return res.status(500).json({ error: 'diagnostics_failed', message: err.message });
+  }
+});
+
+// POST /admin/api/test-deliverability/:auditId/start - Start mail-tester.com test
+router.post('/api/test-deliverability/:auditId/start', requireAdmin, auditJobLimiter, async (req, res) => {
+  const auditId = req.params.auditId;
+  
+  try {
+    console.log(`[TEST-DELIVERABILITY] Starting test for audit ${auditId}`);
+    
+    // Get test email from mail-tester.com
+    const { email: testEmail, testId } = await getTestEmail();
+    
+    console.log(`[TEST-DELIVERABILITY] Got test email: ${testEmail}, testId: ${testId}`);
+    
+    // Get audit email content
+    const { getAuditJob } = require('../db');
+    const audit = await new Promise((resolve, reject) => {
+      getAuditJob(auditId, (err, job) => {
+        if (err) reject(err);
+        else resolve(job);
+      });
+    });
+    
+    if (!audit) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Audit not found' 
+      });
+    }
+    
+    // Prepare email content
+    const htmlBody = audit.email_html || '<p>Test email from Max & Jacob</p>';
+    const subject = `${audit.company_name || audit.niche || 'Test'} x Max & Jacob`;
+    
+    // Add unsubscribe footer (using existing function)
+    const htmlWithFooter = addUnsubscribeFooterToHtml(htmlBody, testEmail);
+    const textBody = generatePlainTextFromHtml(htmlWithFooter, testEmail);
+    
+    // Send email to mail-tester
+    console.log(`[TEST-DELIVERABILITY] Sending email to ${testEmail}`);
+    
+    const sendResult = await sendEmail({
+      to: testEmail,
+      subject: subject,
+      html: htmlWithFooter,
+      text: textBody
+    });
+    
+    if (!sendResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send test email',
+        details: sendResult.error
+      });
+    }
+    
+    console.log(`[TEST-DELIVERABILITY] Email sent successfully, resend_id: ${sendResult.id}`);
+    
+    // Return test info
+    res.json({
+      success: true,
+      testId,
+      testEmail,
+      resultsUrl: `https://www.mail-tester.com/${testId}`,
+      message: 'Test email sent! Results will be available in ~30 seconds.'
+    });
+    
+  } catch (error) {
+    console.error(`[TEST-DELIVERABILITY] Error starting test for audit ${auditId}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start deliverability test'
+    });
+  }
+});
+
+// GET /admin/api/test-deliverability/:testId/results - Get mail-tester.com results
+router.get('/api/test-deliverability/:testId/results', requireAdmin, async (req, res) => {
+  const testId = req.params.testId;
+  
+  try {
+    console.log(`[TEST-DELIVERABILITY] Fetching results for test ${testId}`);
+    
+    const results = await getTestResults(testId);
+    
+    if (!results.ready) {
+      return res.json({
+        success: true,
+        ready: false,
+        message: 'Test results not ready yet. Please wait...'
+      });
+    }
+    
+    console.log(`[TEST-DELIVERABILITY] Results ready: Score ${results.score}/10`);
+    
+    res.json({
+      success: true,
+      ready: true,
+      score: results.score,
+      details: results.details,
+      resultsUrl: results.resultsUrl
+    });
+    
+  } catch (error) {
+    console.error(`[TEST-DELIVERABILITY] Error getting results for test ${testId}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get test results'
+    });
   }
 });
 
