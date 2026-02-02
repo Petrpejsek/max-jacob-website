@@ -1,381 +1,279 @@
-# 🚨 EMAIL DELIVERABILITY FIX - Přestaňte padat do spamu!
+# 📧 Email Deliverability Fix - Kompletní Řešení
 
-## ⚡ OKAMŽITÁ AKCE (udělat TERAZ!)
+**Datum:** 2. února 2026  
+**Problém:** Emaily padají do spamu  
+**Řešení:** DNS konfigurace + úpravy kódu
 
-### 1. Zkontrolujte Resend Domain Authentication
+---
 
-**Krok 1: Přejděte na Resend Domains**
+## 🚨 KRITICKÉ PROBLÉMY NALEZENÉ
+
+### 1. ❌ SPF záznam neobsahuje Resend
+**Současný stav:**
 ```
-https://resend.com/domains
+v=spf1 include:secureserver.net -all
 ```
 
-**Krok 2: Zkontrolujte status `maxandjacob.com`**
+**Problém:** Resend NEMÁ povolení odesílat emaily z `@maxandjacob.com` → emaily jdou do spamu
+
+### 2. ❌ Duplicitní DMARC záznamy
+Máte 2 DMARC záznamy, jeden s policy `p=quarantine` (karanténa)
+
+### 3. ❌ Chybí unsubscribe link v HTML emailu
+Jen v plain textu, Gmail a Outlook to trestají
+
+### 4. ❌ Chybí List-Unsubscribe hlavička
+RFC standardní hlavička pro hromadné emaily
+
+### 5. ❌ Relativní URL pro obrázky
+Email klienti nedokážou zobrazit obrázky s relativní cestou
+
+### 6. ❌ Chybí plain text verze
+Emaily by měly mít obě verze (HTML + plain text)
+
+---
+
+## ✅ ŘEŠENÍ KROK ZA KROKEM
+
+---
+
+## ČÁST A: DNS ZMĚNY (MUSÍTE UDĚLAT VY)
+
+### Krok 1: Opravit SPF záznam
+
+**Kde:** V DNS správě vaší domény (pravděpodobně GoDaddy nebo jiný registrátor)
+
+**Co udělat:**
+1. Přihlaste se do DNS správy pro `maxandjacob.com`
+2. Najděte TXT záznam s hodnotou začínající `v=spf1`
+3. **ZMĚŇTE** z:
+   ```
+   v=spf1 include:secureserver.net -all
+   ```
+   
+   **NA:**
+   ```
+   v=spf1 include:secureserver.net include:_spf.resend.com -all
+   ```
+
+**DŮLEŽITÉ:**
+- ✅ **PŘIDEJTE** `include:_spf.resend.com` (nepřepisujte celý záznam!)
+- ✅ Zachovejte `include:secureserver.net` (pro příchozí emaily)
+- ✅ Zachovejte `-all` na konci
+
+**Příklad - GoDaddy:**
+- DNS Management → TXT Records → Edit
+- Změňte hodnotu
+- Save
+
+**Propagace:** 5 minut až 2 hodiny (obvykle během 15 minut)
+
+---
+
+### Krok 2: Vyčistit DMARC záznamy
+
+**Co udělat:**
+1. V DNS správě najděte všechny TXT záznamy pro `_dmarc.maxandjacob.com`
+2. **SMAŽTE** všechny DMARC záznamy
+3. **VYTVOŘTE** nový jedný DMARC záznam:
+
+**Host/Name:** `_dmarc` nebo `_dmarc.maxandjacob.com`
+
+**Hodnota:**
+```
+v=DMARC1; p=none; rua=mailto:postmaster@maxandjacob.com; pct=100; adkim=r; aspf=r
+```
+
+**Vysvětlení:**
+- `p=none` - jen monitoring (později můžete změnit na `quarantine` nebo `reject`)
+- `rua=mailto:postmaster@maxandjacob.com` - kam posílat reporty
+- `adkim=r` - relaxed DKIM alignment (bezpečnější pro začátek)
+- `aspf=r` - relaxed SPF alignment
+
+**POZNÁMKA:** Jakmile budete mít 100% doručitelnost po dobu 2-4 týdnů, můžete změnit `p=none` na `p=quarantine` nebo `p=reject` pro ještě lepší reputaci.
+
+---
+
+### Krok 3: Ověřit DKIM (měl by být už správně)
+
+**Ověření:**
+Zkontrolujte, že máte TXT záznam:
+- **Host/Name:** `resend._domainkey` nebo `resend._domainkey.maxandjacob.com`
+- **Hodnota:** Začíná `p=MIGfMA0GCSq...`
+
+✅ Tento záznam **UŽ MÁTE** správně nastavený (verified v Resend dashboardu)
+
+---
+
+## ČÁST B: CODE ZMĚNY (HOTOVO)
+
+### ✅ Změna 1: emailService.js
+- Přidán **List-Unsubscribe** header (RFC standardní)
+- Přidán **Reply-To** header
+- Přidán **From name** ("Jacob from Max & Jacob")
+- Obě verze emailu (HTML + plain text)
+
+### ✅ Změna 2: generateEmailHtml()
+- Přidán **unsubscribe link** do HTML
+- Změněny relativní URL na **absolutní URL** pro obrázky
+- Zlepšená struktura HTML pro lepší rendering
+
+### ✅ Změna 3: Plain text verze
+- Automatické generování plain text verze z HTML
+- Fallback pokud HTML není k dispozici
+
+---
+
+## ČÁST C: JAK OVĚŘIT, ŽE TO FUNGUJE
+
+### 1. Zkontrolovat DNS (po změnách)
+
+Použijte diagnostický script:
+```bash
+node scripts/check-email-dns.js
+```
 
 Měli byste vidět:
 ```
-✅ Domain verified
-✅ SPF: Verified
-✅ DKIM: Verified
-⚠️ DMARC: Not configured  ← TOTO JE PROBLÉM!
+✅ SPF: obsahuje _spf.resend.com
+✅ DKIM: verified
+✅ DMARC: správně nastavený
 ```
 
-**Pokud vidíte ❌ nebo ⚠️ u SPF/DKIM:**
-- Klikněte na doménu
-- Zkopírujte DNS záznamy
-- Přidejte je do vašeho DNS providera (GoDaddy/Cloudflare/etc.)
-- Počkejte 5-10 minut
-- Klikněte "Verify" v Resend
+### 2. Otestovat email
+
+Po odeslání testovacího emailu:
+
+**Gmail:**
+- Otevřete email
+- Klikněte na "Show original" (tři tečky → Show original)
+- Zkontrolujte:
+  - `SPF: PASS`
+  - `DKIM: PASS`
+  - `DMARC: PASS`
+
+**Outlook/Hotmail:**
+- Zkontrolujte, že email není ve spamu
+- Headers by měly ukazovat PASS pro SPF/DKIM
+
+**Online nástroje:**
+```
+https://www.mail-tester.com/
+```
+Pošlete testovací email na adresu, kterou vám dají, a dostanete skóre 0-10.
+Cíl: **8/10 nebo vyšší**
 
 ---
 
-## 🔧 KRITICKÁ OPRAVA: DMARC Setup
+## 📊 OČEKÁVANÉ VÝSLEDKY
 
-**Bez DMARC vás Gmail/Outlook automaticky označí jako spam!**
+### Před opravami:
+- ❌ SPF: FAIL nebo SOFTFAIL
+- ❌ DMARC: FAIL
+- ❌ Emaily ve spamu
+- ❌ Nízké skóre na mail-tester (4-6/10)
 
-### Krok 1: Přidejte DMARC záznam do DNS
-
-**V DNS provideru (GoDaddy/Cloudflare/etc.):**
-
-```
-Type: TXT
-Name: _dmarc
-Value: v=DMARC1; p=none; rua=mailto:postmaster@maxandjacob.com; pct=100; adkim=r; aspf=r;
-TTL: 3600
-```
-
-**Co to znamená:**
-- `p=none` - zatím jen monitorujeme (neblokujeme)
-- `rua=mailto:...` - posílat reporty na tento email
-- `adkim=r` - relaxed DKIM alignment (nutné pro Resend)
-- `aspf=r` - relaxed SPF alignment (nutné pro Resend)
-
-### Krok 2: Ověřte DMARC po 10 minutách
-
-```bash
-# V terminálu:
-dig TXT _dmarc.maxandjacob.com +short
-
-# Měli byste vidět:
-"v=DMARC1; p=none; rua=mailto:postmaster@maxandjacob.com..."
-```
-
-### Krok 3: Po týdnu zpřísněte politiku
-
-Když vidíte, že všechny emaily passují, změňte:
-```
-v=DMARC1; p=quarantine; rua=mailto:postmaster@maxandjacob.com; pct=100; adkim=r; aspf=r;
-```
-
-Po dalším týdnu (pokud je vše OK):
-```
-v=DMARC1; p=reject; rua=mailto:postmaster@maxandjacob.com; pct=100; adkim=r; aspf=r;
-```
+### Po opravách:
+- ✅ SPF: PASS
+- ✅ DKIM: PASS (už jste měli)
+- ✅ DMARC: PASS
+- ✅ Emaily v inboxu
+- ✅ Vysoké skóre na mail-tester (8-10/10)
 
 ---
 
-## 📧 Email Content - Odstraňte SPAM triggery
+## ⚠️ DŮLEŽITÉ POZNÁMKY
 
-### Běžné spam slova V ČESKÝCH emailech:
+### O SPF záznamu:
+- **NEPŘEPISUJTE** existující `include:secureserver.net`
+- **PŘIDEJTE** pouze `include:_spf.resend.com`
+- SPF záznam může mít max **10 includes** (máte jen 2, jste v pohodě)
 
-**❌ VYHNĚTE SE:**
-- "Zdarma" / "Free"
-- "Garancované výsledky"
-- "Žádné riziko"
-- "Ušetříte peníze"
-- "Proklikněte zde"
-- "Speciální nabídka"
-- "100% záruka"
-- Příliš mnoho emojis (max 2-3 celkem)
-- VELKÝMI PÍSMENY
-- !!! vícenásobné vykřičníky !!!
+### O DMARC policy:
+- Začínáme s `p=none` (jen monitoring)
+- Po 2-4 týdnech úspěšného odesílání změňte na `p=quarantine`
+- Později můžete jít na `p=reject` (nejpřísnější)
 
-**✅ POUŽÍVEJTE:**
-- Konkrétní, faktická tvrzení
-- Profesionální tón
-- Přirozený jazyk
-- Personalizaci (jméno firmy, město, niche)
-
-### Kontrola vašich emailů:
-
-1. **Otevřete admin dashboard:**
-   ```
-   https://maxandjacob.com/admin/audits/62
-   ```
-
-2. **Klikněte "Show Email"**
-
-3. **Zkontrolujte:**
-   - ❌ Subject line obsahuje spam slova?
-   - ❌ Příliš mnoho odkazů (ideálně max 2-3)?
-   - ❌ Chybí unsubscribe link?
-   - ❌ Je pouze HTML verze (chybí plain text)?
+### O email contentu:
+- Unsubscribe link je **povinný** pro marketing emaily
+- List-Unsubscribe header umožňuje "jedno-klikové" odhlášení v Gmailu
+- Plain text verze zlepšuje deliverability
 
 ---
 
-## 🔗 KRITICKÉ: Vypněte Click Tracking (dočasně)
+## 🎯 CHECKLIST - CO MUSÍTE UDĚLAT
 
-**Click tracking může triggerovat spam filtry!**
+### DNS změny (u vašeho DNS providera):
+- [ ] Upravit SPF záznam - přidat `include:_spf.resend.com`
+- [ ] Vyčistit duplicitní DMARC záznamy
+- [ ] Vytvořit jeden správný DMARC záznam
+- [ ] Počkat 15-30 minut na DNS propagaci
 
-### Krok 1: Vypněte v Resend
+### Ověření:
+- [ ] Spustit `node scripts/check-email-dns.js`
+- [ ] Vidět všechna ✅ zelená
+- [ ] Odeslat testovací email
+- [ ] Zkontrolovat "Show original" v Gmailu → SPF/DKIM/DMARC = PASS
+- [ ] Otestovat na mail-tester.com (cíl: 8+/10)
 
-```
-1. https://resend.com/settings/domains
-2. Klikněte na maxandjacob.com
-3. Configuration → Click Tracking: OFF (toggle vypnuto)
-4. Save
-```
-
-### Krok 2: Aktualizujte webhook
-
-Protože už nemáte click tracking:
-- Jděte na: https://resend.com/webhooks
-- Smažte webhook pro `email.clicked`
-- Ponechte jen základní webhook (pokud máte)
-
-### Krok 3: Testujte bez trackingu
-
-- Pošlete 5-10 testů na různé emaily
-- Zkontrolujte inbox vs spam
-- **Pokud už nepadají do spamu**, tracking byl problém!
+### Monitoring (po týdnu):
+- [ ] Zkontrolovat, že emaily nejsou ve spamu
+- [ ] Zkontrolovat DMARC reporty (pokud přicházejí na postmaster@)
+- [ ] Případně zpřísnit DMARC policy na `p=quarantine`
 
 ---
 
-## 🌡️ Email Warming Strategy
+## 🆘 TROUBLESHOOTING
 
-**Problém:** Posíláte příliš mnoho emailů najednou z nové domény!
+### Problém: DNS změny se neprojevují
+**Řešení:** 
+- Počkejte 2 hodiny (max propagační čas)
+- Vymažte DNS cache: `sudo dscacheutil -flushcache` (Mac)
+- Zkontrolujte z jiné sítě nebo přes online nástroj
 
-### Denní limity pro warming:
+### Problém: Stále ve spamu i po DNS opravách
+**Možné příčiny:**
+1. **Doménová reputace** - nová doména nebo historie spamu
+   - Řešení: Zahřívejte doménu (začněte malým počtem emailů)
+2. **Content problémy** - spamové slova
+   - Zkontrolujte na mail-tester.com
+3. **Engagement** - nízká míra otevření
+   - Posílejte jen relevantním příjemcům
 
-```
-Den 1-3:   5-10 emailů/den
-Den 4-7:   20 emailů/den
-Den 8-14:  50 emailů/den
-Den 15-21: 100 emailů/den
-Den 22-30: 200+ emailů/den (postupně zvyšujte)
-```
-
-### Best practices:
-
-1. **Posílejte v různých časech** (ne všechny najednou)
-2. **Variety**: Mírně změňte subject lines mezi emaily
-3. **Engagement**: Ideálně začněte s emaily, kde znáte příjemce
-4. **Response rate**: Odpovídejte na všechny odpovědi (zvyšuje reputaci)
-
----
-
-## ✅ Must-Have v každém emailu
-
-### 1. Unsubscribe link (POVINNÉ!)
-
-Přidejte na konec každého emailu:
-
-```html
-<p style="font-size: 12px; color: #999; margin-top: 40px;">
-  Tento email jste dostali, protože jsme analyzovali vaši webovou stránku.<br>
-  <a href="https://maxandjacob.com/unsubscribe?email={{email}}" style="color: #666;">
-    Odhlásit se z budoucích emailů
-  </a>
-</p>
-```
-
-### 2. Plain text verze
-
-Vždycky posílejte HTML + plain text:
-
-```javascript
-// V emailService.js:
-await sendEmail({
-  to: recipient,
-  subject: subject,
-  html: htmlVersion,    // ✅
-  text: plainVersion    // ✅ Must have!
-});
-```
-
-### 3. Proper FROM name
-
-```javascript
-// Místo jen "jacob@maxandjacob.com"
-from: 'Jacob from Max & Jacob <jacob@maxandjacob.com>'
-```
+### Problém: SPF/DKIM/DMARC všechny PASS, ale stále spam
+**Pravděpodobně:**
+- Content filtering (spamové fráze v textu)
+- Nízká doménová reputace (nová doména)
+- Chybí email warmup
+  
+**Řešení:**
+- Testujte content na mail-tester.com
+- Začněte posílat méně emailů (5-10 denně)
+- Postupně zvyšujte volume
 
 ---
 
-## 🧪 Testování deliverability
+## 📞 DALŠÍ KROKY
 
-### Nástroje na testování spamu:
-
-1. **Mail-tester.com** (FREE, nejlepší)
-   ```
-   1. Otevřete: https://www.mail-tester.com/
-   2. Zkopírujte test email: test-xxxxx@mail-tester.com
-   3. Pošlete váš audit email na tuto adresu
-   4. Zkontrolujte skóre (musí být 8+/10)
-   ```
-
-2. **GlockApps** (placené, ale přesné)
-   - Testuje Gmail, Outlook, Yahoo, etc.
-   - Ukáže inbox placement rate
-
-3. **Manuální test:**
-   ```
-   Pošlete email na:
-   - Gmail účet
-   - Outlook/Hotmail účet
-   - Seznam.cz účet (pokud posíláte v ČR)
-   
-   Zkontrolujte:
-   - ✅ Inbox nebo ❌ Spam?
-   - SPF, DKIM, DMARC pass? (View > Show Original)
-   ```
+1. **HNED:** Upravte DNS záznamy (SPF + DMARC)
+2. **Po 15-30 min:** Spusťte diagnostický script
+3. **Po ověření DNS:** Odešlete testovací email
+4. **Zkontrolujte:** Gmail "Show original" + mail-tester.com
+5. **V produkci:** Monitorujte doručitelnost prvních 50-100 emailů
+6. **Po týdnu:** Zpřísněte DMARC na `p=quarantine`
 
 ---
 
-## 🔍 Diagnostika - Proč KONKRÉTNĚ padáte do spamu?
+## 📚 UŽITEČNÉ ODKAZY
 
-### Gmail Headers Check:
-
-1. Otevřete email v Gmailu
-2. Klikněte na **"..."** → **"Show original"**
-3. Hledejte tyto řádky:
-
-```
-SPF: PASS ✅ nebo FAIL ❌?
-DKIM: PASS ✅ nebo FAIL ❌?
-DMARC: PASS ✅ nebo FAIL ❌?
-
-X-Spam-Score: 2.5  ← Musí být < 5.0
-X-Spam-Status: No  ← Musí být "No"
-```
-
-### Běžné problémy:
-
-**Problem 1: "DMARC: FAIL"**
-- ➡️ Chybí DMARC záznam v DNS (viz výše)
-
-**Problem 2: "SPF: FAIL"**
-- ➡️ Resend domain není ověřená
-- ➡️ SPF záznam není v DNS
-
-**Problem 3: "X-Spam-Score: 7.2" (vysoké skóre)**
-- ➡️ Email content má spam slova
-- ➡️ Příliš mnoho odkazů
-- ➡️ Chybí unsubscribe link
-
-**Problem 4: "Authentication-Results: none"**
-- ➡️ Posíláte z `jacob@maxandjacob.com` ale doména není verified v Resend
+- **Resend Dashboard:** https://resend.com/domains
+- **Mail Tester:** https://www.mail-tester.com/
+- **Google Postmaster Tools:** https://postmaster.google.com/
+- **SPF Checker:** https://mxtoolbox.com/spf.aspx
+- **DMARC Analyzer:** https://dmarc.org/
 
 ---
 
-## 📊 Monitoring & Maintenance
-
-### Sledujte tyto metriky:
-
-```
-✅ Inbox placement rate > 90%
-✅ Bounce rate < 2%
-✅ Complaint rate < 0.1%
-✅ Open rate > 15% (realistické)
-✅ DMARC reports: 100% pass
-```
-
-### Nástroje na monitoring:
-
-1. **Resend Analytics** (built-in)
-   - https://resend.com/emails
-   - Sledujte delivery rate, bounces
-
-2. **DMARC Analyzer** (free tiers available)
-   - Parsuje DMARC reporty
-   - Ukáže kdo failuje authentication
-
-3. **Google Postmaster Tools** (FREE!)
-   ```
-   1. https://postmaster.google.com/
-   2. Přidejte maxandjacob.com
-   3. Sledujte domain reputation, spam rate
-   ```
-
----
-
-## 🚀 Action Plan - Co udělat TEĎ (v pořadí priority)
-
-### URGENT (do 1 hodiny):
-
-1. ✅ Zkontrolujte Resend domain verification
-2. ✅ Přidejte DMARC záznam do DNS
-3. ✅ Vypněte click tracking v Resend (dočasně)
-4. ✅ Test email na mail-tester.com → skóre 8+?
-
-### HIGH (dnes):
-
-5. ✅ Přidejte unsubscribe link do všech emailů
-6. ✅ Přidejte plain text verzi emailů
-7. ✅ Zkontrolujte subject lines - odstraňte spam slova
-8. ✅ Limit 5-10 emailů dnes (warming)
-
-### MEDIUM (tento týden):
-
-9. ✅ Setup Google Postmaster Tools
-10. ✅ Zkontrolujte DMARC reports po 3 dnech
-11. ✅ Postupně zvyšujte daily volume (20/day)
-12. ✅ Implementujte email variations (3 různé subject lines)
-
-### LOW (dlouhodobě):
-
-13. ✅ Po 2 týdnech: zpřísněte DMARC na `p=quarantine`
-14. ✅ Zapněte click tracking zpět (když máte 90%+ inbox rate)
-15. ✅ Setup dedicated IP u Resend (pokud posíláte 1000+/měsíc)
-
----
-
-## 🔗 Užitečné odkazy:
-
-- **Resend Docs**: https://resend.com/docs
-- **DMARC Guide**: https://dmarc.org/overview/
-- **Mail Tester**: https://www.mail-tester.com/
-- **Google Postmaster**: https://postmaster.google.com/
-- **MXToolbox**: https://mxtoolbox.com/SuperTool.aspx
-
----
-
-## ❓ FAQ
-
-**Q: Jak dlouho trvá než se zlepší deliverability?**  
-A: S DMARC a bez spam triggerů: 3-7 dní. S warmingem: 2-4 týdny.
-
-**Q: Můžu poslat více emailů když mám DMARC?**  
-A: Ano, ale držte se warming schedule. DMARC není zázrak, jen nutnost.
-
-**Q: Click tracking je špatný vždycky?**  
-A: Ne. Ale u nových domén s nízkou reputací ano. Zapněte až máte 90%+ inbox rate.
-
-**Q: Kolik stojí dedicated IP?**  
-A: U Resend ~$20-50/měsíc. Potřebujete jen když posíláte 10,000+/měsíc.
-
-**Q: Můžu použít "test" subdoménu?**  
-A: Ne! Vždy posílejte z produkční domény (maxandjacob.com), jinak budete spam.
-
----
-
-## ✅ Checklist - Pro každý email:
-
-```
-□ SPF: PASS
-□ DKIM: PASS
-□ DMARC: PASS (po přidání záznamu)
-□ Plain text verze: ✅
-□ Unsubscribe link: ✅
-□ Subject < 60 znaků
-□ Žádná spam slova v subject
-□ Max 2-3 odkazy v emailu
-□ Personalizace (jméno firmy, město)
-□ FROM name: "Jacob from Max & Jacob"
-□ Mail-tester.com skóre: 8+/10
-```
-
----
-
-**Good luck! 🚀 S těmito úpravami byste měli vidět zlepšení za 3-7 dní.**
-
-**Tip:** Začněte s 5 testy na různé emaily (Gmail, Outlook, Seznam) a sledujte kam padají!
+Vytvořeno: 2. února 2026  
+Pro: Max & Jacob  
+Status: **Ready for Implementation**

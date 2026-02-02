@@ -59,6 +59,7 @@ const { loginLimiter, auditJobLimiter } = require('../middleware/security');
 const { auditQueue } = require('../services/auditQueue');
 const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor');
 const { sendEmail } = require('../services/emailService');
+const { checkEmailHealth } = require('../services/emailHealthCheck');
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -67,6 +68,62 @@ function escapeHtml(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Convert HTML email to plain text for better deliverability
+ * @param {string} html - HTML content
+ * @param {string} recipientEmail - Recipient email for unsubscribe link
+ * @returns {string} Plain text version
+ */
+function generatePlainTextFromHtml(html, recipientEmail) {
+  if (!html) return '';
+  
+  let text = html;
+  
+  // Remove DOCTYPE, html, head, body tags
+  text = text.replace(/<!DOCTYPE[^>]*>/gi, '');
+  text = text.replace(/<html[^>]*>/gi, '');
+  text = text.replace(/<\/html>/gi, '');
+  text = text.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+  text = text.replace(/<body[^>]*>/gi, '');
+  text = text.replace(/<\/body>/gi, '');
+  
+  // Convert links to plain text with URL
+  text = text.replace(/<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)');
+  
+  // Convert headings
+  text = text.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n\n$1\n' + '='.repeat(50) + '\n');
+  
+  // Convert paragraphs
+  text = text.replace(/<p[^>]*>(.*?)<\/p>/gi, '\n$1\n');
+  
+  // Convert line breaks
+  text = text.replace(/<br[^>]*>/gi, '\n');
+  
+  // Convert list items
+  text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n');
+  text = text.replace(/<ul[^>]*>/gi, '\n');
+  text = text.replace(/<\/ul>/gi, '\n');
+  
+  // Remove all other HTML tags
+  text = text.replace(/<[^>]*>/g, '');
+  
+  // Decode HTML entities
+  text = text.replace(/&nbsp;/g, ' ');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&quot;/g, '"');
+  text = text.replace(/&#39;/g, "'");
+  text = text.replace(/&middot;/g, '·');
+  
+  // Clean up whitespace
+  text = text.replace(/\n\s*\n\s*\n/g, '\n\n'); // Multiple newlines to max 2
+  text = text.replace(/  +/g, ' '); // Multiple spaces to single
+  text = text.trim();
+  
+  return text;
 }
 
 function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel }) {
@@ -256,6 +313,11 @@ router.get('/diagnostics', requireAdmin, async (req, res) => {
     console.error('[DIAGNOSTICS] Failed to collect diagnostics:', err);
     return res.status(500).send('Failed to collect diagnostics');
   }
+});
+
+// GET /admin/email-health - Email Health Dashboard
+router.get('/email-health', requireAdmin, (req, res) => {
+  res.render('admin-email-health');
 });
 
 // GET /admin/api/diagnostics - JSON diagnostics for automation
@@ -729,43 +791,38 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
       });
     }
 
-    // Choose body based on format
-    let emailBody = format === 'html' ? html_body : plain_body;
+    // Get email body based on format
+    let htmlBody = html_body;
+    let textBody = plain_body;
     
-    if (!emailBody || emailBody.trim() === '') {
+    // Validate that we have content
+    if (format === 'html' && (!htmlBody || htmlBody.trim() === '')) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Email body is empty' 
+        error: 'HTML email body is empty' 
+      });
+    }
+    if (format === 'plain' && (!textBody || textBody.trim() === '')) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Plain text email body is empty' 
       });
     }
 
-    // Add unsubscribe footer (REQUIRED for deliverability & CAN-SPAM compliance)
-    if (format === 'html') {
-      const encodedEmail = encodeURIComponent(recipient);
-      const unsubscribeFooter = `
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: Arial, sans-serif;">
-          <p style="font-size: 11px; color: #6b7280; line-height: 1.5; margin: 0;">
-            You received this email because we analyzed your website and wanted to share a complimentary audit.
-            <br>If you'd prefer not to receive future messages, you can <a href="https://maxandjacob.com/unsubscribe?email=${encodedEmail}" style="color: #4b5563; text-decoration: underline;">unsubscribe here</a>.
-          </p>
-          <p style="font-size: 11px; color: #9ca3af; margin: 8px 0 0 0;">
-            Max & Jacob - <a href="https://maxandjacob.com" style="color: #9ca3af; text-decoration: none;">maxandjacob.com</a>
-          </p>
-        </div>
-      `;
-      emailBody = emailBody + unsubscribeFooter;
-    } else {
-      // Plain text footer
-      const unsubscribeFooter = `\n\n---\n\nYou received this email because we analyzed your website and wanted to share a complimentary audit.\nIf you'd prefer not to receive future messages, unsubscribe here:\nhttps://maxandjacob.com/unsubscribe?email=${encodeURIComponent(recipient)}\n\nMax & Jacob - maxandjacob.com`;
-      emailBody = emailBody + unsubscribeFooter;
+    // IMPORTANT: Unsubscribe footer should be in the HTML template (generateEmailHtml)
+    // Do NOT add it here to avoid duplication
+    
+    // Generate plain text version from HTML if not provided (improves deliverability)
+    if (!textBody && htmlBody) {
+      textBody = generatePlainTextFromHtml(htmlBody, recipient);
     }
 
-    // Send email via Resend
+    // Send email via Resend (with BOTH html and text for best deliverability)
     const sendResult = await sendEmail({
       to: recipient,
       subject: subject,
-      html: format === 'html' ? emailBody : undefined,
-      text: format === 'plain' ? emailBody : undefined
+      html: htmlBody,
+      text: textBody
     });
 
     // Log to database
@@ -1907,6 +1964,33 @@ router.delete('/api/preaudits/search/:searchId', requireAdmin, (req, res) => {
       message: 'Search deleted successfully'
     });
   });
+});
+
+// GET /admin/api/email-health - Check email deliverability configuration
+router.get('/api/email-health', requireAdmin, async (req, res) => {
+  try {
+    console.log('[EMAIL HEALTH] Running email health check...');
+    
+    const healthReport = await checkEmailHealth();
+    
+    console.log('[EMAIL HEALTH] Check completed:', healthReport.overall.status);
+    
+    res.json({
+      success: true,
+      ...healthReport
+    });
+  } catch (error) {
+    console.error('[EMAIL HEALTH] Error running health check:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to run email health check',
+      overall: {
+        status: 'error',
+        message: 'Health check failed to run',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
 });
 
 module.exports = router;

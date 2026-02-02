@@ -19,14 +19,25 @@ async function sendEmail({ to, subject, html, text }) {
       throw new Error('RESEND_API_KEY not configured in environment variables');
     }
 
+    // Build unsubscribe URL
+    const unsubscribeUrl = `https://maxandjacob.com/unsubscribe?email=${encodeURIComponent(to)}`;
+
     // Send email via Resend
     // NOTE: Resend Node SDK returns { data, error } (v4+).
     const result = await resend.emails.send({
-      from: 'jacob@maxandjacob.com',
+      from: 'Jacob from Max & Jacob <jacob@maxandjacob.com>',
       to,
       subject,
       html: html || undefined,
       text: text || undefined,
+      reply_to: 'jacob@maxandjacob.com',
+      headers: {
+        // List-Unsubscribe header (RFC 8058) - enables one-click unsubscribe in Gmail/Outlook
+        'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:jacob@maxandjacob.com?subject=Unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        // Optional: Precedence header (helps avoid auto-responders)
+        'Precedence': 'bulk'
+      },
       tags: [
         { name: 'category', value: 'audit-outreach' }
       ]

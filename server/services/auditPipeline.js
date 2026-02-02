@@ -2785,7 +2785,7 @@ async function generateConceptPreview(job, miniAudit, preset = null) {
   };
 }
 
-function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = null) {
+function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = null, recipientEmail = null) {
   const leaks = miniAudit.top_3_leaks || [];
   const plan = miniAudit.seven_day_plan || [];
   const introLine = emailPolish && emailPolish.intro_line
@@ -2795,44 +2795,98 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
   const ctaText = (preset && preset.default_primary_cta) || (miniAudit.copy_suggestions && miniAudit.copy_suggestions[0]) || 'Unlock full audit';
   
   // Use preset concept image if available, otherwise use screenshot
+  // IMPORTANT: Use ABSOLUTE URLs for email clients
+  const baseUrl = 'https://maxandjacob.com';
   const imageUrl = preset && preset.concept_image_url 
-    ? `/${preset.concept_image_url}` 
-    : (screenshots && screenshots.above_fold ? `/${screenshots.above_fold}` : '');
+    ? `${baseUrl}/${preset.concept_image_url}` 
+    : (screenshots && screenshots.above_fold ? `${baseUrl}/${screenshots.above_fold}` : '');
   
   const imageLabel = preset && preset.concept_image_url 
     ? 'Concept preview for your industry' 
     : 'Website snapshot';
 
+  // Build unsubscribe URL
+  const unsubscribeUrl = recipientEmail 
+    ? `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`
+    : `${baseUrl}/unsubscribe`;
+
   return `
-  <html>
-    <body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f6f6f8;color:#111;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f6f8;padding:24px 0;">
-        <tr>
-          <td align="center">
-            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:24px;">
-              <tr>
-                <td>
-                  <h2 style="margin:0 0 12px 0;">Website + AI follow-up built to book more ${job.niche} jobs (${job.city})</h2>
-                  <p style="margin:0 0 16px 0;">${introLine}</p>
-                  ${imageUrl ? `<img src="${imageUrl}" alt="${imageLabel}" style="width:100%;border-radius:8px;margin-bottom:8px;"><p style="font-size:11px;color:#999;margin:0 0 16px 0;font-style:italic;">${imageLabel}</p>` : ''}
-                  <h3 style="margin:0 0 8px 0;">Top 3 lead leaks we found</h3>
-                  <ul style="padding-left:18px;margin:0 0 16px 0;">
-                    ${leaks.map((item) => `<li style="margin-bottom:6px;">${item.problem}</li>`).join('')}
-                  </ul>
-                  <h3 style="margin:0 0 8px 0;">What we can ship in 7 days</h3>
-                  <ul style="padding-left:18px;margin:0 0 16px 0;">
-                    ${plan.map((item) => `<li style="margin-bottom:6px;">${item}</li>`).join('')}
-                  </ul>
-                  <a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;margin-top:8px;">${ctaText}</a>
-                  <p style="font-size:12px;color:#666;margin-top:16px;">This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake. No guarantees or performance promises.</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-  </html>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Website Audit - Max &amp; Jacob</title>
+  </head>
+  <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f6f8;color:#111;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f6f8;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:12px;padding:32px;max-width:600px;">
+            <tr>
+              <td>
+                <h2 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:600;color:#111;">Website + AI follow-up built to book more ${job.niche} jobs (${job.city})</h2>
+                <p style="margin:0 0 20px 0;font-size:16px;line-height:1.5;color:#333;">${introLine}</p>
+                ${imageUrl ? `
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                  <tr>
+                    <td>
+                      <img src="${imageUrl}" alt="${imageLabel}" style="width:100%;max-width:600px;height:auto;display:block;border-radius:8px;border:none;" />
+                      <p style="font-size:12px;color:#999;margin:8px 0 0 0;font-style:italic;">${imageLabel}</p>
+                    </td>
+                  </tr>
+                </table>
+                ` : ''}
+                <h3 style="margin:24px 0 12px 0;font-size:18px;font-weight:600;color:#111;">Top 3 lead leaks we found</h3>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                  <tr>
+                    <td>
+                      <ul style="padding-left:20px;margin:0;font-size:15px;line-height:1.6;color:#333;">
+                        ${leaks.map((item) => `<li style="margin-bottom:8px;">${item.problem}</li>`).join('')}
+                      </ul>
+                    </td>
+                  </tr>
+                </table>
+                <h3 style="margin:24px 0 12px 0;font-size:18px;font-weight:600;color:#111;">What we can ship in 7 days</h3>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                  <tr>
+                    <td>
+                      <ul style="padding-left:20px;margin:0;font-size:15px;line-height:1.6;color:#333;">
+                        ${plan.map((item) => `<li style="margin-bottom:8px;">${item}</li>`).join('')}
+                      </ul>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 24px 0;">
+                  <tr>
+                    <td align="center">
+                      <a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;text-align:center;">${ctaText}</a>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #e5e5e5;padding-top:20px;margin-top:32px;">
+                  <tr>
+                    <td>
+                      <p style="font-size:13px;line-height:1.5;color:#666;margin:0 0 12px 0;">This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake. No guarantees or performance promises.</p>
+                      <p style="font-size:12px;line-height:1.5;color:#999;margin:0;">
+                        You received this email because we analyzed your website and wanted to share a complimentary audit. 
+                        <a href="${unsubscribeUrl}" style="color:#6a82fb;text-decoration:underline;">Unsubscribe</a>
+                      </p>
+                      <p style="font-size:12px;color:#999;margin:8px 0 0 0;">
+                        Max &amp; Jacob &middot; <a href="https://maxandjacob.com" style="color:#6a82fb;text-decoration:none;">maxandjacob.com</a>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
   `.trim();
 }
 
