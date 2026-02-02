@@ -2018,6 +2018,7 @@
                             <div class="actions-row">
                                 <button class="btn" type="button" onclick='navigator.clipboard.writeText(<%- JSON.stringify(auditJob.email_html || "") %>)'>Copy HTML</button>
                                 <button class="btn" type="button" onclick='navigator.clipboard.writeText(<%- JSON.stringify(JSON.stringify(auditJob.mini_audit_json || {}, null, 2)) %>)'>Copy text summary</button>
+                                <button class="btn btn-primary" type="button" id="regenerateEmailBtn" onclick="regenerateEmail()">🔄 Regenerate Email</button>
                             </div>
                         <% } %>
                     </div>
@@ -4024,6 +4025,55 @@ STYLE:
                     alert('Process failed: ' + err.message);
                 }
             });
+        }
+
+        // Regenerate email with updated unsubscribe links
+        async function regenerateEmail() {
+            const btn = document.getElementById('regenerateEmailBtn');
+            if (!btn) return;
+            
+            // Disable button
+            btn.disabled = true;
+            btn.textContent = '⏳ Regenerating...';
+            btn.style.opacity = '0.6';
+            
+            try {
+                const auditId = <%= auditJob.id %>;
+                const response = await fetch(`/admin/audits/${auditId}/regenerate-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/admin/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    alert('✅ Email regenerated successfully with updated unsubscribe links!\n\nPage will reload to show the new email.');
+                    
+                    // Reload page to show updated email
+                    window.location.reload();
+                } else {
+                    alert('❌ Failed to regenerate email: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Regenerate Email';
+                    btn.style.opacity = '1';
+                }
+            } catch (err) {
+                console.error('Regenerate email error:', err);
+                alert('❌ Network error - please try again');
+                btn.disabled = false;
+                btn.textContent = '🔄 Regenerate Email';
+                btn.style.opacity = '1';
+            }
         }
 
     </script>

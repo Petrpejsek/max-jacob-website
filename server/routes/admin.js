@@ -913,6 +913,32 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
   }
 });
 
+// POST /admin/audits/:id/regenerate-email - Regenerate email with updated unsubscribe links
+router.post('/audits/:id/regenerate-email', requireAdmin, auditJobLimiter, async (req, res) => {
+  const id = req.params.id;
+  
+  try {
+    console.log(`[REGENERATE EMAIL] Starting for audit ID ${id}`);
+    
+    // Call the existing regenerateEmail function from auditPipeline
+    await auditPipeline.regenerateEmail(id);
+    
+    console.log(`[REGENERATE EMAIL] Successfully regenerated for audit ID ${id}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Email regenerated successfully with updated unsubscribe links'
+    });
+    
+  } catch (error) {
+    console.error(`[REGENERATE EMAIL] Error for audit ID ${id}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to regenerate email'
+    });
+  }
+});
+
 // POST /admin/audits/:id/regenerate-public
 router.post('/audits/:id/regenerate-public', requireAdmin, async (req, res) => {
   const id = req.params.id;
