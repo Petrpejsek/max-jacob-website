@@ -32,18 +32,66 @@ async function getTestEmail() {
     
     // Navigate to mail-tester.com
     await page.goto('https://www.mail-tester.com/', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 30000
     });
     
-    // Wait for email to appear
-    await page.waitForSelector('input[type="text"]', { timeout: 10000 });
+    // Wait a bit for JavaScript to render
+    await page.waitForTimeout(3000);
     
-    // Get the test email address
-    const email = await page.inputValue('input[type="text"]');
+    // Get page content
+    const pageContent = await page.content();
+    
+    // Try multiple methods to extract email
+    let email = null;
+    
+    // Method 1: Look for input field
+    try {
+      const inputElement = await page.$('input[type="text"], input[readonly], input[value*="@mail-tester.com"]');
+      if (inputElement) {
+        email = await inputElement.inputValue();
+      }
+    } catch (e) {
+      console.log('[MAIL-TESTER] Method 1 failed:', e.message);
+    }
+    
+    // Method 2: Look for email pattern in page content
+    if (!email) {
+      const emailMatch = pageContent.match(/test-[a-z0-9]+@mail-tester\.com/i);
+      if (emailMatch) {
+        email = emailMatch[0];
+      }
+    }
+    
+    // Method 3: Look for specific elements that might contain email
+    if (!email) {
+      const possibleSelectors = [
+        'code', 'pre', 'strong', 'b', 
+        '[class*="email"]', '[id*="email"]',
+        '.test-email', '#test-email'
+      ];
+      
+      for (const selector of possibleSelectors) {
+        try {
+          const elements = await page.$$(selector);
+          for (const el of elements) {
+            const text = await el.textContent();
+            if (text && text.includes('@mail-tester.com')) {
+              email = text.trim();
+              break;
+            }
+          }
+          if (email) break;
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+    }
     
     if (!email || !email.includes('@mail-tester.com')) {
-      throw new Error('Failed to extract valid test email');
+      // Log page content for debugging
+      console.error('[MAIL-TESTER] Page content sample:', pageContent.substring(0, 500));
+      throw new Error('Failed to extract valid test email from page');
     }
     
     // Extract test ID from email (e.g., test-abc123@mail-tester.com -> abc123)
