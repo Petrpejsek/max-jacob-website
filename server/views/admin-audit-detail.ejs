@@ -4034,178 +4034,37 @@ STYLE:
             });
         }
 
-        // Test email deliverability with mail-tester.com (AUTOMATED)
+        // Test email deliverability with mail-tester.com (MANUAL WITH AUTO-SEND)
         async function testDeliverability() {
-            const btn = document.getElementById('testDeliverabilityBtn');
             const statusDiv = document.getElementById('sendEmailStatus');
+            const recipientField = document.getElementById('sendEmailRecipient');
             
-            if (!btn) return;
+            // Open mail-tester.com in new tab
+            window.open('https://www.mail-tester.com/', '_blank');
             
-            // Disable button
-            btn.disabled = true;
-            btn.textContent = '⏳ Getting test email...';
-            btn.style.opacity = '0.6';
+            // Show instructions
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(16, 185, 129, 0.1)';
+                statusDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                statusDiv.style.color = '#10b981';
+                statusDiv.innerHTML = `
+                    <strong>📋 Quick Test Instructions:</strong><br>
+                    1️⃣ Copy the email from mail-tester.com (opened in new tab)<br>
+                    2️⃣ Paste it in "Recipient Email" field above<br>
+                    3️⃣ Click "Send Email"<br>
+                    4️⃣ Go back to mail-tester and click "Then check your score"<br>
+                    <br>
+                    <small>💡 You'll get a score 0-10 showing exactly what's wrong!</small>
+                `;
+            }
             
-            try {
-                const auditId = <%= auditJob.id %>;
-                
-                // Show status
-                if (statusDiv) {
-                    statusDiv.style.display = 'block';
-                    statusDiv.style.background = 'rgba(59, 130, 246, 0.1)';
-                    statusDiv.style.border = '1px solid rgba(59, 130, 246, 0.3)';
-                    statusDiv.style.color = '#3b82f6';
-                    statusDiv.innerHTML = '🔄 Step 1/3: Getting test email from mail-tester.com...';
-                }
-                
-                // Start test
-                const startResponse = await fetch(`/admin/api/test-deliverability/${auditId}/start`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    credentials: 'same-origin'
-                });
-                
-                if (startResponse.status === 401) {
-                    window.location.href = '/admin/login';
-                    return;
-                }
-                
-                const startData = await startResponse.json();
-                
-                if (!startData.success) {
-                    throw new Error(startData.error || 'Failed to start test');
-                }
-                
-                const { testId, resultsUrl } = startData;
-                
-                // Update status
-                btn.textContent = '📧 Sending test email...';
-                if (statusDiv) {
-                    statusDiv.innerHTML = `🔄 Step 2/3: Test email sent!<br>⏳ Waiting for results (this takes ~30-60 seconds)...<br><small>Test ID: ${testId}</small>`;
-                }
-                
-                // Poll for results
-                let pollCount = 0;
-                const maxPolls = 24; // 24 * 5s = 2 minutes max
-                
-                btn.textContent = '⏳ Waiting for results...';
-                
-                const pollInterval = setInterval(async () => {
-                    pollCount++;
-                    
-                    try {
-                        const resultsResponse = await fetch(`/admin/api/test-deliverability/${testId}/results`, {
-                            credentials: 'same-origin'
-                        });
-                        
-                        if (resultsResponse.status === 401) {
-                            clearInterval(pollInterval);
-                            window.location.href = '/admin/login';
-                            return;
-                        }
-                        
-                        const resultsData = await resultsResponse.json();
-                        
-                        if (resultsData.ready && resultsData.score !== null) {
-                            // Results ready!
-                            clearInterval(pollInterval);
-                            
-                            const score = resultsData.score;
-                            let emoji = '🔴';
-                            let color = '#ef4444';
-                            let rating = 'Poor';
-                            
-                            if (score >= 9) {
-                                emoji = '🟢';
-                                color = '#10b981';
-                                rating = 'Excellent';
-                            } else if (score >= 7) {
-                                emoji = '🟡';
-                                color = '#f59e0b';
-                                rating = 'Good';
-                            } else if (score >= 5) {
-                                emoji = '🟠';
-                                color = '#f97316';
-                                rating = 'Fair';
-                            }
-                            
-                            // Show results
-                            if (statusDiv) {
-                                statusDiv.style.background = `rgba(16, 185, 129, 0.1)`;
-                                statusDiv.style.border = `1px solid ${color}`;
-                                statusDiv.style.color = color;
-                                statusDiv.innerHTML = `
-                                    ${emoji} <strong>Test Complete!</strong><br>
-                                    <span style="font-size: 2rem; font-weight: bold;">${score}/10</span> - ${rating}<br>
-                                    <br>
-                                    <a href="${resultsUrl}" target="_blank" style="color: ${color}; text-decoration: underline;">
-                                        📊 View Detailed Results on mail-tester.com
-                                    </a>
-                                `;
-                            }
-                            
-                            btn.textContent = '✅ Test Complete!';
-                            btn.style.opacity = '1';
-                            
-                            // Re-enable after 3 seconds
-                            setTimeout(() => {
-                                btn.disabled = false;
-                                btn.textContent = '🧪 Test Deliverability';
-                            }, 3000);
-                            
-                        } else {
-                            // Still waiting
-                            if (statusDiv) {
-                                const dots = '.'.repeat((pollCount % 3) + 1);
-                                statusDiv.innerHTML = `⏳ Waiting for test results${dots}<br><small>Poll ${pollCount}/${maxPolls} - Checking every 5 seconds</small>`;
-                            }
-                        }
-                        
-                        // Timeout after max polls
-                        if (pollCount >= maxPolls) {
-                            clearInterval(pollInterval);
-                            
-                            if (statusDiv) {
-                                statusDiv.style.background = 'rgba(245, 158, 11, 0.1)';
-                                statusDiv.style.border = '1px solid rgba(245, 158, 11, 0.3)';
-                                statusDiv.style.color = '#f59e0b';
-                                statusDiv.innerHTML = `
-                                    ⚠️ <strong>Timeout</strong><br>
-                                    Results are taking longer than expected.<br>
-                                    <a href="${resultsUrl}" target="_blank" style="color: #f59e0b; text-decoration: underline;">
-                                        📊 Check results manually on mail-tester.com
-                                    </a>
-                                `;
-                            }
-                            
-                            btn.disabled = false;
-                            btn.textContent = '🧪 Test Deliverability';
-                            btn.style.opacity = '1';
-                        }
-                        
-                    } catch (pollError) {
-                        console.error('Error polling results:', pollError);
-                    }
-                    
-                }, 5000); // Poll every 5 seconds
-                
-            } catch (error) {
-                console.error('Test deliverability error:', error);
-                
-                if (statusDiv) {
-                    statusDiv.style.display = 'block';
-                    statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
-                    statusDiv.style.border = '1px solid rgba(239, 68, 68, 0.3)';
-                    statusDiv.style.color = '#ef4444';
-                    statusDiv.innerHTML = `❌ Error: ${error.message}`;
-                }
-                
-                btn.disabled = false;
-                btn.textContent = '🧪 Test Deliverability';
-                btn.style.opacity = '1';
+            // Focus recipient field
+            if (recipientField) {
+                setTimeout(() => {
+                    recipientField.focus();
+                    recipientField.select();
+                }, 500);
             }
         }
         

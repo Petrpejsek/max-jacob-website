@@ -2785,6 +2785,18 @@ async function generateConceptPreview(job, miniAudit, preset = null) {
   };
 }
 
+/**
+ * Select email template variant (1-5) for anti-spam rotation
+ * Uses job ID to ensure consistent variant per job
+ */
+function selectEmailVariant(jobId) {
+  // Use job ID to deterministically select variant (1-5)
+  // This ensures same job always gets same variant for consistency
+  const variant = (jobId % 5) + 1;
+  console.log(`[EMAIL] Selected variant ${variant} for job ${jobId}`);
+  return variant;
+}
+
 function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = null, recipientEmail = null) {
   const leaks = miniAudit.top_3_leaks || [];
   const plan = miniAudit.seven_day_plan || [];
@@ -2810,84 +2822,131 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
     ? `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`
     : `${baseUrl}/unsubscribe`;
 
-  return `
+  // SELECT TEMPLATE VARIANT (1-5) for anti-spam rotation
+  const variant = selectEmailVariant(job.id);
+  
+  // Get company name for personalization
+  const companyName = job.company_name || `your ${job.niche} business`;
+  const city = job.city || 'your area';
+
+  // GENERATE HTML BASED ON VARIANT (1-5) for anti-spam rotation
+  let htmlTemplate = '';
+  
+  switch(variant) {
+    case 1:
+      // VARIANT 1: Short & Direct (original style)
+      htmlTemplate = `
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Website Audit - Max &amp; Jacob</title>
-  </head>
-  <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f6f8;color:#111;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f6f8;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:12px;padding:32px;max-width:600px;">
-            <tr>
-              <td>
-                <h2 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;font-weight:600;color:#111;">Website + AI follow-up built to book more ${job.niche} jobs (${job.city})</h2>
-                <p style="margin:0 0 20px 0;font-size:16px;line-height:1.5;color:#333;">${introLine}</p>
-                ${imageUrl ? `
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
-                  <tr>
-                    <td>
-                      <img src="${imageUrl}" alt="${imageLabel}" style="width:100%;max-width:600px;height:auto;display:block;border-radius:8px;border:none;" />
-                      <p style="font-size:12px;color:#999;margin:8px 0 0 0;font-style:italic;">${imageLabel}</p>
-                    </td>
-                  </tr>
-                </table>
-                ` : ''}
-                <h3 style="margin:24px 0 12px 0;font-size:18px;font-weight:600;color:#111;">Top 3 lead leaks we found</h3>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
-                  <tr>
-                    <td>
-                      <ul style="padding-left:20px;margin:0;font-size:15px;line-height:1.6;color:#333;">
-                        ${leaks.map((item) => `<li style="margin-bottom:8px;">${item.problem}</li>`).join('')}
-                      </ul>
-                    </td>
-                  </tr>
-                </table>
-                <h3 style="margin:24px 0 12px 0;font-size:18px;font-weight:600;color:#111;">What we can ship in 7 days</h3>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                  <tr>
-                    <td>
-                      <ul style="padding-left:20px;margin:0;font-size:15px;line-height:1.6;color:#333;">
-                        ${plan.map((item) => `<li style="margin-bottom:8px;">${item}</li>`).join('')}
-                      </ul>
-                    </td>
-                  </tr>
-                </table>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 24px 0;">
-                  <tr>
-                    <td align="center">
-                      <a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#6a82fb;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;text-align:center;">${ctaText}</a>
-                    </td>
-                  </tr>
-                </table>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #e5e5e5;padding-top:20px;margin-top:32px;">
-                  <tr>
-                    <td>
-                      <p style="font-size:13px;line-height:1.5;color:#666;margin:0 0 12px 0;">This is a concept example for ${job.niche} businesses in ${job.city}, not your current website. We'll tailor it after a short intake. No guarantees or performance promises.</p>
-                      <p style="font-size:12px;line-height:1.5;color:#999;margin:0;">
-                        You received this email because we analyzed your website and wanted to share a complimentary audit. 
-                        <a href="${unsubscribeUrl}" style="color:#6a82fb;text-decoration:underline;">Unsubscribe</a>
-                      </p>
-                      <p style="font-size:12px;color:#999;margin:8px 0 0 0;">
-                        Max &amp; Jacob &middot; <a href="https://maxandjacob.com" style="color:#6a82fb;text-decoration:none;">maxandjacob.com</a>
-                      </p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-  `.trim();
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Website Review</title></head>
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f6f6f8;color:#111;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f6f8;padding:24px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#fff;border-radius:8px;padding:32px;max-width:600px;"><tr><td>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">${introLine}</p>
+${leaks.length > 0 ? `<p style="margin:16px 0;font-size:15px;line-height:1.6;color:#333;"><strong>Found ${leaks.length} issues:</strong></p><ul style="margin:0 0 16px 0;padding-left:24px;font-size:15px;line-height:1.6;">${leaks.map(l => `<li style="margin-bottom:8px;">${l.problem}</li>`).join('')}</ul>` : ''}
+<p style="margin:16px 0;font-size:15px;line-height:1.6;">Interested in fixing these?</p>
+<p style="margin:16px 0;"><a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#4F46E5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Let's talk</a></p>
+<p style="margin:16px 0 0 0;font-size:14px;line-height:1.6;">Jacob<br>Max & Jacob</p>
+<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
+<a href="${unsubscribeUrl}" style="color:#4F46E5;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#4F46E5;text-decoration:none;">maxandjacob.com</a></p>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+      break;
+      
+    case 2:
+      // VARIANT 2: Technical & Professional
+      htmlTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Technical Review - ${job.niche}</title></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#fafafa;color:#1a1a1a;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:32px 16px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #e5e7eb;padding:40px;max-width:600px;"><tr><td>
+<h2 style="margin:0 0 8px 0;font-size:20px;font-weight:600;color:#1a1a1a;">Technical Review: ${companyName}</h2>
+<p style="margin:0 0 24px 0;font-size:14px;color:#6b7280;">Automated audit · ${city}</p>
+<p style="margin:0 0 20px 0;font-size:15px;line-height:1.7;color:#374151;">I ran an automated scan on your website and identified several optimization opportunities.</p>
+${leaks.length > 0 ? `<div style="margin:24px 0;padding:16px;background:#f9fafb;border-left:3px solid #ef4444;"><p style="margin:0 0 12px 0;font-size:14px;font-weight:600;color:#1f2937;">Priority Issues:</p><ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.8;color:#4b5563;">${leaks.map(l => `<li style="margin-bottom:6px;">${l.problem}</li>`).join('')}</ol></div>` : ''}
+${plan.length > 0 ? `<p style="margin:24px 0 12px 0;font-size:14px;font-weight:600;color:#1f2937;">Recommended fixes:</p><ul style="margin:0 0 20px 0;padding-left:20px;font-size:14px;line-height:1.7;color:#4b5563;">${plan.slice(0,3).map(p => `<li style="margin-bottom:6px;">${p}</li>`).join('')}</ul>` : ''}
+<p style="margin:24px 0 20px 0;font-size:15px;line-height:1.7;color:#374151;">Would you like a detailed breakdown?</p>
+<p style="margin:0;"><a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#10b981;color:#fff;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:500;">Request Full Report</a></p>
+<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;"><p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;">Jacob Liesner<br>Technical Lead · Max & Jacob</p>
+<p style="margin:16px 0 0 0;font-size:11px;color:#9ca3af;"><a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p></div>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+      break;
+      
+    case 3:
+      // VARIANT 3: Casual & Friendly
+      htmlTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Quick note about your site</title></head>
+<body style="margin:0;padding:0;font-family:Georgia,serif;background:#fff;color:#222;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:40px 20px;"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;"><tr><td>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.8;color:#374151;">Hey there,</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.8;color:#374151;">I was looking at ${job.niche} websites in ${city} and came across yours. Ran a quick check and noticed a few things that might be costing you customers.</p>
+${leaks.length > 0 ? `<p style="margin:20px 0 12px 0;font-size:16px;line-height:1.8;color:#374151;">Here's what stood out:</p><ul style="margin:0 0 20px 0;padding-left:24px;font-size:15px;line-height:1.8;color:#4b5563;">${leaks.slice(0,3).map(l => `<li style="margin-bottom:10px;">${l.problem}</li>`).join('')}</ul>` : ''}
+<p style="margin:20px 0 16px 0;font-size:16px;line-height:1.8;color:#374151;">Not trying to sell you anything—just thought you'd want to know. If you're interested in the full details, hit reply.</p>
+<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#6b7280;">Best,<br>Jacob<br><span style="color:#9ca3af;">Max & Jacob</span></p>
+<div style="margin-top:48px;padding-top:20px;border-top:1px solid #e5e7eb;"><p style="margin:0;font-size:12px;color:#9ca3af;">
+<a href="${unsubscribeUrl}" style="color:#6366f1;">Unsubscribe</a> · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p></div>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+      break;
+      
+    case 4:
+      // VARIANT 4: Minimal & Clean
+      htmlTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Website Analysis</title></head>
+<body style="margin:0;padding:0;font-family:system-ui,sans-serif;background:#ffffff;color:#18181b;">
+<div style="max-width:540px;margin:60px auto;padding:0 20px;">
+<p style="margin:0 0 24px 0;font-size:17px;line-height:1.7;color:#18181b;">Hi,</p>
+<p style="margin:0 0 24px 0;font-size:17px;line-height:1.7;color:#18181b;">I analyzed your ${job.niche} website and found some issues that could be affecting your conversions.</p>
+${leaks.length > 0 ? `<div style="margin:28px 0;padding:20px;background:#f4f4f5;border-radius:4px;"><p style="margin:0 0 14px 0;font-size:15px;font-weight:600;color:#18181b;">Key findings:</p>${leaks.map((l,i) => `<p style="margin:0 0 10px 0;font-size:15px;line-height:1.6;color:#52525b;"><strong>${i+1}.</strong> ${l.problem}</p>`).join('')}</div>` : ''}
+<p style="margin:28px 0 24px 0;font-size:17px;line-height:1.7;color:#18181b;">Want the full breakdown?</p>
+<p style="margin:0 0 40px 0;"><a href="mailto:jacob@maxandjacob.com" style="display:inline-block;color:#18181b;border:2px solid #18181b;padding:12px 32px;text-decoration:none;font-size:15px;font-weight:500;border-radius:4px;">Get Details</a></p>
+<p style="margin:0 0 8px 0;font-size:15px;color:#71717a;">Jacob</p>
+<p style="margin:0 0 40px 0;font-size:14px;color:#a1a1aa;">Max & Jacob</p>
+<p style="margin:0;padding-top:28px;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;"><a href="${unsubscribeUrl}" style="color:#71717a;">Unsubscribe</a> · <a href="https://maxandjacob.com" style="color:#71717a;text-decoration:none;">maxandjacob.com</a></p>
+</div>
+</body></html>`;
+      break;
+      
+    case 5:
+      // VARIANT 5: Value-Focused
+      htmlTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Potential improvements for ${job.niche}</title></head>
+<body style="margin:0;padding:0;font-family:Inter,Helvetica,Arial,sans-serif;background:#f8f9fa;color:#212529;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:32px 16px;"><tr><td align="center">
+<table width="580" cellpadding="0" cellspacing="0" border="0" style="background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:36px;max-width:580px;"><tr><td>
+<h1 style="margin:0 0 20px 0;font-size:22px;font-weight:700;color:#212529;line-height:1.3;">Opportunities for ${companyName}</h1>
+<p style="margin:0 0 24px 0;font-size:16px;line-height:1.7;color:#495057;">I reviewed your online presence and identified several ways to improve customer acquisition.</p>
+${leaks.length > 0 ? `<div style="margin:28px 0;"><p style="margin:0 0 14px 0;font-size:15px;font-weight:600;color:#212529;text-transform:uppercase;letter-spacing:0.5px;">Current Issues</p>${leaks.map(l => `<div style="margin:0 0 16px 0;padding-left:20px;border-left:3px solid #0d6efd;"><p style="margin:0;font-size:15px;line-height:1.6;color:#495057;">${l.problem}</p></div>`).join('')}</div>` : ''}
+${plan.length > 0 ? `<div style="margin:28px 0;"><p style="margin:0 0 14px 0;font-size:15px;font-weight:600;color:#212529;text-transform:uppercase;letter-spacing:0.5px;">Quick Wins</p><ul style="margin:0;padding-left:22px;font-size:15px;line-height:1.8;color:#495057;">${plan.slice(0,4).map(p => `<li style="margin-bottom:8px;">${p}</li>`).join('')}</ul></div>` : ''}
+<p style="margin:28px 0 24px 0;font-size:16px;line-height:1.7;color:#495057;">These changes could help you capture more leads and increase bookings.</p>
+<p style="margin:0;"><a href="mailto:jacob@maxandjacob.com" style="display:inline-block;background:#0d6efd;color:#fff;padding:13px 30px;border-radius:4px;text-decoration:none;font-size:15px;font-weight:600;">Discuss Improvements</a></p>
+<div style="margin-top:40px;padding-top:24px;border-top:1px solid #dee2e6;"><p style="margin:0 0 4px 0;font-size:14px;font-weight:600;color:#212529;">Jacob Liesner</p><p style="margin:0 0 20px 0;font-size:13px;color:#6c757d;">Max & Jacob · Website optimization</p>
+<p style="margin:0;font-size:12px;color:#adb5bd;"><a href="${unsubscribeUrl}" style="color:#6c757d;text-decoration:underline;">Unsubscribe</a> · <a href="https://maxandjacob.com" style="color:#6c757d;text-decoration:none;">maxandjacob.com</a></p></div>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+      break;
+      
+    default:
+      // Fallback to variant 1
+      htmlTemplate = `<!DOCTYPE html><html><body><p>Email template error. Please contact support.</p></body></html>`;
+  }
+  
+  return htmlTemplate.trim();
 }
 
 function generatePublicPageJson(job, miniAudit, conceptPreview, screenshots, preset = null) {
