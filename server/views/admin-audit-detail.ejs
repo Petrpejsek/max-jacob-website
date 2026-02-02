@@ -980,10 +980,17 @@
                             </label>
                         </div>
                         
-                        <button id="sendEmailBtn" type="button"
-                                style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 600; border-radius: 8px; background: linear-gradient(90deg, #4F46E5, #6366F1); color: #fff; border: none; cursor: pointer; transition: all 0.2s;">
-                            📧 Send Email
-                        </button>
+                        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                            <button id="sendEmailBtn" type="button"
+                                    style="flex: 1; padding: 14px; font-size: 1rem; font-weight: 600; border-radius: 8px; background: linear-gradient(90deg, #4F46E5, #6366F1); color: #fff; border: none; cursor: pointer; transition: all 0.2s;">
+                                📧 Send Email
+                            </button>
+                            
+                            <button id="testDeliverabilityBtn" type="button"
+                                    style="flex: 1; padding: 14px; font-size: 1rem; font-weight: 600; border-radius: 8px; background: linear-gradient(90deg, #10b981, #059669); color: #fff; border: none; cursor: pointer; transition: all 0.2s;">
+                                🧪 Test Deliverability
+                            </button>
+                        </div>
                         
                         <div id="sendEmailStatus" style="margin-top: 12px; display: none; padding: 12px; border-radius: 6px; font-size: 0.9rem; font-weight: 500;"></div>
                     </div>
@@ -4026,6 +4033,54 @@ STYLE:
                 }
             });
         }
+
+        // Test email deliverability with mail-tester.com
+        async function testDeliverability() {
+            const btn = document.getElementById('testDeliverabilityBtn');
+            if (!btn) return;
+            
+            // Show instructions modal
+            const proceed = confirm(
+                '🧪 Email Deliverability Test\n\n' +
+                'This will:\n' +
+                '1. Open mail-tester.com in a new tab\n' +
+                '2. You copy the test email address from there\n' +
+                '3. Paste it in the "Recipient Email" field above\n' +
+                '4. Click "Send Email"\n' +
+                '5. Go back to mail-tester.com and check your score\n\n' +
+                'Ready to proceed?'
+            );
+            
+            if (proceed) {
+                // Open mail-tester.com in new tab
+                window.open('https://www.mail-tester.com/', '_blank');
+                
+                // Focus on recipient field
+                const recipientField = document.getElementById('sendEmailRecipient');
+                if (recipientField) {
+                    recipientField.focus();
+                    recipientField.select();
+                }
+                
+                // Show helper message
+                const statusDiv = document.getElementById('sendEmailStatus');
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = 'rgba(16, 185, 129, 0.1)';
+                    statusDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    statusDiv.style.color = '#10b981';
+                    statusDiv.innerHTML = '📋 Instructions:<br>1. Copy the email address from mail-tester.com<br>2. Paste it in "Recipient Email" above<br>3. Click "Send Email"<br>4. Check your score on mail-tester.com';
+                }
+            }
+        }
+        
+        // Attach event listener to test deliverability button
+        (function() {
+            const testBtn = document.getElementById('testDeliverabilityBtn');
+            if (testBtn) {
+                testBtn.addEventListener('click', testDeliverability);
+            }
+        })();
 
         // Regenerate email with updated unsubscribe links
         async function regenerateEmail() {
