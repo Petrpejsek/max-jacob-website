@@ -2526,6 +2526,26 @@ function isUrlAlreadyProcessed(url, callback) {
  * @param {function} callback - Callback(err, email)
  */
 function getPreauditEmailByUrl(url, callback) {
+  getPreauditEmailCandidateByUrl(url, (err, row) => {
+    if (err) return callback(err, null);
+    callback(null, row && row.email ? row.email : null);
+  });
+}
+
+/**
+ * Get best preaudit email candidate row by URL.
+ *
+ * Root cause this solves:
+ * - preaudit_results can contain multiple rows for the same normalized URL across many searches
+ * - choosing strictly "latest created_at" can return a different email than the one used when converting to an audit
+ * - we prefer rows with status='converted_to_audit' first, then newest
+ *
+ * Returns row metadata to support diagnostics in admin endpoints.
+ *
+ * @param {string} url
+ * @param {function} callback - Callback(err, row|null)
+ */
+function getPreauditEmailCandidateByUrl(url, callback) {
   // Normalize URL for matching (remove trailing slash, www, lowercase)
   let normalized = url;
   try {
@@ -2538,13 +2558,18 @@ function getPreauditEmailByUrl(url, callback) {
   }
 
   const sql = `
-    SELECT email, url, title, created_at
+    SELECT id, search_id, email, url, title, created_at, status
     FROM preaudit_results 
     WHERE (url = ? OR url = ?) 
       AND has_email = 1 
       AND email IS NOT NULL
       AND email != ''
-    ORDER BY created_at DESC
+    ORDER BY
+      CASE WHEN status = 'converted_to_audit' THEN 2
+           WHEN status = 'valid' THEN 1
+           ELSE 0
+      END DESC,
+      created_at DESC
     LIMIT 1
   `;
   
@@ -2553,12 +2578,16 @@ function getPreauditEmailByUrl(url, callback) {
     if (err) {
       callback(err, null);
     } else if (row && row.email) {
-      console.log('[DB] Found preaudit email fallback:', {
+      console.log('[DB] Found preaudit email candidate:', {
+        id: row.id,
+        search_id: row.search_id,
         url: row.url,
         email: row.email,
-        title: row.title
+        title: row.title,
+        status: row.status,
+        created_at: row.created_at
       });
-      callback(null, row.email);
+      callback(null, row);
     } else {
       callback(null, null);
     }
@@ -2658,6 +2687,7 @@ module.exports = {
   isUrlBlacklisted,
   isUrlAlreadyProcessed,
   getPreauditEmailByUrl,
+  getPreauditEmailCandidateByUrl,
   getPreauditCountsBySearchId,
   getBlacklistedUrls,
   removeFromBlacklist

@@ -1092,8 +1092,8 @@ router.post('/audits/:id/load-preaudit-email', requireAdmin, async (req, res) =>
       }
       
       // Try to get preaudit email
-      const { getPreauditEmailByUrl } = require('../db');
-      getPreauditEmailByUrl(job.input_url, async (preauditErr, preauditEmail) => {
+      const { getPreauditEmailCandidateByUrl } = require('../db');
+      getPreauditEmailCandidateByUrl(job.input_url, async (preauditErr, preauditRow) => {
         if (preauditErr) {
           console.error(`[LOAD PREAUDIT EMAIL] Error querying preaudit:`, preauditErr);
           return res.status(500).json({ 
@@ -1103,7 +1103,7 @@ router.post('/audits/:id/load-preaudit-email', requireAdmin, async (req, res) =>
           });
         }
         
-        if (!preauditEmail) {
+        if (!preauditRow || !preauditRow.email) {
           console.log(`[LOAD PREAUDIT EMAIL] No preaudit email found for URL: ${job.input_url}`);
           return res.json({ 
             success: false, 
@@ -1112,7 +1112,16 @@ router.post('/audits/:id/load-preaudit-email', requireAdmin, async (req, res) =>
           });
         }
         
-        console.log(`[LOAD PREAUDIT EMAIL] Found preaudit email: ${preauditEmail}`);
+        const preauditEmail = preauditRow.email;
+        console.log(`[LOAD PREAUDIT EMAIL] Found preaudit email candidate:`, {
+          audit_id: id,
+          input_url: job.input_url,
+          preaudit_result_id: preauditRow.id,
+          preaudit_url: preauditRow.url,
+          preaudit_status: preauditRow.status,
+          preaudit_created_at: preauditRow.created_at,
+          email: preauditEmail
+        });
         
         // Update scrape_result_json to add the email
         try {
@@ -1169,6 +1178,14 @@ router.post('/audits/:id/load-preaudit-email', requireAdmin, async (req, res) =>
             res.json({ 
               success: true, 
               email: preauditEmail,
+              preaudit: {
+                id: preauditRow.id,
+                search_id: preauditRow.search_id,
+                url: preauditRow.url,
+                title: preauditRow.title,
+                status: preauditRow.status,
+                created_at: preauditRow.created_at
+              },
               message: 'Email loaded from preaudit and added to scraped contacts'
             });
           });
