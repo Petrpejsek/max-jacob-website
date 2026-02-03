@@ -1057,6 +1057,142 @@ router.post('/audits/:id/regenerate-email', requireAdmin, auditJobLimiter, async
   }
 });
 
+// POST /admin/audits/:id/load-preaudit-email - Load email from preaudit fallback
+router.post('/audits/:id/load-preaudit-email', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  
+  try {
+    console.log(`[LOAD PREAUDIT EMAIL] Starting for audit ID ${id}`);
+    
+    // Load audit job
+    getAuditJobById(id, async (err, job) => {
+      if (err) {
+        console.error(`[LOAD PREAUDIT EMAIL] Error loading job:`, err);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Failed to load audit job',
+          message: err.message
+        });
+      }
+      
+      if (!job) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Audit job not found',
+          message: `Audit job ${id} not found`
+        });
+      }
+      
+      if (!job.input_url) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No URL',
+          message: 'Audit job has no input_url - cannot search preaudit'
+        });
+      }
+      
+      // Try to get preaudit email
+      const { getPreauditEmailByUrl } = require('../db');
+      getPreauditEmailByUrl(job.input_url, async (preauditErr, preauditEmail) => {
+        if (preauditErr) {
+          console.error(`[LOAD PREAUDIT EMAIL] Error querying preaudit:`, preauditErr);
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Database error',
+            message: preauditErr.message
+          });
+        }
+        
+        if (!preauditEmail) {
+          console.log(`[LOAD PREAUDIT EMAIL] No preaudit email found for URL: ${job.input_url}`);
+          return res.json({ 
+            success: false, 
+            error: 'Not found',
+            message: 'No email found in preaudit results for this URL'
+          });
+        }
+        
+        console.log(`[LOAD PREAUDIT EMAIL] Found preaudit email: ${preauditEmail}`);
+        
+        // Update scrape_result_json to add the email
+        try {
+          let scrapeResult = job.scrape_result_json || {};
+          if (typeof scrapeResult === 'string') {
+            scrapeResult = JSON.parse(scrapeResult);
+          }
+          
+          // Add email to contacts if not already there
+          if (!scrapeResult.contacts) {
+            scrapeResult.contacts = { emails: [], phones: [] };
+          }
+          if (!scrapeResult.contacts.emails) {
+            scrapeResult.contacts.emails = [];
+          }
+          
+          // Check if email already exists
+          const emailExists = scrapeResult.contacts.emails.some(e => {
+            const val = typeof e === 'object' ? e.value : e;
+            return val && val.toLowerCase() === preauditEmail.toLowerCase();
+          });
+          
+          if (emailExists) {
+            return res.json({ 
+              success: false, 
+              error: 'Already exists',
+              message: 'This email is already in the scraped contacts'
+            });
+          }
+          
+          // Add preaudit email to the beginning (highest priority)
+          scrapeResult.contacts.emails.unshift({ 
+            value: preauditEmail, 
+            source: 'preaudit_fallback_manual' 
+          });
+          
+          // Also update the top-level email field for backward compatibility
+          if (!scrapeResult.email) {
+            scrapeResult.email = preauditEmail;
+          }
+          
+          // Update audit job
+          updateAuditJob(id, { scrape_result_json: scrapeResult }, (updateErr) => {
+            if (updateErr) {
+              console.error(`[LOAD PREAUDIT EMAIL] Error updating job:`, updateErr);
+              return res.status(500).json({ 
+                success: false, 
+                error: 'Update failed',
+                message: updateErr.message
+              });
+            }
+            
+            console.log(`[LOAD PREAUDIT EMAIL] Successfully added preaudit email to audit ${id}`);
+            res.json({ 
+              success: true, 
+              email: preauditEmail,
+              message: 'Email loaded from preaudit and added to scraped contacts'
+            });
+          });
+        } catch (parseErr) {
+          console.error(`[LOAD PREAUDIT EMAIL] Error parsing scrape result:`, parseErr);
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Parse error',
+            message: parseErr.message
+          });
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error(`[LOAD PREAUDIT EMAIL] Error for audit ID ${id}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Internal server error',
+      message: error.message || 'Failed to load preaudit email'
+    });
+  }
+});
+
 // POST /admin/audits/:id/regenerate-business-name - Regenerate all content with new business name
 router.post('/audits/:id/regenerate-business-name', requireAdmin, auditJobLimiter, async (req, res) => {
   const id = req.params.id;

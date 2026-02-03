@@ -732,55 +732,69 @@
         </div>
 
         <%
-        // Compute business name for display (server-side)
-        function normalizeCompanyName(raw) {
-            if (!raw) return null;
-            const s = String(raw).trim();
-            if (!s) return null;
-            return s.replace(/\s+/g, ' ').trim();
-        }
-        
-        function isLikelyBusinessName(name) {
-            if (!name || typeof name !== 'string') return false;
-            const s = name.trim();
-            if (s.length < 2 || s.length > 100) return false;
-            if (/^(home|about|contact|services?|products?|your business)$/i.test(s)) return false;
-            return true;
-        }
-        
-        const ejsCompanyNameDirectRaw = normalizeCompanyName(auditJob.company_name);
-        const ejsCompanyNameDirect = (ejsCompanyNameDirectRaw && isLikelyBusinessName(ejsCompanyNameDirectRaw)) ? ejsCompanyNameDirectRaw : null;
-        
-        let ejsEvidenceName = null;
+        // Compute business name for display (server-side) - with safe error handling
         try {
-            const epv2 = auditJob.evidence_pack_v2_json || null;
-            const ev = normalizeCompanyName(epv2 && epv2.company_profile && epv2.company_profile.name);
-            ejsEvidenceName = (ev && isLikelyBusinessName(ev)) ? ev : null;
-        } catch (_) {}
-        
-        const ejsScrape = auditJob.scrape_result_json || {};
-        const og = normalizeCompanyName(ejsScrape.og_site_name || ejsScrape.ogSiteName || null);
-        const ejsOgName = (og && isLikelyBusinessName(og)) ? og : null;
-        
-        const ejsTitleRaw = (ejsScrape.title || '').toString();
-        const titleCandidateRaw = ejsTitleRaw ? ejsTitleRaw.split('|')[0].split(' - ')[0].split(' — ')[0].trim() : null;
-        const titleCandidate = normalizeCompanyName(titleCandidateRaw);
-        const ejsTitleName = (titleCandidate && isLikelyBusinessName(titleCandidate)) ? titleCandidate : null;
-        
-        let ejsDerivedName = null;
-        if (auditJob.input_url) {
+            function normalizeCompanyName(raw) {
+                if (!raw) return null;
+                const s = String(raw).trim();
+                if (!s) return null;
+                return s.replace(/\s+/g, ' ').trim();
+            }
+            
+            function isLikelyBusinessName(name) {
+                if (!name || typeof name !== 'string') return false;
+                const s = name.trim();
+                if (s.length < 2 || s.length > 100) return false;
+                if (/^(home|about|contact|services?|products?|your business)$/i.test(s)) return false;
+                return true;
+            }
+            
+            var ejsCompanyNameDirectRaw = normalizeCompanyName(auditJob.company_name);
+            var ejsCompanyNameDirect = (ejsCompanyNameDirectRaw && isLikelyBusinessName(ejsCompanyNameDirectRaw)) ? ejsCompanyNameDirectRaw : null;
+            
+            var ejsEvidenceName = null;
             try {
-                const url = new URL(auditJob.input_url);
-                const hostname = url.hostname.replace(/^www\./i, '');
-                const parts = hostname.split('.');
-                const base = parts.slice(0, -1).join('.');
-                const spaced = base.replace(/[-_.]+/g, ' ').trim();
-                const words = spaced.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-                ejsDerivedName = words.join(' ');
-            } catch (e) {}
+                const epv2 = auditJob.evidence_pack_v2_json || null;
+                const ev = normalizeCompanyName(epv2 && epv2.company_profile && epv2.company_profile.name);
+                ejsEvidenceName = (ev && isLikelyBusinessName(ev)) ? ev : null;
+            } catch (_) {}
+            
+            var ejsScrape = auditJob.scrape_result_json || {};
+            var og = normalizeCompanyName(ejsScrape.og_site_name || ejsScrape.ogSiteName || null);
+            var ejsOgName = (og && isLikelyBusinessName(og)) ? og : null;
+            
+            var ejsTitleRaw = (ejsScrape.title || '').toString();
+            var titleCandidateRaw = ejsTitleRaw ? ejsTitleRaw.split('|')[0].split(' - ')[0].split(' — ')[0].trim() : null;
+            var titleCandidate = normalizeCompanyName(titleCandidateRaw);
+            var ejsTitleName = (titleCandidate && isLikelyBusinessName(titleCandidate)) ? titleCandidate : null;
+            
+            var ejsDerivedName = null;
+            if (auditJob.input_url) {
+                try {
+                    const urlStr = String(auditJob.input_url);
+                    const hostname = urlStr.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
+                    const parts = hostname.split('.');
+                    const base = parts.slice(0, -1).join('.');
+                    const spaced = base.replace(/[-_.]+/g, ' ').trim();
+                    if (spaced) {
+                        const words = spaced.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+                        ejsDerivedName = words.join(' ');
+                    }
+                } catch (e) {
+                    console.error('Error deriving name from URL:', e);
+                }
+            }
+            
+            var ejsBusinessName = ejsCompanyNameDirect || ejsEvidenceName || ejsOgName || ejsTitleName || ejsDerivedName || 'your business';
+        } catch (err) {
+            console.error('Error computing business name:', err);
+            var ejsCompanyNameDirect = null;
+            var ejsEvidenceName = null;
+            var ejsOgName = null;
+            var ejsTitleName = null;
+            var ejsDerivedName = null;
+            var ejsBusinessName = 'your business';
         }
-        
-        const ejsBusinessName = ejsCompanyNameDirect || ejsEvidenceName || ejsOgName || ejsTitleName || ejsDerivedName || 'your business';
         %>
 
         <!-- Outreach Email Generator -->
@@ -1255,7 +1269,12 @@
                             </div>
                         </div>
                         <div class="field-group">
-                            <div class="field-label">Emails</div>
+                            <div class="field-label" style="display: flex; align-items: center; justify-content: space-between;">
+                                <span>Emails</span>
+                                <button type="button" class="btn btn-secondary" onclick="loadPreauditEmail()" id="loadPreauditEmailBtn" style="padding: 6px 12px; font-size: 13px; background: #6366f1; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                                    🔄 Load from Preaudit
+                                </button>
+                            </div>
                             <div class="field-value">
                                 <% if (contacts.emails && contacts.emails.length > 0) { %>
                                     <ul style="margin: 0; padding-left: 20px;">
@@ -1278,6 +1297,7 @@
                                         </div>
                                     <% } %>
                                 <% } %>
+                                <div id="loadPreauditEmailStatus" style="display: none; margin-top: 8px; padding: 8px; border-radius: 6px; font-size: 14px;"></div>
                             </div>
                         </div>
                         <div class="field-group">
@@ -4205,6 +4225,74 @@ STYLE:
                 alert('❌ Network error - please try again');
                 btn.disabled = false;
                 btn.textContent = '🔄 Regenerate Email';
+                btn.style.opacity = '1';
+            }
+        }
+
+        // Load preaudit email fallback for existing audit
+        async function loadPreauditEmail() {
+            const btn = document.getElementById('loadPreauditEmailBtn');
+            const statusDiv = document.getElementById('loadPreauditEmailStatus');
+            
+            if (!btn || !statusDiv) return;
+            
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.textContent = '⏳ Loading...';
+            btn.style.opacity = '0.6';
+            statusDiv.style.display = 'none';
+            
+            try {
+                const auditId = <%= auditJob.id %>;
+                const response = await fetch(`/admin/audits/${auditId}/load-preaudit-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/admin/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    statusDiv.textContent = `✅ Found and loaded email: ${data.email} (will reload page...)`;
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#10b981';
+                    statusDiv.style.color = 'white';
+                    
+                    // Reload page after 2 seconds to show updated email
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    // Show error/info message
+                    statusDiv.textContent = '⚠️ ' + (data.message || data.error || 'No preaudit email found');
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#dc2626';
+                    statusDiv.style.color = 'white';
+                    
+                    // Re-enable button
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Load from Preaudit';
+                    btn.style.opacity = '1';
+                }
+            } catch (err) {
+                console.error('Load preaudit email error:', err);
+                statusDiv.textContent = '❌ Network error - please try again';
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#dc2626';
+                statusDiv.style.color = 'white';
+                
+                // Re-enable button
+                btn.disabled = false;
+                btn.textContent = '🔄 Load from Preaudit';
                 btn.style.opacity = '1';
             }
         }
