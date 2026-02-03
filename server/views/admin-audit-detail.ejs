@@ -1123,7 +1123,7 @@
                     </div>
                     <div style="display: flex; gap: 12px; align-items: flex-start;">
                         <input type="text" id="newBusinessNameInput" placeholder="Enter correct business name" value="<%= mjBusinessName !== 'your business' ? mjBusinessName : '' %>" style="flex: 1; padding: 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px;">
-                        <button type="button" class="btn btn-secondary" onclick="regenerateBusinessName()" id="regenerateBusinessNameBtn" style="padding: 12px 20px; background: #10b981; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s ease;">
+                        <button type="button" class="btn btn-secondary" id="regenerateBusinessNameBtn" style="padding: 12px 20px; background: #10b981; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s ease;">
                             Regenerate All
                         </button>
                     </div>
@@ -1205,7 +1205,7 @@
                         <div class="field-group">
                             <div class="field-label" style="display: flex; align-items: center; justify-content: space-between;">
                                 <span>Emails</span>
-                                <button type="button" class="btn btn-secondary" onclick="loadPreauditEmail()" id="loadPreauditEmailBtn" style="padding: 6px 12px; font-size: 13px; background: #6366f1; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                                <button type="button" class="btn btn-secondary" id="loadPreauditEmailBtn" style="padding: 6px 12px; font-size: 13px; background: #6366f1; border: none; border-radius: 6px; color: white; cursor: pointer;">
                                     🔄 Load from Preaudit
                                 </button>
                             </div>
@@ -4314,6 +4314,18 @@ STYLE:
                 input.disabled = false;
             }
         }
+
+        // CSP-safe event bindings (no inline handlers)
+        (function() {
+            const regenBtn = document.getElementById('regenerateBusinessNameBtn');
+            if (regenBtn) {
+                regenBtn.addEventListener('click', regenerateBusinessName);
+            }
+            const preauditBtn = document.getElementById('loadPreauditEmailBtn');
+            if (preauditBtn) {
+                preauditBtn.addEventListener('click', loadPreauditEmail);
+            }
+        })();
 
     </script>
 </body>
