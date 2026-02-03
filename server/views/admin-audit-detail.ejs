@@ -731,72 +731,6 @@
             </div>
         </div>
 
-        <%
-        // Compute business name for display (server-side) - with safe error handling
-        try {
-            function normalizeCompanyName(raw) {
-                if (!raw) return null;
-                const s = String(raw).trim();
-                if (!s) return null;
-                return s.replace(/\s+/g, ' ').trim();
-            }
-            
-            function isLikelyBusinessName(name) {
-                if (!name || typeof name !== 'string') return false;
-                const s = name.trim();
-                if (s.length < 2 || s.length > 100) return false;
-                if (/^(home|about|contact|services?|products?|your business)$/i.test(s)) return false;
-                return true;
-            }
-            
-            var ejsCompanyNameDirectRaw = normalizeCompanyName(auditJob.company_name);
-            var ejsCompanyNameDirect = (ejsCompanyNameDirectRaw && isLikelyBusinessName(ejsCompanyNameDirectRaw)) ? ejsCompanyNameDirectRaw : null;
-            
-            var ejsEvidenceName = null;
-            try {
-                const epv2 = auditJob.evidence_pack_v2_json || null;
-                const ev = normalizeCompanyName(epv2 && epv2.company_profile && epv2.company_profile.name);
-                ejsEvidenceName = (ev && isLikelyBusinessName(ev)) ? ev : null;
-            } catch (_) {}
-            
-            var ejsScrape = auditJob.scrape_result_json || {};
-            var og = normalizeCompanyName(ejsScrape.og_site_name || ejsScrape.ogSiteName || null);
-            var ejsOgName = (og && isLikelyBusinessName(og)) ? og : null;
-            
-            var ejsTitleRaw = (ejsScrape.title || '').toString();
-            var titleCandidateRaw = ejsTitleRaw ? ejsTitleRaw.split('|')[0].split(' - ')[0].split(' — ')[0].trim() : null;
-            var titleCandidate = normalizeCompanyName(titleCandidateRaw);
-            var ejsTitleName = (titleCandidate && isLikelyBusinessName(titleCandidate)) ? titleCandidate : null;
-            
-            var ejsDerivedName = null;
-            if (auditJob.input_url) {
-                try {
-                    const urlStr = String(auditJob.input_url);
-                    const hostname = urlStr.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
-                    const parts = hostname.split('.');
-                    const base = parts.slice(0, -1).join('.');
-                    const spaced = base.replace(/[-_.]+/g, ' ').trim();
-                    if (spaced) {
-                        const words = spaced.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-                        ejsDerivedName = words.join(' ');
-                    }
-                } catch (e) {
-                    console.error('Error deriving name from URL:', e);
-                }
-            }
-            
-            var ejsBusinessName = ejsCompanyNameDirect || ejsEvidenceName || ejsOgName || ejsTitleName || ejsDerivedName || 'your business';
-        } catch (err) {
-            console.error('Error computing business name:', err);
-            var ejsCompanyNameDirect = null;
-            var ejsEvidenceName = null;
-            var ejsOgName = null;
-            var ejsTitleName = null;
-            var ejsDerivedName = null;
-            var ejsBusinessName = 'your business';
-        }
-        %>
-
         <!-- Outreach Email Generator -->
         <div class="section">
             <div class="section-title">Outreach Email Generator</div>
@@ -1172,23 +1106,23 @@
                 <div class="field-group" style="margin-top: 24px; margin-bottom: 16px; padding: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px;">
                     <div class="field-label">Override Business Name (Optional)</div>
                     <div class="small" style="margin-bottom: 12px; color: #7a7aa0;">
-                        Current: <span style="color: #b6b6d6;"><%= ejsBusinessName %></span>
-                        <% if (ejsCompanyNameDirect) { %>
+                        Current: <span style="color: #b6b6d6;"><%= mjBusinessName %></span>
+                        <% if (mjCompanyNameDirect) { %>
                             (from database)
-                        <% } else if (ejsEvidenceName) { %>
+                        <% } else if (mjEvidenceName) { %>
                             (from evidence pack)
-                        <% } else if (ejsOgName) { %>
+                        <% } else if (mjOgName) { %>
                             (from scrape og:site_name)
-                        <% } else if (ejsTitleName) { %>
+                        <% } else if (mjTitleName) { %>
                             (from page title)
-                        <% } else if (ejsDerivedName) { %>
+                        <% } else if (mjDerivedName) { %>
                             (derived from URL)
                         <% } else { %>
                             (default)
                         <% } %>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: flex-start;">
-                        <input type="text" id="newBusinessNameInput" placeholder="Enter correct business name" value="<%= ejsBusinessName !== 'your business' ? ejsBusinessName : '' %>" style="flex: 1; padding: 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px;">
+                        <input type="text" id="newBusinessNameInput" placeholder="Enter correct business name" value="<%= mjBusinessName !== 'your business' ? mjBusinessName : '' %>" style="flex: 1; padding: 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px;">
                         <button type="button" class="btn btn-secondary" onclick="regenerateBusinessName()" id="regenerateBusinessNameBtn" style="padding: 12px 20px; background: #10b981; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s ease;">
                             Regenerate All
                         </button>
