@@ -731,6 +731,58 @@
             </div>
         </div>
 
+        <%
+        // Compute business name for display (server-side)
+        function normalizeCompanyName(raw) {
+            if (!raw) return null;
+            const s = String(raw).trim();
+            if (!s) return null;
+            return s.replace(/\s+/g, ' ').trim();
+        }
+        
+        function isLikelyBusinessName(name) {
+            if (!name || typeof name !== 'string') return false;
+            const s = name.trim();
+            if (s.length < 2 || s.length > 100) return false;
+            if (/^(home|about|contact|services?|products?|your business)$/i.test(s)) return false;
+            return true;
+        }
+        
+        const ejsCompanyNameDirectRaw = normalizeCompanyName(auditJob.company_name);
+        const ejsCompanyNameDirect = (ejsCompanyNameDirectRaw && isLikelyBusinessName(ejsCompanyNameDirectRaw)) ? ejsCompanyNameDirectRaw : null;
+        
+        let ejsEvidenceName = null;
+        try {
+            const epv2 = auditJob.evidence_pack_v2_json || null;
+            const ev = normalizeCompanyName(epv2 && epv2.company_profile && epv2.company_profile.name);
+            ejsEvidenceName = (ev && isLikelyBusinessName(ev)) ? ev : null;
+        } catch (_) {}
+        
+        const ejsScrape = auditJob.scrape_result_json || {};
+        const og = normalizeCompanyName(ejsScrape.og_site_name || ejsScrape.ogSiteName || null);
+        const ejsOgName = (og && isLikelyBusinessName(og)) ? og : null;
+        
+        const ejsTitleRaw = (ejsScrape.title || '').toString();
+        const titleCandidateRaw = ejsTitleRaw ? ejsTitleRaw.split('|')[0].split(' - ')[0].split(' — ')[0].trim() : null;
+        const titleCandidate = normalizeCompanyName(titleCandidateRaw);
+        const ejsTitleName = (titleCandidate && isLikelyBusinessName(titleCandidate)) ? titleCandidate : null;
+        
+        let ejsDerivedName = null;
+        if (auditJob.input_url) {
+            try {
+                const url = new URL(auditJob.input_url);
+                const hostname = url.hostname.replace(/^www\./i, '');
+                const parts = hostname.split('.');
+                const base = parts.slice(0, -1).join('.');
+                const spaced = base.replace(/[-_.]+/g, ' ').trim();
+                const words = spaced.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+                ejsDerivedName = words.join(' ');
+            } catch (e) {}
+        }
+        
+        const ejsBusinessName = ejsCompanyNameDirect || ejsEvidenceName || ejsOgName || ejsTitleName || ejsDerivedName || 'your business';
+        %>
+
         <!-- Outreach Email Generator -->
         <div class="section">
             <div class="section-title">Outreach Email Generator</div>
@@ -1100,6 +1152,38 @@
                     <div class="card" style="padding: 16px;">
                         <div id="presetPreviewContent"></div>
                     </div>
+                </div>
+
+                <!-- Business Name Override -->
+                <div class="field-group" style="margin-top: 24px; margin-bottom: 16px; padding: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px;">
+                    <div class="field-label">Override Business Name (Optional)</div>
+                    <div class="small" style="margin-bottom: 12px; color: #7a7aa0;">
+                        Current: <span style="color: #b6b6d6;"><%= ejsBusinessName %></span>
+                        <% if (ejsCompanyNameDirect) { %>
+                            (from database)
+                        <% } else if (ejsEvidenceName) { %>
+                            (from evidence pack)
+                        <% } else if (ejsOgName) { %>
+                            (from scrape og:site_name)
+                        <% } else if (ejsTitleName) { %>
+                            (from page title)
+                        <% } else if (ejsDerivedName) { %>
+                            (derived from URL)
+                        <% } else { %>
+                            (default)
+                        <% } %>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <input type="text" id="newBusinessNameInput" placeholder="Enter correct business name" value="<%= ejsBusinessName !== 'your business' ? ejsBusinessName : '' %>" style="flex: 1; padding: 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px;">
+                        <button type="button" class="btn btn-secondary" onclick="regenerateBusinessName()" id="regenerateBusinessNameBtn" style="padding: 12px 20px; background: #10b981; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s ease;">
+                            Regenerate All
+                        </button>
+                    </div>
+                    <div class="small" style="margin-top: 8px; color: #7a7aa0;">
+                        This will regenerate email, audit, and homepage with the new business name. Scrape data will remain unchanged.
+                    </div>
+                    <div id="regenerateBusinessNameError" style="display: none; margin-top: 8px; padding: 8px; background: #dc2626; border-radius: 6px; color: white; font-size: 14px;"></div>
+                    <div id="regenerateBusinessNameSuccess" style="display: none; margin-top: 8px; padding: 8px; background: #10b981; border-radius: 6px; color: white; font-size: 14px;"></div>
                 </div>
 
                 <div class="actions-row" style="margin-top: 24px;">
@@ -4122,6 +4206,90 @@ STYLE:
                 btn.disabled = false;
                 btn.textContent = '🔄 Regenerate Email';
                 btn.style.opacity = '1';
+            }
+        }
+
+        // Regenerate all content with new business name
+        async function regenerateBusinessName() {
+            const input = document.getElementById('newBusinessNameInput');
+            const btn = document.getElementById('regenerateBusinessNameBtn');
+            const errorDiv = document.getElementById('regenerateBusinessNameError');
+            const successDiv = document.getElementById('regenerateBusinessNameSuccess');
+            
+            if (!input || !btn) return;
+            
+            // Get and validate new business name
+            const newBusinessName = input.value.trim();
+            
+            if (!newBusinessName) {
+                errorDiv.textContent = 'Please enter a business name';
+                errorDiv.style.display = 'block';
+                successDiv.style.display = 'none';
+                return;
+            }
+            
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.textContent = '⏳ Regenerating...';
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+            input.disabled = true;
+            
+            try {
+                const auditId = <%= auditJob.id %>;
+                const response = await fetch(`/admin/audits/${auditId}/regenerate-business-name`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ new_business_name: newBusinessName }),
+                    credentials: 'same-origin'
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/admin/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    successDiv.textContent = '✅ Successfully regenerated all content with new business name! Reloading page...';
+                    successDiv.style.display = 'block';
+                    
+                    // Reload page after 1.5 seconds to show updated content
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    // Show error message
+                    errorDiv.textContent = '❌ ' + (data.message || data.error || 'Failed to regenerate');
+                    errorDiv.style.display = 'block';
+                    
+                    // Re-enable button
+                    btn.disabled = false;
+                    btn.textContent = 'Regenerate All';
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    input.disabled = false;
+                }
+            } catch (err) {
+                console.error('Regenerate business name error:', err);
+                errorDiv.textContent = '❌ Network error - please try again';
+                errorDiv.style.display = 'block';
+                
+                // Re-enable button
+                btn.disabled = false;
+                btn.textContent = 'Regenerate All';
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                input.disabled = false;
             }
         }
 

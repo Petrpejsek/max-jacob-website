@@ -1342,13 +1342,58 @@ async function scrapeWebsite(url, jobId) {
   // Merge all contact sources: JSON-LD (highest priority) > tel/mailto links > text extraction > contact page
   const mergedContacts = mergeContactSources(extracted.contacts, jsonLdContacts, contactPageData);
   
+  // Common placeholder/invalid emails to filter out
+  const isInvalidEmail = (email) => {
+    if (!email) return true;
+    const lower = email.toLowerCase();
+    const invalidPatterns = [
+      'example.com',
+      'test.com',
+      'test@',
+      'noreply@',
+      'no-reply@',
+      'admin@example',
+      'info@example',
+      'contact@example',
+      'support@example',
+      'hello@example',
+      'yourname@',
+      'youremail@',
+      'your.email@',
+      'email@domain',
+      'user@domain',
+      '@localhost',
+      '@test',
+      'sample@',
+      'demo@'
+    ];
+    return invalidPatterns.some(pattern => lower.includes(pattern));
+  };
+  
+  // Filter out invalid emails from mergedContacts
+  mergedContacts.emails = mergedContacts.emails.filter(emailObj => {
+    const email = emailObj.value || emailObj;
+    if (isInvalidEmail(email)) {
+      console.log(`[AUDIT V2] Filtered out invalid email: ${email}`);
+      return false;
+    }
+    return true;
+  });
+  
   const bodyText = extracted.bodyText || '';
   const phoneMatch = bodyText.match(/(\+?1[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
   let emailMatch = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   
-  // CRITICAL FALLBACK: If no email found in merged contacts or body text, try preaudit results
-  if (!emailMatch && mergedContacts.emails.length === 0 && job.input_url) {
-    console.log('[AUDIT V2] No email found in scraped data, checking preaudit fallback...');
+  // Validate emailMatch
+  if (emailMatch && emailMatch[0] && isInvalidEmail(emailMatch[0])) {
+    console.log(`[AUDIT V2] Filtered out invalid email from bodyText: ${emailMatch[0]}`);
+    emailMatch = null;
+  }
+  
+  // CRITICAL FALLBACK: Try preaudit results ALWAYS (not just when empty)
+  // Preaudit has better email detection, so check it even if we found emails
+  if (job.input_url) {
+    console.log('[AUDIT V2] Checking preaudit email fallback...');
     const { getPreauditEmailByUrl } = require('../db');
     const preauditEmail = await new Promise((resolve, reject) => {
       getPreauditEmailByUrl(job.input_url, (err, email) => {
@@ -1361,14 +1406,29 @@ async function scrapeWebsite(url, jobId) {
       });
     });
     
-    if (preauditEmail) {
-      console.log('[AUDIT V2] ✓ Found email from preaudit fallback:', preauditEmail);
-      // Simulate emailMatch result for backward compatibility
-      emailMatch = [preauditEmail];
-      // Also add to mergedContacts for consistency
-      mergedContacts.emails.push({ value: preauditEmail, source: 'preaudit_fallback' });
+    if (preauditEmail && !isInvalidEmail(preauditEmail)) {
+      console.log('[AUDIT V2] ✓ Found email from preaudit:', preauditEmail);
+      
+      // Check if we already have this email
+      const alreadyHasEmail = mergedContacts.emails.some(e => {
+        const val = e.value || e;
+        return val.toLowerCase() === preauditEmail.toLowerCase();
+      });
+      
+      if (!emailMatch && mergedContacts.emails.length === 0) {
+        // No valid emails found - use preaudit as primary
+        emailMatch = [preauditEmail];
+        mergedContacts.emails.push({ value: preauditEmail, source: 'preaudit_fallback_primary' });
+      } else if (!alreadyHasEmail) {
+        // We have emails but preaudit might be better - add as alternative
+        mergedContacts.emails.push({ value: preauditEmail, source: 'preaudit_fallback' });
+        // If we don't have emailMatch yet, use preaudit
+        if (!emailMatch) {
+          emailMatch = [preauditEmail];
+        }
+      }
     } else {
-      console.log('[AUDIT V2] No email found in preaudit either');
+      console.log('[AUDIT V2] No valid email found in preaudit');
     }
   }
 
@@ -3118,12 +3178,47 @@ async function processAuditJob(jobId, options = {}) {
       const emailByKey = new Map();
       
       console.log('[AUDIT V3] Email extraction - checking scraped pages...');
+      
+      // Common placeholder/invalid emails to ignore
+      const isInvalidEmail = (email) => {
+        const lower = email.toLowerCase();
+        const invalidPatterns = [
+          'example.com',
+          'test.com',
+          'test@',
+          'noreply@',
+          'no-reply@',
+          'admin@example',
+          'info@example',
+          'contact@example',
+          'support@example',
+          'hello@example',
+          'yourname@',
+          'youremail@',
+          'your.email@',
+          'email@domain',
+          'user@domain',
+          '@localhost',
+          '@test',
+          'sample@',
+          'demo@'
+        ];
+        return invalidPatterns.some(pattern => lower.includes(pattern));
+      };
+      
       const pushEmailCandidate = (raw, source) => {
         const s = String(raw || '').trim();
         if (!s) return;
         const m = s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
         if (!m || !m[0]) return;
         const email = m[0].slice(0, 140);
+        
+        // Skip invalid/placeholder emails
+        if (isInvalidEmail(email)) {
+          console.log(`[AUDIT V3] Skipping invalid/placeholder email: ${email}`);
+          return;
+        }
+        
         const key = email.toLowerCase();
         if (emailByKey.has(key)) return;
         emailByKey.set(key, { value: email, source: source || 'unknown' });
@@ -3150,9 +3245,10 @@ async function processAuditJob(jobId, options = {}) {
         pushEmailCandidate(blob, 'text_fallback');
       }
       
-      // CRITICAL FALLBACK: If no email found, try preaudit results (preaudit has better email detection)
-      if (emailByKey.size === 0 && job.input_url) {
-        console.log('[AUDIT V3] No email found in scraped pages, checking preaudit fallback...');
+      // CRITICAL FALLBACK: Try preaudit results ALWAYS (not just when empty)
+      // Preaudit has better email detection, so we want it as a high-priority candidate
+      if (job.input_url) {
+        console.log('[AUDIT V3] Checking preaudit email fallback...');
         const { getPreauditEmailByUrl } = require('../db');
         const preauditEmail = await new Promise((resolve, reject) => {
           getPreauditEmailByUrl(job.input_url, (err, email) => {
@@ -3166,10 +3262,21 @@ async function processAuditJob(jobId, options = {}) {
         });
         
         if (preauditEmail) {
-          console.log('[AUDIT V3] ✓ Found email from preaudit fallback:', preauditEmail);
-          pushEmailCandidate(preauditEmail, 'preaudit_fallback');
+          console.log('[AUDIT V3] ✓ Found email from preaudit:', preauditEmail);
+          // Add as high-priority candidate (will be preferred if scraper found nothing or only bad emails)
+          if (emailByKey.size === 0) {
+            // No emails found in scrape - preaudit email is our only option
+            pushEmailCandidate(preauditEmail, 'preaudit_fallback_primary');
+          } else {
+            // Emails found in scrape but preaudit might be better - add as alternative
+            // Note: We don't override existing emails, but make it available
+            const key = preauditEmail.toLowerCase();
+            if (!emailByKey.has(key)) {
+              emailByKey.set(key, { value: preauditEmail, source: 'preaudit_fallback' });
+            }
+          }
         } else {
-          console.log('[AUDIT V3] No email found in preaudit either');
+          console.log('[AUDIT V3] No email found in preaudit');
         }
       }
 
@@ -4600,6 +4707,176 @@ async function generateHomepageProposal(jobId, job) {
   }
 }
 
+/**
+ * Regenerate all content (email, audit, homepage) with a new business name
+ * This updates the business name everywhere without re-scraping
+ */
+async function regenerateWithNewBusinessName(jobId, newBusinessName) {
+  await logStep(jobId, 'regenerate_business_name', `Regenerating all content with new business name: "${newBusinessName}"`);
+  
+  try {
+    // Load job
+    let job = await loadJob(jobId);
+    
+    if (!job) {
+      throw new Error(`Audit job ${jobId} not found`);
+    }
+    
+    console.log(`[REGENERATE BUSINESS NAME] Starting for job ${jobId}`);
+    console.log(`[REGENERATE BUSINESS NAME] Old name: "${job.company_name || '(not set)'}"`);
+    console.log(`[REGENERATE BUSINESS NAME] New name: "${newBusinessName}"`);
+    
+    const updatedFields = ['company_name'];
+    
+    // 1. Update company_name in audit_jobs table
+    await updateJob(jobId, { company_name: newBusinessName });
+    
+    // 2. Update evidence pack v2 JSON (if exists)
+    if (job.evidence_pack_v2_json) {
+      const evidencePack = typeof job.evidence_pack_v2_json === 'string' 
+        ? JSON.parse(job.evidence_pack_v2_json) 
+        : job.evidence_pack_v2_json;
+      
+      if (evidencePack) {
+        // Update company_name in evidence pack
+        evidencePack.company_name = newBusinessName;
+        
+        // Update company_profile.name in evidence pack
+        if (!evidencePack.company_profile) {
+          evidencePack.company_profile = {};
+        }
+        evidencePack.company_profile.name = newBusinessName;
+        
+        await updateJob(jobId, { evidence_pack_v2_json: evidencePack });
+        updatedFields.push('evidence_pack_v2_json');
+        console.log(`[REGENERATE BUSINESS NAME] Updated evidence pack v2`);
+      }
+    }
+    
+    // 3. Update llm_context_json (if exists)
+    if (job.llm_context_json) {
+      const llmContext = typeof job.llm_context_json === 'string' 
+        ? JSON.parse(job.llm_context_json) 
+        : job.llm_context_json;
+      
+      if (llmContext) {
+        if (!llmContext.company_profile) {
+          llmContext.company_profile = {};
+        }
+        llmContext.company_profile.name = newBusinessName;
+        
+        await updateJob(jobId, { llm_context_json: llmContext });
+        updatedFields.push('llm_context_json');
+        console.log(`[REGENERATE BUSINESS NAME] Updated llm_context_json`);
+      }
+    }
+    
+    // Reload job with updated data
+    job = await loadJob(jobId);
+    
+    // 4. Regenerate email HTML
+    if (job.mini_audit_json || job.status === 'ready') {
+      try {
+        await logStep(jobId, 'regenerate_business_name', 'Regenerating email...');
+        
+        // Load preset if assigned
+        let preset = null;
+        if (job.preset_id) {
+          preset = await new Promise((resolve, reject) => {
+            getNichePresetById(job.preset_id, (err, result) => {
+              if (err) return reject(err);
+              resolve(result);
+            });
+          });
+        }
+        
+        const miniAudit = job.mini_audit_json || {};
+        const screenshots = job.screenshots_json || {};
+        const emailPolish = job.email_polish_json || null;
+        
+        // Generate new email with updated business name
+        const emailHtml = generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset);
+        
+        // Ensure audit link block is present
+        const publicSlug = job.public_page_slug || generatePublicSlug(job);
+        const auditUrl = getAuditLandingUrlFromSlug(publicSlug, jobId);
+        const companyLabel = newBusinessName;
+        const finalEmailHtml = ensureAuditLinkBlockInEmailHtml(
+          emailHtml,
+          { publicSlug, auditUrl, companyLabel }
+        );
+        
+        await updateJob(jobId, { email_html: finalEmailHtml });
+        updatedFields.push('email_html');
+        console.log(`[REGENERATE BUSINESS NAME] Regenerated email`);
+      } catch (emailErr) {
+        console.error(`[REGENERATE BUSINESS NAME] Email regeneration failed:`, emailErr);
+        await logStep(jobId, 'regenerate_business_name', `Email regeneration failed: ${emailErr.message}`);
+      }
+    }
+    
+    // 5. Regenerate homepage proposal (if exists)
+    if (job.homepage_proposal_html || job.homepage_proposal_data_json) {
+      try {
+        await logStep(jobId, 'regenerate_business_name', 'Regenerating homepage proposal...');
+        
+        // Load crawled pages
+        const crawledPages = await new Promise((resolve, reject) => {
+          getCrawledPagesByJobId(jobId, (err, pages) => {
+            if (err) return reject(err);
+            resolve(pages || []);
+          });
+        });
+        
+        if (crawledPages.length > 0) {
+          // Rebuild template data with new business name
+          const templateData = await homepageBuilder.buildTemplateData(job, crawledPages);
+          
+          // Get template slug from existing data or use default
+          let templateSlug = 'local-service-v2';
+          if (job.homepage_proposal_data_json) {
+            const existingData = typeof job.homepage_proposal_data_json === 'string'
+              ? JSON.parse(job.homepage_proposal_data_json)
+              : job.homepage_proposal_data_json;
+            if (existingData.template_slug) {
+              templateSlug = existingData.template_slug;
+            }
+          }
+          
+          // Render template with updated data
+          const proposalHtml = await homepageBuilder.renderTemplate(templateSlug, templateData);
+          
+          await updateJob(jobId, {
+            homepage_proposal_html: proposalHtml,
+            homepage_proposal_data_json: templateData
+          });
+          updatedFields.push('homepage_proposal_html', 'homepage_proposal_data_json');
+          console.log(`[REGENERATE BUSINESS NAME] Regenerated homepage proposal`);
+        } else {
+          console.log(`[REGENERATE BUSINESS NAME] No crawled pages found, skipping homepage regeneration`);
+        }
+      } catch (homepageErr) {
+        console.error(`[REGENERATE BUSINESS NAME] Homepage regeneration failed:`, homepageErr);
+        await logStep(jobId, 'regenerate_business_name', `Homepage regeneration failed: ${homepageErr.message}`);
+      }
+    }
+    
+    await logStep(jobId, 'regenerate_business_name', `Successfully regenerated all content with new business name`);
+    console.log(`[REGENERATE BUSINESS NAME] Completed successfully for job ${jobId}`);
+    console.log(`[REGENERATE BUSINESS NAME] Updated fields:`, updatedFields);
+    
+    return {
+      success: true,
+      updated_fields: updatedFields
+    };
+    
+  } catch (err) {
+    console.error(`[REGENERATE BUSINESS NAME] Error for job ${jobId}:`, err);
+    await logStep(jobId, 'error', `Business name regeneration failed: ${err.message}`);
+    throw err;
+  }
+}
+
 module.exports = {
   processAuditJob,
   runLlmOnly,
@@ -4609,6 +4886,7 @@ module.exports = {
   generateEvidencePack,
   generateEvidencePackV2,
   runSingleAssistant,
-  runAssistantsPipeline
+  runAssistantsPipeline,
+  regenerateWithNewBusinessName
 };
 

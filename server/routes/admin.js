@@ -1057,6 +1057,63 @@ router.post('/audits/:id/regenerate-email', requireAdmin, auditJobLimiter, async
   }
 });
 
+// POST /admin/audits/:id/regenerate-business-name - Regenerate all content with new business name
+router.post('/audits/:id/regenerate-business-name', requireAdmin, auditJobLimiter, async (req, res) => {
+  const id = req.params.id;
+  const { new_business_name } = req.body;
+  
+  try {
+    console.log(`[REGENERATE BUSINESS NAME] Starting for audit ID ${id} with new name: "${new_business_name}"`);
+    
+    // Validate new business name
+    if (!new_business_name || typeof new_business_name !== 'string' || new_business_name.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid business name',
+        message: 'Business name is required and must be a non-empty string'
+      });
+    }
+    
+    const trimmedName = new_business_name.trim();
+    
+    if (trimmedName.length < 2) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid business name',
+        message: 'Business name must be at least 2 characters long'
+      });
+    }
+    
+    if (trimmedName.length > 200) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid business name',
+        message: 'Business name must be less than 200 characters'
+      });
+    }
+    
+    // Call the regeneration function from auditPipeline
+    const result = await auditPipeline.regenerateWithNewBusinessName(id, trimmedName);
+    
+    console.log(`[REGENERATE BUSINESS NAME] Successfully regenerated for audit ID ${id}`);
+    console.log(`[REGENERATE BUSINESS NAME] Updated fields:`, result.updated_fields);
+    
+    res.json({ 
+      success: true, 
+      message: 'All content regenerated successfully with new business name',
+      updated_fields: result.updated_fields
+    });
+    
+  } catch (error) {
+    console.error(`[REGENERATE BUSINESS NAME] Error for audit ID ${id}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to regenerate with new business name',
+      message: error.message || 'Internal server error during regeneration'
+    });
+  }
+});
+
 // POST /admin/audits/:id/regenerate-public
 router.post('/audits/:id/regenerate-public', requireAdmin, async (req, res) => {
   const id = req.params.id;
