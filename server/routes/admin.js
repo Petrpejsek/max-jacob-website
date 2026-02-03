@@ -895,21 +895,28 @@ router.post('/audits/:id/run-llm', requireAdmin, async (req, res) => {
 // POST /admin/audits/:id/regenerate-email
 router.post('/audits/:id/regenerate-email', requireAdmin, async (req, res) => {
   const id = req.params.id;
-  auditPipeline.regenerateEmail(id, {
-    settings: {
-      email_name: req.body.email_name,
-      email_model: req.body.email_model,
-      email_temperature: Number(req.body.email_temperature)
-    },
-    promptOverrides: {
-      email: req.body.prompt_email
-    }
-  }).then(() => {
+  
+  try {
+    await auditPipeline.regenerateEmail(id, {
+      settings: {
+        email_name: req.body.email_name,
+        email_model: req.body.email_model,
+        email_temperature: Number(req.body.email_temperature)
+      },
+      promptOverrides: {
+        email: req.body.prompt_email
+      }
+    });
+    
     res.redirect(`/admin/audits/${id}`);
-  }).catch((pipelineErr) => {
-    console.error('Regenerate email error:', pipelineErr);
-    res.redirect(`/admin/audits/${id}`);
-  });
+  } catch (pipelineErr) {
+    console.error('❌ Regenerate email error:', pipelineErr);
+    // Return error as JSON so frontend can display it
+    return res.status(500).json({
+      success: false,
+      error: pipelineErr.message || 'Failed to regenerate email'
+    });
+  }
 });
 
 // POST /admin/audits/:id/send-email - Send email to customer

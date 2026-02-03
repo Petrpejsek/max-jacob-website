@@ -2605,9 +2605,10 @@ async function runEmailPolish(job, miniAudit, options) {
 }
 
 function generatePublicSlug(job) {
-  // Require niche (critical), allow city fallback
+  // CRITICAL: Must have niche to generate proper slug!
+  // This error will bubble up and be shown to admin in UI
   if (!job.niche) {
-    throw new Error(`Cannot generate slug without niche (${job.niche})`);
+    throw new Error(`❌ Cannot send email: Audit ${job.id} is missing required 'niche' field. Please add niche in admin before sending email.`);
   }
   
   const niche = job.niche.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -2826,10 +2827,11 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
   const variant = selectEmailVariant(job.id);
   
   // Get company name for personalization
-  const companyName = job.company_name || `your ${job.niche} business`;
+  const companyName = job.company_name || (job.niche ? `your ${job.niche} business` : 'your business');
   const city = job.city || 'your area';
   
   // Generate audit landing page URL
+  // CRITICAL: If no public_page_slug exists, we MUST generate one or fail loudly!
   const publicSlug = job.public_page_slug || generatePublicSlug(job);
   const auditUrl = getAuditLandingUrlFromSlug(publicSlug, job.id);
   const auditLabel = companyName ? `Review for ${companyName}` : 'Full Audit Report';

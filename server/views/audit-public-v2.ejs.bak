@@ -40,112 +40,103 @@
             cursor: zoom-out;
         }
 
-        /* Homepage proposal annotations - Premium cards design */
+        /* Homepage proposal annotations - Professional business cards */
         .proposal-annotation {
             position: absolute;
-            width: 220px;
-            padding: 18px 16px 16px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.92) 100%);
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.1) inset;
-            backdrop-filter: blur(20px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 240px;
+            padding: 16px 14px 14px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%);
+            border: 1px solid rgba(71, 85, 105, 0.15);
+            box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(255,255,255,0.8) inset;
+            backdrop-filter: blur(16px);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @media (min-width: 1536px) {
-            .proposal-annotation { width: 260px; padding: 20px 18px 18px; }
+            .proposal-annotation { width: 280px; padding: 18px 16px 16px; }
         }
 
         .proposal-annotation:hover {
-            transform: translateY(-4px) scale(1.02);
-            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.15) inset;
-            border-color: rgba(255, 255, 255, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 16px 50px rgba(15, 23, 42, 0.3), 0 0 0 1px rgba(255,255,255,0.9) inset;
+            border-color: rgba(71, 85, 105, 0.25);
         }
 
         .proposal-annotation__header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
-            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            margin-bottom: 10px;
         }
-
-        .proposal-annotation__icon {
-            flex-shrink: 0;
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: 900;
-            transition: transform 0.3s ease;
-        }
-
-        .proposal-annotation:hover .proposal-annotation__icon {
-            transform: scale(1.1) rotate(-5deg);
-        }
-
-        .proposal-icon--seo { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
-        .proposal-icon--conversion { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4); }
-        .proposal-icon--trust { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
-        .proposal-icon--local { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4); }
-        .proposal-icon--tech { background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white; box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4); }
 
         .proposal-annotation__tag {
-            flex: 1;
-            font-size: 8px;
-            font-weight: 900;
-            letter-spacing: 0.15em;
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             line-height: 1;
         }
 
-        .proposal-tag--seo { color: #2563eb; }
-        .proposal-tag--conversion { color: #16a34a; }
-        .proposal-tag--trust { color: #d97706; }
-        .proposal-tag--local { color: #9333ea; }
-        .proposal-tag--tech { color: #475569; }
+        .proposal-tag--seo { background: #dbeafe; color: #1e40af; }
+        .proposal-tag--conversion { background: #d1fae5; color: #065f46; }
+        .proposal-tag--trust { background: #fed7aa; color: #92400e; }
+        .proposal-tag--local { background: #e9d5ff; color: #6b21a8; }
+        .proposal-tag--tech { background: #e2e8f0; color: #334155; }
 
         .proposal-annotation__title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 900;
-            letter-spacing: -0.025em;
+            letter-spacing: -0.02em;
             color: #0f172a;
-            line-height: 1.2;
-            margin-bottom: 10px;
+            line-height: 1.3;
+            margin-bottom: 8px;
         }
 
-        .proposal-annotation__benefit {
-            font-size: 11px;
-            line-height: 1.45;
-            color: #475569;
-            font-weight: 600;
-            padding: 8px 10px;
-            background: rgba(59, 130, 246, 0.06);
-            border-radius: 8px;
-            border-left: 3px solid;
+        .proposal-annotation__desc {
+            font-size: 10px;
+            line-height: 1.5;
+            color: #64748b;
+            font-weight: 500;
+            margin-bottom: 8px;
         }
 
-        .proposal-benefit--seo { border-left-color: #3b82f6; background: rgba(59, 130, 246, 0.06); }
-        .proposal-benefit--conversion { border-left-color: #22c55e; background: rgba(34, 197, 94, 0.06); }
-        .proposal-benefit--trust { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.06); }
-        .proposal-benefit--local { border-left-color: #a855f7; background: rgba(168, 85, 247, 0.06); }
-        .proposal-benefit--tech { border-left-color: #64748b; background: rgba(100, 116, 139, 0.06); }
+        .proposal-annotation__profit {
+            font-size: 10px;
+            line-height: 1.4;
+            color: #0f172a;
+            font-weight: 700;
+            padding: 7px 9px;
+            background: rgba(59, 130, 246, 0.08);
+            border-radius: 6px;
+            border-left: 2px solid;
+        }
 
-        .proposal-annotation--left::before,
-        .proposal-annotation--right::before {
+        .proposal-profit--seo { border-left-color: #2563eb; background: rgba(37, 99, 235, 0.08); }
+        .proposal-profit--conversion { border-left-color: #16a34a; background: rgba(22, 163, 74, 0.08); }
+        .proposal-profit--trust { border-left-color: #ea580c; background: rgba(234, 88, 12, 0.08); }
+        .proposal-profit--local { border-left-color: #9333ea; background: rgba(147, 51, 234, 0.08); }
+        .proposal-profit--tech { border-left-color: #475569; background: rgba(71, 85, 105, 0.08); }
+
+        .proposal-annotation--left::after,
+        .proposal-annotation--right::after {
             content: '';
             position: absolute;
-            top: 24px;
-            width: 12px;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9));
+            top: 20px;
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(71, 85, 105, 0.2);
+            transform: rotate(45deg);
         }
 
-        .proposal-annotation--left::before { right: -12px; }
-        .proposal-annotation--right::before { left: -12px; transform: scaleX(-1); }
+        .proposal-annotation--left::after { right: -4px; }
+        .proposal-annotation--right::after { left: -4px; }
 
         /* Mobile checklist details marker reset */
         .proposal-checklist summary { list-style: none; }
@@ -162,7 +153,7 @@
                 Max & Jacob
             </div>
             <a href="#form" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
-                Get the 7-Day Plan
+                New Website Preview
             </a>
         </div>
     </header>
@@ -177,14 +168,14 @@
         <div class="grid lg:grid-cols-12 gap-16 lg:gap-32 items-center">
             <div class="lg:col-span-5 text-center lg:text-left order-2 lg:order-1 relative z-40 lg:pl-8">
                 <% 
-                    const backlogCounts = (vm.improvement_backlog && vm.improvement_backlog.counts) ? vm.improvement_backlog.counts : null;
-                    const criticalCount = backlogCounts ? backlogCounts.critical : vm.top_3_issues.length;
-                    const warningCount = backlogCounts ? backlogCounts.warning : 0;
-                    const totalCount = backlogCounts ? backlogCounts.total : vm.top_3_issues.length;
-                    const highImpactCount = (backlogCounts ? (backlogCounts.critical + backlogCounts.warning) : vm.top_3_issues.length);
+                    const heroBacklogCounts = (vm.improvement_backlog && vm.improvement_backlog.counts) ? vm.improvement_backlog.counts : null;
+                    const heroCriticalCount = heroBacklogCounts ? heroBacklogCounts.critical : vm.top_3_issues.length;
+                    const heroWarningCount = heroBacklogCounts ? heroBacklogCounts.warning : 0;
+                    const heroTotalCount = heroBacklogCounts ? heroBacklogCounts.total : vm.top_3_issues.length;
+                    const highImpactCount = (heroBacklogCounts ? (heroBacklogCounts.critical + heroBacklogCounts.warning) : vm.top_3_issues.length);
                 %>
                 <div class="inline-block px-4 py-1.5 bg-red-50 text-red-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8 border border-red-200 animate-pulse">
-                    ⚠️ <%= highImpactCount %> High-Impact Issues Found • <%= criticalCount %> Critical
+                    ⚠️ <%= highImpactCount %> High-Impact Issues Found • <%= heroCriticalCount %> Critical
                 </div>
                 <h1 class="text-5xl md:text-8xl font-black text-slate-900 tracking-tighter leading-[1.1] mb-10">
                     Grow bigger online.<br/>
@@ -219,9 +210,9 @@
                         </div>
 
                         <!-- Low Clarity Tag -->
-                        <div class="absolute -top-8 -left-4 md:-left-16 bg-red-600 text-white p-7 rounded-[2.5rem] shadow-2xl animate-bounce-slow z-30">
+                        <div class="absolute -top-8 -left-4 md:-left-16 bg-blue-600 text-white p-7 rounded-[2.5rem] shadow-2xl animate-bounce-slow z-30">
                             <p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Diagnosis</p>
-                            <p class="text-3xl font-black tracking-tighter">CRITICAL FRICTION</p>
+                            <p class="text-3xl font-black tracking-tighter">Quick Audit Summary</p>
                         </div>
                     </div>
 
@@ -245,7 +236,494 @@
         </div>
     </section>
 
-    <!-- GROWTH GAP SECTION -->
+    <!-- 
+    ============================================
+    PRODUCT DASHBOARD SECTION (NEW DESIGN)
+    Replaces old Growth Gap + SEO Visibility + Mini Audit sections
+    ============================================
+    -->
+    
+    <!-- DASHBOARD: SCOREBOARD ROW (Block A) -->
+    <%
+        // Data mapping for dashboard
+        const healthMetrics = (vm.health_snapshot && vm.health_snapshot.metrics) ? vm.health_snapshot.metrics : [];
+        const localSeo = healthMetrics.find(m => m.key === 'local_seo') || { score: 0, label: 'Local SEO (Google)' };
+        const geoSignals = healthMetrics.find(m => m.key === 'geo') || { score: 0, label: 'AI Search Ready' };
+        const trust = healthMetrics.find(m => m.key === 'trust') || { score: 0, label: 'Trust & Credibility' };
+        const conversion = healthMetrics.find(m => m.key === 'conversion') || { score: 0, label: 'Conversion Path' };
+        const content = healthMetrics.find(m => m.key === 'content') || { score: 0, label: 'Content' };
+        const design = healthMetrics.find(m => m.key === 'design') || { score: 48, label: 'Design' };
+        
+        const metrics = [localSeo, geoSignals, trust, conversion, content, design];
+        const overallScore = Math.round(metrics.reduce((sum, m) => sum + m.score, 0) / metrics.length);
+        
+        // Critical gaps & quick wins counts
+        const backlogCounts = (vm.improvement_backlog && vm.improvement_backlog.counts) ? vm.improvement_backlog.counts : { critical: 0, warning: 0, opportunity: 0 };
+        const criticalCount = backlogCounts.critical || 0;
+        const warningCount = backlogCounts.warning || 0;
+        
+        // Quick wins: issues that are easy/fast to fix
+        const allIssues = [];
+        if (vm.improvement_backlog) {
+            if (Array.isArray(vm.improvement_backlog.critical)) allIssues.push(...vm.improvement_backlog.critical);
+            if (Array.isArray(vm.improvement_backlog.warnings)) allIssues.push(...vm.improvement_backlog.warnings);
+        }
+        const quickWins = allIssues.filter(it => {
+            const fixText = (it.fix || '').toLowerCase();
+            return fixText.includes('license') || fixText.includes('phone') || fixText.includes('add') || fixText.includes('display') || fixText.includes('simple');
+        });
+        const quickWinsCount = Math.min(6, quickWins.length);
+        
+        // Score tier and messaging
+        const scoreTier = overallScore >= 75 ? 'strong' : overallScore >= 50 ? 'needs-work' : 'critical';
+        const scoreColor = scoreTier === 'strong' ? 'text-emerald-500' : scoreTier === 'needs-work' ? 'text-amber-500' : 'text-red-500';
+        const scoreBgColor = scoreTier === 'strong' ? 'from-emerald-500/10 to-emerald-600/5' : scoreTier === 'needs-work' ? 'from-amber-500/10 to-amber-600/5' : 'from-red-500/10 to-red-600/5';
+        const scoreMessage = scoreTier === 'strong' 
+            ? 'Strong foundation — ready to optimize and dominate local search.'
+            : scoreTier === 'needs-work'
+                ? `Mixed signals: ${vm.hero.city} customers see you sometimes, but not consistently.`
+                : `Critical: local customers + AI systems can't clearly choose you yet.`;
+        
+        // Missed leads calculation (conservative)
+        const missedLeadsMin = 8;
+        const missedLeadsMax = Math.min(22, Math.round((100 - overallScore) / 4) + 8);
+        
+        // 3 Pillars data
+        const captureScore = conversion.score || 0;
+        const trustScore = trust.score || 0;
+        const geoScore = geoSignals.score || 0;
+        
+        const frictionLevel = (vm.scoreboard && vm.scoreboard.friction && vm.scoreboard.friction.level) ? vm.scoreboard.friction.level : 'high';
+        const trustLevel = (vm.scoreboard && vm.scoreboard.trust && vm.scoreboard.trust.level) ? vm.scoreboard.trust.level : 'weak';
+        const clarityLevel = (vm.scoreboard && vm.scoreboard.clarity && vm.scoreboard.clarity.level) ? vm.scoreboard.clarity.level : 'weak';
+        
+        function getBarColor(score) {
+            if (score >= 70) return 'bg-emerald-500';
+            if (score >= 40) return 'bg-amber-500';
+            return 'bg-red-500';
+        }
+        
+        function getTextColor(score) {
+            if (score >= 70) return 'text-emerald-600';
+            if (score >= 40) return 'text-amber-600';
+            return 'text-red-600';
+        }
+    %>
+    
+    <section class="py-20 px-6 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+        <!-- Background decoration -->
+        <div class="absolute inset-0 opacity-30">
+            <div class="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"></div>
+        </div>
+        
+        <div class="max-w-7xl mx-auto relative z-10">
+            <!-- Scoreboard Row -->
+            <div class="grid lg:grid-cols-12 gap-8 mb-16">
+                <!-- Left: Gauge -->
+                <div class="lg:col-span-7">
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 md:p-12 shadow-2xl">
+                        <div class="flex flex-col md:flex-row items-center gap-8">
+                            <!-- Gauge Chart (SVG Circle) -->
+                            <div class="relative flex-shrink-0">
+                                <svg class="transform -rotate-90" width="200" height="200" viewBox="0 0 200 200">
+                                    <!-- Background circle -->
+                                    <circle cx="100" cy="100" r="85" fill="none" stroke="#1e293b" stroke-width="12"/>
+                                    <!-- Progress circle -->
+                                    <circle 
+                                        cx="100" 
+                                        cy="100" 
+                                        r="85" 
+                                        fill="none" 
+                                        stroke="<%= scoreTier === 'strong' ? '#10b981' : scoreTier === 'needs-work' ? '#f59e0b' : '#ef4444' %>"
+                                        stroke-width="12"
+                                        stroke-linecap="round"
+                                        stroke-dasharray="<%= (overallScore / 100) * 534 %> 534"
+                                        class="transition-all duration-1000"
+                                        style="filter: drop-shadow(0 0 8px <%= scoreTier === 'strong' ? 'rgba(16, 185, 129, 0.4)' : scoreTier === 'needs-work' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.4)' %>)"
+                                    />
+                                </svg>
+                                <!-- Score text in center -->
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span class="text-6xl font-black <%= scoreColor %>"><%= overallScore %></span>
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">/ 100</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Score info -->
+                            <div class="flex-1 text-center md:text-left">
+                                <div class="inline-block px-3 py-1 bg-gradient-to-r <%= scoreBgColor %> border border-slate-600/30 rounded-full text-xs font-bold uppercase tracking-wider text-slate-300 mb-4">
+                                    <%= scoreTier === 'strong' ? '✓ Strong Position' : scoreTier === 'needs-work' ? '⚠ Needs Work' : '🚨 Critical Status' %>
+                                </div>
+                                <h2 class="text-3xl md:text-4xl font-black text-white mb-3 leading-tight">
+                                    Local Lead Magnet Score
+                                </h2>
+                                <p class="text-base md:text-lg text-slate-300 font-medium leading-relaxed">
+                                    <%= scoreMessage %>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Critical Gaps & Quick Wins -->
+                <div class="lg:col-span-5 grid grid-cols-2 gap-6">
+                    <!-- Critical Gaps -->
+                    <div class="bg-red-500/10 backdrop-blur-xl border border-red-500/30 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-[1.02]">
+                        <div class="flex items-start gap-3 mb-4">
+                            <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">🚨</span>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-xs font-bold uppercase tracking-wider text-red-300 mb-1">Critical Gaps</p>
+                                <p class="text-5xl font-black text-white"><%= criticalCount %></p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-300 font-medium">High-impact issues blocking leads</p>
+                    </div>
+                    
+                    <!-- Quick Wins -->
+                    <div class="bg-emerald-500/10 backdrop-blur-xl border border-emerald-500/30 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-[1.02]">
+                        <div class="flex items-start gap-3 mb-4">
+                            <div class="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <span class="text-xl">⚡</span>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-xs font-bold uppercase tracking-wider text-emerald-300 mb-1">Quick Wins</p>
+                                <p class="text-5xl font-black text-white"><%= quickWinsCount %></p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-300 font-medium">Fast fixes, immediate impact</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DASHBOARD: IMPACT PANEL (Block B) -->
+            <div class="mb-16">
+                <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 md:p-10 shadow-2xl">
+                    <div class="text-center mb-8">
+                        <div class="inline-block px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-xs font-bold uppercase tracking-wider text-blue-300 mb-4">
+                            📊 Opportunity Analysis
+                        </div>
+                        <h3 class="text-2xl md:text-3xl font-black text-white mb-3">
+                            Estimated Opportunity Loss (Local + AI)
+                        </h3>
+                        <p class="text-slate-300 font-medium">
+                            Missed leads/month: <span class="font-black text-white"><%= missedLeadsMin %>-<%= missedLeadsMax %></span>
+                            <span class="text-sm text-slate-400">(based on typical local conversion ranges)</span>
+                        </p>
+                    </div>
+                    
+                    <div class="bg-slate-900/50 rounded-2xl p-6 border border-slate-700/30">
+                        <p class="text-sm font-bold text-slate-400 mb-4 text-center">Adjust assumptions:</p>
+                        <div class="grid md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Avg Job Value ($)</label>
+                                <input 
+                                    type="number" 
+                                    id="avgJobValue" 
+                                    value="300" 
+                                    min="50" 
+                                    step="50"
+                                    class="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-white font-bold text-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Close Rate (%)</label>
+                                <input 
+                                    type="number" 
+                                    id="closeRate" 
+                                    value="30" 
+                                    min="5" 
+                                    max="100" 
+                                    step="5"
+                                    class="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-white font-bold text-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div class="text-center pt-6 border-t border-slate-700/50">
+                            <p class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">Potential Revenue Range</p>
+                            <p class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400" id="revenueRange">
+                                $720 - $2,000/mo
+                            </p>
+                            <p class="text-xs text-slate-500 mt-2 font-medium">Estimate only · Adjust assumptions above</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MESSAGE STRIP -->
+            <div class="mb-16">
+                <div class="bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-blue-600/20 backdrop-blur-xl border border-blue-500/30 rounded-2xl px-6 py-5 text-center shadow-xl">
+                    <p class="text-base md:text-lg text-white font-bold leading-relaxed">
+                        This isn't a website redesign. It's a <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-black">Local Lead Magnet + AI-ready structure</span> that turns traffic into booked jobs.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- DASHBOARD: 3 PILLARS BREAKDOWN (Block C) -->
+            <div class="mb-16">
+                <div class="text-center mb-10">
+                    <div class="inline-block px-3 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full text-xs font-bold uppercase tracking-wider text-purple-300 mb-4">
+                        🎯 Diagnostic Breakdown
+                    </div>
+                    <h3 class="text-3xl md:text-4xl font-black text-white mb-3">
+                        The 3 Pillars of Lead Generation
+                    </h3>
+                    <p class="text-slate-300 font-medium max-w-3xl mx-auto">
+                        Every local service business needs these three systems working together.
+                    </p>
+                </div>
+                
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <!-- Pillar 1: Capture (Mobile Conversion) -->
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-2xl hover:shadow-blue-500/20 transition-all">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-14 h-14 bg-blue-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <span class="text-3xl">📱</span>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-xl font-black text-white">Capture</h4>
+                                <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Mobile Conversion</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-bold text-slate-300">Score</span>
+                                <span class="text-sm font-black <%= getTextColor(captureScore) %>"><%= captureScore %>%</span>
+                            </div>
+                            <div class="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                                <div class="h-full <%= getBarColor(captureScore) %> transition-all duration-1000" style="width: <%= captureScore %>%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3 mb-6">
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= frictionLevel === 'low' ? 'text-emerald-400' : 'text-red-400' %> font-black"><%= frictionLevel === 'low' ? '✓' : '✗' %></span>
+                                <span class="text-slate-300 font-medium">Sticky CTA: <span class="font-black"><%= frictionLevel === 'low' ? 'Present' : 'Missing' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= frictionLevel === 'low' ? 'text-emerald-400' : frictionLevel === 'medium' ? 'text-amber-400' : 'text-red-400' %> font-black">•</span>
+                                <span class="text-slate-300 font-medium">Friction: <span class="font-black text-white"><%= frictionLevel === 'low' ? 'Low' : frictionLevel === 'medium' ? 'Medium' : 'High' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= captureScore >= 60 ? 'text-emerald-400' : 'text-amber-400' %> font-black">•</span>
+                                <span class="text-slate-300 font-medium">Speed: <span class="font-black text-white"><%= captureScore >= 60 ? 'Fast' : 'Needs work' %></span></span>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-slate-700/50">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 <%= captureScore >= 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-blue-500/10 border-blue-500/30 text-blue-300' %> border rounded-full text-xs font-bold">
+                                <%= captureScore >= 60 ? '🔨 Optimization phase' : '⚡ Fixable in 7-Day Sprint' %>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pillar 2: Trust (Authority & Proof) -->
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-2xl hover:shadow-amber-500/20 transition-all">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-14 h-14 bg-amber-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <span class="text-3xl">🛡️</span>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-xl font-black text-white">Trust</h4>
+                                <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Authority & Proof</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-bold text-slate-300">Score</span>
+                                <span class="text-sm font-black <%= getTextColor(trustScore) %>"><%= trustScore %>%</span>
+                            </div>
+                            <div class="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                                <div class="h-full <%= getBarColor(trustScore) %> transition-all duration-1000" style="width: <%= trustScore %>%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3 mb-6">
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= trustLevel === 'strong' ? 'text-emerald-400' : trustLevel === 'ok' ? 'text-amber-400' : 'text-red-400' %> font-black"><%= trustLevel === 'strong' ? '✓' : '•' %></span>
+                                <span class="text-slate-300 font-medium">Reviews: <span class="font-black text-white"><%= trustLevel === 'strong' ? 'Visible' : trustLevel === 'ok' ? 'Partial' : 'Missing' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= trustScore >= 70 ? 'text-emerald-400' : 'text-red-400' %> font-black"><%= trustScore >= 70 ? '✓' : '✗' %></span>
+                                <span class="text-slate-300 font-medium">Licensing: <span class="font-black text-white"><%= trustScore >= 70 ? 'Displayed' : 'Not visible' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= trustScore >= 50 ? 'text-amber-400' : 'text-red-400' %> font-black">•</span>
+                                <span class="text-slate-300 font-medium">Proof: <span class="font-black text-white"><%= trustScore >= 60 ? 'Strong' : 'Limited' %></span></span>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-slate-700/50">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 <%= trustScore >= 70 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300' %> border rounded-full text-xs font-bold">
+                                <%= trustScore >= 70 ? '⚡ Quick optimizations' : '🔨 Ongoing work required' %>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pillar 3: AI/GEO Visibility -->
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-2xl hover:shadow-purple-500/20 transition-all">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                <span class="text-3xl">🤖</span>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-xl font-black text-white">AI/GEO</h4>
+                                <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Machine Readability</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-bold text-slate-300">Score</span>
+                                <span class="text-sm font-black <%= getTextColor(geoScore) %>"><%= geoScore %>%</span>
+                            </div>
+                            <div class="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                                <div class="h-full <%= getBarColor(geoScore) %> transition-all duration-1000" style="width: <%= geoScore %>%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3 mb-6">
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= geoScore >= 60 ? 'text-emerald-400' : 'text-red-400' %> font-black"><%= geoScore >= 60 ? '✓' : '✗' %></span>
+                                <span class="text-slate-300 font-medium">Structured: <span class="font-black text-white"><%= geoScore >= 60 ? 'Clear' : 'Weak' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= geoScore >= 50 ? 'text-amber-400' : 'text-red-400' %> font-black"><%= geoScore >= 50 ? '•' : '✗' %></span>
+                                <span class="text-slate-300 font-medium">Schema: <span class="font-black text-white"><%= geoScore >= 50 ? 'Partial' : 'Missing' %></span></span>
+                            </div>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="<%= clarityLevel === 'strong' ? 'text-emerald-400' : clarityLevel === 'ok' ? 'text-amber-400' : 'text-red-400' %> font-black"><%= clarityLevel === 'strong' ? '✓' : '•' %></span>
+                                <span class="text-slate-300 font-medium">Entity: <span class="font-black text-white"><%= clarityLevel === 'strong' ? 'Strong' : clarityLevel === 'ok' ? 'Okay' : 'Weak' %></span></span>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-slate-700/50">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 <%= geoScore >= 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-blue-500/10 border-blue-500/30 text-blue-300' %> border rounded-full text-xs font-bold">
+                                <%= geoScore >= 60 ? '🔨 Refinement phase' : '⚡ Fixable in 7-Day Sprint' %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DASHBOARD: TOP ISSUES + QUICK WINS (Block D) -->
+            <div class="mb-16">
+                <div class="grid lg:grid-cols-2 gap-6">
+                    <!-- Top Critical Issues -->
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-red-500/30 rounded-3xl p-8 shadow-2xl">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center">
+                                <span class="text-2xl">🚨</span>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-black text-white">Top Critical Issues</h4>
+                                <p class="text-xs text-red-300 font-bold uppercase tracking-wider"><%= Math.min(6, criticalCount) %> Blocking Conversions</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <% 
+                            const topCritical = (vm.improvement_backlog && vm.improvement_backlog.critical) ? vm.improvement_backlog.critical.slice(0, 6) : [];
+                            if (topCritical.length === 0 && vm.top_3_issues && vm.top_3_issues.length > 0) {
+                                topCritical.push(...vm.top_3_issues.slice(0, 6).map(it => ({ title: it.title, fix: it.why_it_matters })));
+                            }
+                            %>
+                            <% topCritical.forEach((issue, idx) => { %>
+                            <div class="bg-slate-900/50 border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all">
+                                <div class="flex items-start gap-3 mb-2">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-red-500/20 rounded-lg text-xs font-black text-red-300"><%= idx + 1 %></span>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-black text-white leading-snug mb-1"><%= issue.title %></p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="inline-block px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold uppercase text-red-300">High</span>
+                                            <span class="inline-block px-2 py-0.5 bg-slate-700/50 rounded text-[10px] font-bold uppercase text-slate-300">
+                                                Impact: <%= (issue.category || 'Leads').includes('ai') || (issue.category || 'Leads').includes('geo') ? 'AI' : (issue.category || 'Leads').includes('trust') ? 'Trust' : 'Leads' %>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }); %>
+                            <% if (topCritical.length === 0) { %>
+                            <div class="text-center py-8 text-slate-500">
+                                <p class="text-sm font-medium">No critical issues detected</p>
+                            </div>
+                            <% } %>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Wins -->
+                    <div class="bg-slate-800/50 backdrop-blur-xl border border-emerald-500/30 rounded-3xl p-8 shadow-2xl">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center">
+                                <span class="text-2xl">⚡</span>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-black text-white">Quick Wins</h4>
+                                <p class="text-xs text-emerald-300 font-bold uppercase tracking-wider"><%= Math.min(6, quickWinsCount) %> Fast Improvements</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <% quickWins.slice(0, 6).forEach((win, idx) => { %>
+                            <div class="bg-slate-900/50 border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all">
+                                <div class="flex items-start gap-3 mb-2">
+                                    <span class="inline-flex items-center justify-center w-6 h-6 bg-emerald-500/20 rounded-lg text-xs font-black text-emerald-300"><%= idx + 1 %></span>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-black text-white leading-snug mb-1"><%= win.title %></p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="inline-block px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[10px] font-bold uppercase text-emerald-300">&lt; 1 Day</span>
+                                            <span class="inline-block px-2 py-0.5 bg-slate-700/50 rounded text-[10px] font-bold uppercase text-slate-300">
+                                                +<%= (win.category || win.fix || '').toLowerCase().includes('trust') ? 'Trust' : (win.category || win.fix || '').toLowerCase().includes('conversion') ? 'Conversion' : 'Impact' %>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }); %>
+                            <% if (quickWinsCount === 0) { %>
+                            <div class="text-center py-8 text-slate-500">
+                                <p class="text-sm font-medium">Excellent! Focus on optimizations</p>
+                            </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Revenue Calculator Script -->
+    <script>
+        (function() {
+            const avgJobValueInput = document.getElementById('avgJobValue');
+            const closeRateInput = document.getElementById('closeRate');
+            const revenueRangeEl = document.getElementById('revenueRange');
+            
+            function updateRevenue() {
+                const avgJobValue = parseFloat(avgJobValueInput.value) || 300;
+                const closeRate = parseFloat(closeRateInput.value) / 100 || 0.30;
+                const missedLeadsMin = <%= missedLeadsMin %>;
+                const missedLeadsMax = <%= missedLeadsMax %>;
+                
+                const revenueMin = Math.round(missedLeadsMin * closeRate * avgJobValue);
+                const revenueMax = Math.round(missedLeadsMax * closeRate * avgJobValue);
+                
+                revenueRangeEl.textContent = `$${revenueMin.toLocaleString()} - $${revenueMax.toLocaleString()}/mo`;
+            }
+            
+            avgJobValueInput.addEventListener('input', updateRevenue);
+            closeRateInput.addEventListener('input', updateRevenue);
+        })();
+    </script>
+    
+    <!-- OLD GROWTH GAP SECTION (BACKUP - REMOVE AFTER TESTING) -->
+    <!--
     <section class="py-24 px-6 bg-white border-y border-slate-100">
         <div class="max-w-7xl mx-auto grid lg:grid-cols-2 gap-20 items-start">
             <!-- 6 Progress Bars: Current State + Potential -->
@@ -626,6 +1104,8 @@
         </div>
         <% } %>
     </section>
+    -->
+    <!-- END OLD SECTIONS (COMMENTED OUT) -->
 
     <!-- MEET THE BROTHERS -->
     <section class="px-6">
@@ -787,49 +1267,45 @@
                     id: 'header-menu',
                     side: 'left',
                     top: 6,
-                    icon: '☰',
                     tag: 'SEO',
                     tagClass: 'proposal-tag--seo',
-                    iconClass: 'proposal-icon--seo',
-                    benefitClass: 'proposal-benefit--seo',
-                    title: 'Clear navigation',
-                    benefit: 'More calls + better crawlability'
+                    profitClass: 'proposal-profit--seo',
+                    title: 'Structured navigation',
+                    desc: 'Clean menu architecture (Services, About, Reviews, Contact) with click-to-call in header. Google crawlers index hierarchical structure faster.',
+                    profit: 'Reduces bounce rate by 15-25% and improves crawl efficiency — both ranking factors.'
                 },
                 {
                     id: 'hero',
                     side: 'left',
                     top: 20,
-                    icon: '🎯',
                     tag: 'CONVERT',
                     tagClass: 'proposal-tag--conversion',
-                    iconClass: 'proposal-icon--conversion',
-                    benefitClass: 'proposal-benefit--conversion',
-                    title: 'H1 + city + CTA',
-                    benefit: 'Higher conversion + local SEO boost'
+                    profitClass: 'proposal-profit--conversion',
+                    title: 'H1 with geo + CTA',
+                    desc: 'Primary keyword + city in H1 tag (e.g., "' + _proposalNiche + ' in ' + _proposalCity + '") with single, clear call-to-action above fold.',
+                    profit: 'Increases local search relevance by 30-40% and improves conversion rate by forcing decision clarity.'
                 },
                 {
                     id: 'trust-fold',
                     side: 'left',
                     top: 36,
-                    icon: '✓',
                     tag: 'TRUST',
                     tagClass: 'proposal-tag--trust',
-                    iconClass: 'proposal-icon--trust',
-                    benefitClass: 'proposal-benefit--trust',
-                    title: 'Trust above fold',
-                    benefit: 'More qualified leads ready to buy'
+                    profitClass: 'proposal-profit--trust',
+                    title: 'Trust signals above fold',
+                    desc: 'Star ratings, licenses, insurance badges, guarantees, and real team photos visible without scrolling. Reduces perceived transaction risk.',
+                    profit: 'Qualified leads convert 2-3x higher when trust elements are immediately visible.'
                 },
                 {
                     id: 'services',
                     side: 'left',
                     top: 54,
-                    icon: '⚙',
                     tag: 'SEO',
                     tagClass: 'proposal-tag--seo',
-                    iconClass: 'proposal-icon--seo',
-                    benefitClass: 'proposal-benefit--seo',
-                    title: 'Service pages',
-                    benefit: 'More organic traffic from search'
+                    profitClass: 'proposal-profit--seo',
+                    title: 'Service-specific pages',
+                    desc: 'Each service gets dedicated landing page with targeted content, internal linking, and optimized meta tags for search intent matching.',
+                    profit: 'Expands ranking footprint — sites with 5+ service pages see 60-80% more organic traffic.'
                 },
                 {
                     id: 'local-geo',
@@ -837,58 +1313,54 @@
                     top: 70,
                     tag: 'LOCAL',
                     tagClass: 'proposal-tag--local',
-                    title: 'GEO signals (Local SEO)',
-                    what: 'Service areas + map + consistent NAP.',
-                    why: 'Strengthens local pack and “near me” relevance.',
-                    benefit: 'More leads from ' + _proposalCity + ' searches.'
+                    profitClass: 'proposal-profit--local',
+                    title: 'Local SEO infrastructure',
+                    desc: 'Service area definitions, embedded map, consistent NAP (Name, Address, Phone) across all pages. Strengthens local pack eligibility.',
+                    profit: 'Local pack listings generate 3-5x more calls than organic results. "Near me" queries convert at 28% vs. 2% average.'
                 },
                 {
                     id: 'conversion-flow',
                     side: 'right',
                     top: 12,
-                    icon: '☎',
                     tag: 'CONVERT',
                     tagClass: 'proposal-tag--conversion',
-                    iconClass: 'proposal-icon--conversion',
-                    benefitClass: 'proposal-benefit--conversion',
-                    title: 'Multiple contact paths',
-                    benefit: 'Higher contact rate, fewer drop-offs'
+                    profitClass: 'proposal-profit--conversion',
+                    title: 'Multi-path contact flow',
+                    desc: 'Phone, booking widget, short form, hours, and emergency CTA. Different visitor personas prefer different contact methods.',
+                    profit: 'Offering 3+ contact options increases total contact rate by 35-50% vs. single-path sites.'
                 },
                 {
                     id: 'reviews-proof',
                     side: 'right',
                     top: 32,
-                    icon: '★',
                     tag: 'TRUST',
                     tagClass: 'proposal-tag--trust',
-                    iconClass: 'proposal-icon--trust',
-                    benefitClass: 'proposal-benefit--trust',
-                    title: 'Social proof',
-                    benefit: 'Trust + pricing power'
+                    profitClass: 'proposal-profit--trust',
+                    title: 'Social proof integration',
+                    desc: 'Customer testimonials with specifics, before/after case studies, industry awards, and third-party verification (Google, Yelp).',
+                    profit: 'Social proof increases pricing power by 15-20% and reduces price shopping behavior.'
                 },
                 {
                     id: 'about-team',
                     side: 'right',
                     top: 50,
-                    icon: '👥',
                     tag: 'TRUST',
                     tagClass: 'proposal-tag--trust',
-                    iconClass: 'proposal-icon--trust',
-                    benefitClass: 'proposal-benefit--trust',
-                    title: 'Team credentials',
-                    benefit: 'E-E-A-T signals for rankings'
+                    profitClass: 'proposal-profit--trust',
+                    title: 'E-E-A-T optimization',
+                    desc: 'Real team photos, credentials, experience timeline, and reliability signals. Google\'s "Experience, Expertise, Authority, Trust" framework.',
+                    profit: 'E-E-A-T is a confirmed ranking factor for local service queries — direct impact on visibility.'
                 },
                 {
                     id: 'faq',
                     side: 'right',
                     top: 66,
-                    icon: '?',
                     tag: 'SEO',
                     tagClass: 'proposal-tag--seo',
-                    iconClass: 'proposal-icon--seo',
-                    benefitClass: 'proposal-benefit--seo',
-                    title: 'FAQ content',
-                    benefit: 'Removes objections + long-tail traffic'
+                    profitClass: 'proposal-profit--seo',
+                    title: 'FAQ schema markup',
+                    desc: 'Structured FAQ content targeting pricing, turnaround, guarantees, and service area questions. Captures long-tail search intent.',
+                    profit: 'FAQ sections with schema increase click-through rate by 20-30% via rich snippets in search results.'
                 },
                 {
                     id: 'tech',
@@ -896,10 +1368,10 @@
                     top: 80,
                     tag: 'TECH',
                     tagClass: 'proposal-tag--tech',
-                    title: 'Technical SEO + tracking',
-                    what: 'Schema, Core Web Vitals, analytics + conversion tracking.',
-                    why: 'Speed + measurement makes growth repeatable.',
-                    benefit: 'Scale what works, fix what doesn’t.'
+                    profitClass: 'proposal-profit--tech',
+                    title: 'Performance + analytics',
+                    desc: 'Core Web Vitals optimization, LocalBusiness schema, conversion tracking, and call/form attribution. Speed is a ranking factor.',
+                    profit: 'Every 100ms improvement in load time increases conversion by 1%. Tracking enables data-driven optimization.'
                 }
             ];
         %>
@@ -933,29 +1405,27 @@
                 <div class="h-24 bg-gradient-to-b from-white/10 to-transparent blur-2xl opacity-80"></div>
             </div>
 
-            <!-- Side “what matters” bubbles (desktop only) -->
-            <div class="hidden xl:block absolute inset-0 z-20">
+            <!-- Side annotations (desktop only) - Professional business insights -->
+            <div class="hidden xl:block absolute inset-0 z-20 pointer-events-none">
                 <% proposalNotes.filter(n => n.side === 'left').forEach(n => { %>
-                <div class="proposal-annotation proposal-annotation--left" style="top: <%= n.top %>%; left: 0.75rem;">
-                    <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
-                    <div class="proposal-annotation__title"><%= n.title %></div>
-                    <div class="proposal-annotation__text">
-                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
-                        <p class="mt-1"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
-                        <p class="mt-1"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                <div class="proposal-annotation proposal-annotation--left pointer-events-auto" style="top: <%= n.top %>%; left: 0.75rem;">
+                    <div class="proposal-annotation__header">
+                        <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
                     </div>
+                    <div class="proposal-annotation__title"><%= n.title %></div>
+                    <div class="proposal-annotation__desc"><%= n.desc %></div>
+                    <div class="proposal-annotation__profit <%= n.profitClass %>"><%= n.profit %></div>
                 </div>
                 <% }); %>
 
                 <% proposalNotes.filter(n => n.side === 'right').forEach(n => { %>
-                <div class="proposal-annotation proposal-annotation--right" style="top: <%= n.top %>%; right: 0.75rem;">
-                    <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
-                    <div class="proposal-annotation__title"><%= n.title %></div>
-                    <div class="proposal-annotation__text">
-                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
-                        <p class="mt-1"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
-                        <p class="mt-1"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                <div class="proposal-annotation proposal-annotation--right pointer-events-auto" style="top: <%= n.top %>%; right: 0.75rem;">
+                    <div class="proposal-annotation__header">
+                        <div class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></div>
                     </div>
+                    <div class="proposal-annotation__title"><%= n.title %></div>
+                    <div class="proposal-annotation__desc"><%= n.desc %></div>
+                    <div class="proposal-annotation__profit <%= n.profitClass %>"><%= n.profit %></div>
                 </div>
                 <% }); %>
             </div>
@@ -973,30 +1443,24 @@
             </div>
         </div>
 
-        <!-- Checklist version (mobile/tablet) -->
-        <div class="xl:hidden mt-10 max-w-3xl mx-auto proposal-checklist">
-            <h3 class="text-white text-2xl font-black tracking-tight">What makes this homepage perform</h3>
-            <p class="mt-3 text-slate-300 font-medium leading-relaxed">
-                Use this as a checklist. It covers the SEO, trust, local GEO signals, and contact flow that consistently drive calls and bookings.
-            </p>
-            <div class="mt-5 space-y-3">
+        <!-- Mobile breakdown (tablet/mobile) - Professional business framework -->
+        <div class="xl:hidden mt-12 max-w-3xl mx-auto">
+            <div class="text-center mb-8">
+                <h3 class="text-white text-3xl font-black tracking-tight mb-3">What drives performance</h3>
+                <p class="text-slate-300 font-medium text-base leading-relaxed">
+                    Strategic elements that convert visitors into customers
+                </p>
+            </div>
+            <div class="grid gap-4">
                 <% proposalNotes.forEach(n => { %>
-                <details class="group bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
-                    <summary class="cursor-pointer flex items-center justify-between gap-4">
-                        <div class="min-w-0">
-                            <div class="flex items-center flex-wrap gap-2">
-                                <span class="proposal-annotation__tag <%= n.tagClass %>"><%= n.tag %></span>
-                                <span class="text-white font-black text-base tracking-tight"><%= n.title %></span>
-                            </div>
-                        </div>
-                        <span aria-hidden="true" class="proposal-chevron text-slate-300/80 font-black text-2xl leading-none transition-transform">⌄</span>
-                    </summary>
-                    <div class="mt-4 text-slate-200/90 text-sm leading-relaxed">
-                        <p><span class="proposal-annotation__label">What:</span> <%= n.what %></p>
-                        <p class="mt-3"><span class="proposal-annotation__label">Why:</span> <%= n.why %></p>
-                        <p class="mt-3"><span class="proposal-annotation__label">Benefit:</span> <%= n.benefit %></p>
+                <div class="bg-white/95 border border-slate-200/50 rounded-xl p-5 shadow-lg backdrop-blur-sm">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="proposal-annotation__tag <%= n.tagClass %> !text-[9px]"><%= n.tag %></div>
                     </div>
-                </details>
+                    <div class="text-slate-900 font-black text-base tracking-tight leading-tight mb-3"><%= n.title %></div>
+                    <div class="text-slate-600 text-[13px] font-medium leading-relaxed mb-3"><%= n.desc %></div>
+                    <div class="proposal-annotation__profit <%= n.profitClass %> !text-[12px] !font-bold !px-3 !py-2.5"><%= n.profit %></div>
+                </div>
                 <% }); %>
             </div>
         </div>
@@ -1006,56 +1470,78 @@
     <!-- FORM SECTION -->
     <section class="py-24 px-6 max-w-4xl mx-auto" id="form">
         <div class="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-100">
-            <div class="text-center mb-12">
-                <h2 class="text-4xl font-black mb-4"><%= vm.form_config.headline %></h2>
-                <p class="text-slate-500 text-lg"><%= vm.form_config.subheadline %></p>
-            </div>
-
-            <form action="<%= vm.form_config.action %>" method="<%= vm.form_config.method %>">
-                <div class="grid md:grid-cols-2 gap-6 mb-6">
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Name *</label>
-                        <input type="text" name="name" required placeholder="Your name" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Email *</label>
-                        <input type="email" name="email" required placeholder="your@email.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Website</label>
-                        <input type="text" name="website" value="<%= vm.form_config.prefill.website %>" placeholder="www.yoursite.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Budget Range</label>
-                        <input
-                            type="text"
-                            name="budget_range"
-                            placeholder="Optional (e.g. $1k–$10k)"
-                            class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
-                        >
-                    </div>
-
-                    <div class="flex flex-col md:col-span-2">
-                        <label class="mb-2 text-slate-700 font-semibold text-sm">Are you the decision maker?</label>
-                        <select name="decision_maker" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
-                            <option value="">Select</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                        </select>
+            <!-- Success Message (hidden by default) -->
+            <div id="audit-form-success" class="hidden text-center">
+                <div class="mb-6">
+                    <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
                     </div>
                 </div>
+                <h2 class="text-4xl font-black mb-4 text-slate-900">Thank You!</h2>
+                <p class="text-slate-600 text-lg mb-2">We've received your information.</p>
+                <p class="text-slate-500 text-base">We'll contact you via email within 12-24 hours with your personalized plan.</p>
+            </div>
 
-                <button type="submit" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
-                    <%= vm.form_config.cta_button_text %>
-                </button>
-
-                <p class="text-center text-slate-400 text-sm mt-6">
-                    <%= vm.form_config.disclaimer %>
+            <!-- Error Message (hidden by default) -->
+            <div id="audit-form-error" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p class="text-red-600 font-semibold text-sm text-center">
+                    <span id="audit-error-text">Something went wrong. Please try again.</span>
                 </p>
-            </form>
+            </div>
+
+            <!-- Form (visible by default) -->
+            <div id="audit-form-container">
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl font-black mb-4"><%= vm.form_config.headline %></h2>
+                    <p class="text-slate-500 text-lg"><%= vm.form_config.subheadline %></p>
+                </div>
+
+                <form id="audit-contact-form" action="<%= vm.form_config.action %>" method="<%= vm.form_config.method %>">
+                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Name *</label>
+                            <input type="text" name="name" required placeholder="Your name" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Email *</label>
+                            <input type="email" name="email" required placeholder="your@email.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Website</label>
+                            <input type="text" name="website" value="<%= vm.form_config.prefill.website %>" placeholder="www.yoursite.com" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                        </div>
+
+                        <div class="flex flex-col">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Budget Range</label>
+                            <input
+                                type="text"
+                                name="budget_range"
+                                placeholder="Optional (e.g. $1k–$10k)"
+                                class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+                            >
+                        </div>
+
+                        <div class="flex flex-col md:col-span-2">
+                            <label class="mb-2 text-slate-700 font-semibold text-sm">Are you the decision maker?</label>
+                            <select name="decision_maker" class="px-4 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all">
+                                <option value="">Select</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="audit-submit-btn" class="w-full px-12 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95">
+                        <%= vm.form_config.cta_button_text %>
+                    </button>
+
+                    <p class="text-center text-slate-400 text-sm mt-6">
+                        <%= vm.form_config.disclaimer %>
+                    </p>
+                </form>
+            </div>
         </div>
     </section>
 
@@ -1068,10 +1554,12 @@
             </div>
             <div class="text-center md:text-right">
                 <p class="text-xs text-slate-400 font-black uppercase tracking-[0.3em] mb-4 italic">No guarantees, just clarity.</p>
+                <div class="flex flex-col items-center md:items-end gap-3">
                 <div class="flex justify-center md:justify-end gap-10 text-xs font-black uppercase text-slate-400 tracking-widest">
                     <a href="https://maxandjacob.com/privacy" class="hover:text-blue-600">Privacy</a>
-                    <a href="#" class="hover:text-blue-600">Terms</a>
-                    <a href="mailto:hello@maxandjacob.com" class="hover:text-blue-600">Contact</a>
+                    <a href="mailto:jacob@maxandjacob.com" class="hover:text-blue-600">Contact</a>
+                </div>
+                <a href="mailto:jacob@maxandjacob.com" class="text-xs font-bold text-slate-400 tracking-wider hover:text-blue-600">jacob@maxandjacob.com</a>
                 </div>
             </div>
         </div>
@@ -1231,6 +1719,72 @@
             }
             setTimeout(resizeProposalIframe, 200);
             setTimeout(resizeProposalIframe, 800);
+        });
+
+        // Audit form submission handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('audit-contact-form');
+            const formContainer = document.getElementById('audit-form-container');
+            const successMessage = document.getElementById('audit-form-success');
+            const errorMessage = document.getElementById('audit-form-error');
+            const errorText = document.getElementById('audit-error-text');
+            const submitBtn = document.getElementById('audit-submit-btn');
+
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    // Hide error message if visible
+                    errorMessage.classList.add('hidden');
+
+                    // Disable submit button
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Sending...';
+
+                    // Get form data
+                    const formData = new FormData(form);
+                    const payload = {
+                        name: formData.get('name'),
+                        email: formData.get('email'),
+                        website: formData.get('website'),
+                        message: 'Audit form submission - Budget: ' + (formData.get('budget_range') || 'Not specified') + ', Decision maker: ' + (formData.get('decision_maker') || 'Not specified')
+                    };
+
+                    try {
+                        const response = await fetch('/api/contact-submissions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok && result.success) {
+                            // Success! Hide form and show thank you message
+                            formContainer.classList.add('hidden');
+                            successMessage.classList.remove('hidden');
+                            
+                            // Smooth scroll to success message
+                            successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } else {
+                            // Error from server
+                            errorText.textContent = result.error || 'Something went wrong. Please try again.';
+                            errorMessage.classList.remove('hidden');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = '<%= vm.form_config.cta_button_text %>';
+                        }
+                    } catch (error) {
+                        // Network error
+                        console.error('Submission error:', error);
+                        errorText.textContent = 'Network error. Please check your connection and try again.';
+                        errorMessage.classList.remove('hidden');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '<%= vm.form_config.cta_button_text %>';
+                    }
+                });
+            }
         });
     </script>
 </body>

@@ -11,9 +11,20 @@ const { chromium } = require('playwright');
 
 /**
  * Get a temporary test email address from mail-tester.com
- * @returns {Promise<{email: string, testId: string}>}
+ * @param {boolean} useManualFallback - If true, return instructions for manual testing
+ * @returns {Promise<{email: string, testId: string, manual: boolean}>}
  */
-async function getTestEmail() {
+async function getTestEmail(useManualFallback = false) {
+  // If manual fallback requested, return instructions
+  if (useManualFallback) {
+    return {
+      email: null,
+      testId: null,
+      manual: true,
+      instructions: 'Please visit https://www.mail-tester.com/ and copy the test email manually'
+    };
+  }
+  
   let browser;
   
   try {
