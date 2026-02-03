@@ -69,8 +69,19 @@ function isValidEmail(email) {
   const normalized = normalizeEmail(email);
   
   // Check basic format
-  const basicPattern = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+$/;
+  // IMPORTANT:
+  // - must have a real TLD (letters only, length >= 2)
+  // - prevents false positives like "froala-editor@4.6" (package@version)
+  const basicPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,24}$/;
   if (!basicPattern.test(normalized)) return false;
+
+  // Reject "version domains" like 4.6, 1.2.3, etc.
+  // Example false positive: froala-editor@4.6
+  const at = normalized.lastIndexOf('@');
+  if (at > 0) {
+    const domain = normalized.slice(at + 1);
+    if (/^\d+(\.\d+)+$/.test(domain)) return false;
+  }
   
   // Check for spam patterns
   for (const pattern of SPAM_PATTERNS) {

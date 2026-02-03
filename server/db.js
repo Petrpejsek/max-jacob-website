@@ -2559,9 +2559,9 @@ function getPreauditEmailCandidateByUrl(url, callback) {
 
   const sql = `
     SELECT id, search_id, email, url, title, created_at, status
-    FROM preaudit_results 
-    WHERE (url = ? OR url = ?) 
-      AND has_email = 1 
+    FROM preaudit_results
+    WHERE (url = ? OR url = ?)
+      AND has_email = 1
       AND email IS NOT NULL
       AND email != ''
     ORDER BY
@@ -2570,27 +2570,40 @@ function getPreauditEmailCandidateByUrl(url, callback) {
            ELSE 0
       END DESC,
       created_at DESC
-    LIMIT 1
+    LIMIT 25
   `;
+
+  // Validate candidate emails to avoid false positives like package@version.
+  let isValidEmail = null;
+  try {
+    ({ isValidEmail } = require('./services/emailDetector'));
+  } catch (_) {}
+
+  const isAcceptableEmail = (raw) => {
+    const s = String(raw || '').trim();
+    if (!s) return false;
+    if (typeof isValidEmail === 'function') return isValidEmail(s);
+    // Fallback strict pattern (if require fails for any reason)
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,24}$/.test(s);
+  };
   
   // Try both original and normalized URL
-  db.get(sql, [url, normalized], (err, row) => {
-    if (err) {
-      callback(err, null);
-    } else if (row && row.email) {
-      console.log('[DB] Found preaudit email candidate:', {
-        id: row.id,
-        search_id: row.search_id,
-        url: row.url,
-        email: row.email,
-        title: row.title,
-        status: row.status,
-        created_at: row.created_at
-      });
-      callback(null, row);
-    } else {
-      callback(null, null);
-    }
+  db.all(sql, [url, normalized], (err, rows) => {
+    if (err) return callback(err, null);
+    const list = rows || [];
+    const picked = list.find((r) => r && isAcceptableEmail(r.email)) || null;
+    if (!picked) return callback(null, null);
+
+    console.log('[DB] Picked preaudit email candidate:', {
+      id: picked.id,
+      search_id: picked.search_id,
+      url: picked.url,
+      email: picked.email,
+      title: picked.title,
+      status: picked.status,
+      created_at: picked.created_at
+    });
+    callback(null, picked);
   });
 }
 
