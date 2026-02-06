@@ -219,6 +219,41 @@
         }
 
         /* (Removed) mobile desktop-toggle styles — mobile must show only mobile preview */
+
+        /* Preview blur and overlay effects */
+        .preview-blur-container {
+            position: relative;
+        }
+
+        .preview-blur {
+            filter: blur(12px);
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .preview-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, 
+                rgba(30, 41, 59, 0.85) 0%, 
+                rgba(30, 41, 59, 0.75) 50%,
+                rgba(30, 41, 59, 0.85) 100%);
+            backdrop-filter: blur(2px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            padding: 2rem;
+            z-index: 10;
+        }
+
+        .cta-microcopy {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.75rem;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body class="bg-[#fcfdfe] text-slate-900 antialiased overflow-x-hidden">
@@ -229,8 +264,8 @@
             <div class="font-black text-2xl tracking-tighter text-blue-600">
                 Max & Jacob
             </div>
-            <a href="#form" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
-                Get 7-Day Build
+            <a href="/web-project-form.html" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
+                Get free site preview in 48h
             </a>
         </div>
     </header>
@@ -273,9 +308,16 @@
                 </p>
                 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                    <a href="#template-preview" class="px-12 py-6 bg-blue-600 text-white rounded-[2rem] font-black text-2xl hover:bg-blue-700 shadow-2xl shadow-blue-200 transition-all transform hover:-translate-y-2 active:scale-95">
-                        <%= vm.hero.primary_cta_text %>
-                    </a>
+                    <div class="flex flex-col items-center lg:items-start">
+                        <a href="/web-project-form.html" class="px-12 py-6 bg-blue-600 text-white rounded-[2rem] font-black text-2xl hover:bg-blue-700 shadow-2xl shadow-blue-200 transition-all transform hover:-translate-y-2 active:scale-95">
+                            <%= vm.hero.primary_cta_text %>
+                        </a>
+                        <div class="cta-microcopy text-center lg:text-left mt-4 space-y-1">
+                            <p class="text-xs text-slate-400 font-medium">No call. Just the brief.</p>
+                            <p class="text-xs text-slate-400 font-medium">Takes 8–12 min.</p>
+                            <p class="text-xs text-slate-400 font-medium">Delivered in 48h.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -496,6 +538,19 @@
         </div>
         
         <div class="max-w-7xl mx-auto relative z-10">
+            <!-- Main Headline -->
+            <div class="text-center mb-16">
+                <div class="inline-block px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-300 text-xs font-bold uppercase tracking-wider mb-6">
+                    Free Analysis
+                </div>
+                <h2 class="text-4xl md:text-6xl font-black text-white tracking-tight mb-4">
+                    Audit of Your Current Website
+                </h2>
+                <p class="text-lg md:text-xl text-slate-300 font-medium max-w-3xl mx-auto">
+                    We analyzed <%= vm.hero.brand_or_domain %> and found critical issues blocking your growth
+                </p>
+            </div>
+
             <!-- HEADER: Site Info & Analysis Summary -->
             <div class="mb-12">
                 <div class="bg-slate-800/40 backdrop-blur-xl border border-slate-700/40 rounded-3xl p-8 shadow-2xl">
@@ -1250,6 +1305,26 @@
             </div>
         </div>
     </section>
+
+    <!-- CTA: Unlock Full Audit -->
+    <section class="py-16 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="bg-gradient-to-br from-blue-600 to-blue-700 rounded-[3rem] p-12 shadow-2xl">
+                <h3 class="text-3xl md:text-4xl font-black text-white mb-4 tracking-tight">
+                    Ready to see your new homepage?
+                </h3>
+                <p class="text-lg text-blue-100 font-medium mb-8 max-w-2xl mx-auto">
+                    We'll analyze your business and deliver a custom homepage preview in 48 hours — completely free.
+                </p>
+                <a href="/web-project-form.html" class="inline-flex px-12 py-6 bg-white text-blue-600 rounded-[2rem] font-black text-xl hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105 active:scale-95">
+                    Unlock full audit + preview (free)
+                </a>
+                <p class="text-sm text-blue-200 font-medium mt-6">
+                    Fill the brief (8–12 min) → we deliver in 48h
+                </p>
+            </div>
+        </div>
+    </section>
     
     <!-- Revenue Calculator Script -->
     <script>
@@ -1339,8 +1414,8 @@
             const tfImpact = twoFounders.estimated_impact || 'Most local service sites can lift conversions with clearer navigation and stronger trust signals above the fold.';
             const tfProcess = twoFounders.process || 'We handle strategy + design, deliver a clean preview, and give you a clear next-step plan.';
             const tfSignature = twoFounders.signature || 'Max & Jacob';
-            const tfPrimaryCta = twoFounders.primary_cta_text || 'Get my plan';
-            const tfSecondaryCta = twoFounders.secondary_cta_text || 'See a sample homepage';
+            const tfPrimaryCta = twoFounders.primary_cta_text || 'Get my free 48h preview';
+            const tfSecondaryCta = twoFounders.secondary_cta_text || 'See a sample preview';
         %>
         <div class="max-w-7xl mx-auto">
             <div class="bg-blue-600 rounded-[4rem] p-8 md:p-12 text-white relative overflow-hidden my-20">
@@ -1369,12 +1444,16 @@
                         <!-- CTA Buttons under photos (desktop only) -->
                         <div class="hidden lg:flex w-full max-w-md">
                             <div class="flex flex-col gap-4 w-full">
-                                <a href="#form" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white text-blue-600 rounded-[1.5rem] font-black text-base md:text-lg hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105">
-                                    <%= tfPrimaryCta %>
-                                </a>
-                                <a href="#sample-homepage" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white/10 text-white rounded-[1.5rem] font-black text-base md:text-lg hover:bg-white/20 border-2 border-white/30 transition-all">
-                                    <%= tfSecondaryCta %>
-                                </a>
+                                <div class="flex flex-col">
+                                    <a href="/web-project-form.html" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white text-blue-600 rounded-[1.5rem] font-black text-base md:text-lg hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105">
+                                        <%= tfPrimaryCta %>
+                                    </a>
+                                    <div class="cta-microcopy text-center mt-3 space-y-1">
+                                        <p class="text-xs text-blue-100 font-medium">No call. Just the brief.</p>
+                                        <p class="text-xs text-blue-100 font-medium">Takes 8–12 min.</p>
+                                        <p class="text-xs text-blue-100 font-medium">Delivered in 48h.</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1417,12 +1496,16 @@
 
                         <!-- CTA Buttons (mobile only - at bottom after text) -->
                         <div class="flex lg:hidden flex-col gap-4 mt-8">
-                            <a href="#form" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white text-blue-600 rounded-[1.5rem] font-black text-base hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105">
-                                <%= tfPrimaryCta %>
-                            </a>
-                            <a href="#sample-homepage" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white/10 text-white rounded-[1.5rem] font-black text-base hover:bg-white/20 border-2 border-white/30 transition-all">
-                                <%= tfSecondaryCta %>
-                            </a>
+                            <div class="flex flex-col">
+                                <a href="/web-project-form.html" class="w-full inline-flex items-center justify-center px-8 py-5 bg-white text-blue-600 rounded-[1.5rem] font-black text-base hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105">
+                                    <%= tfPrimaryCta %>
+                                </a>
+                                <div class="cta-microcopy text-center mt-3 space-y-1">
+                                    <p class="text-xs text-blue-100 font-medium">No call. Just the brief.</p>
+                                    <p class="text-xs text-blue-100 font-medium">Takes 8–12 min.</p>
+                                    <p class="text-xs text-blue-100 font-medium">Delivered in 48h.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1493,9 +1576,16 @@
             <p class="text-2xl text-slate-400 font-medium mb-16 leading-relaxed">
                 We've identified exactly what's wrong with <%= vm.hero.brand_or_domain %>. Answer 5 quick questions, and Max & Jacob will send you the complete 7-day transformation plan—customized for your business.
             </p>
-            <a href="#form" class="inline-flex px-16 py-8 bg-blue-600 text-white rounded-[2.5rem] font-black text-3xl hover:bg-blue-700 shadow-[0_35px_60px_-15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105">
-                Get My Free Plan
-            </a>
+            <div class="flex flex-col items-center">
+                <a href="/web-project-form.html" class="inline-flex px-16 py-8 bg-blue-600 text-white rounded-[2.5rem] font-black text-3xl hover:bg-blue-700 shadow-[0_35px_60px_-15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105">
+                    Claim free 48h preview
+                </a>
+                <div class="cta-microcopy text-center mt-6 space-y-1">
+                    <p class="text-sm text-slate-300 font-medium">No call. Just the brief.</p>
+                    <p class="text-sm text-slate-300 font-medium">Takes 8–12 min.</p>
+                    <p class="text-sm text-slate-300 font-medium">Delivered in 48h.</p>
+                </div>
+            </div>
             <div class="mt-16 pt-12 border-t border-white/10 flex flex-wrap justify-center gap-10 text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
                 <span>Concept Review</span>
                 <span>Accuracy Verified</span>
@@ -1587,8 +1677,8 @@
         %>
 
         <div class="mx-auto max-w-4xl">
-            <!-- Open in browser -->
-            <div class="flex justify-center mb-3">
+            <!-- Open in browser (HIDDEN) -->
+            <div class="flex justify-center mb-3" style="display: none;">
                 <a
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-blue-600 text-white text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-colors"
                     href="/<%= publicSlug %>/homepage-proposal.html"
@@ -1600,15 +1690,15 @@
                 </a>
             </div>
             
-            <!-- Mini note below button -->
-            <div class="text-center mb-3">
+            <!-- Mini note below button (HIDDEN) -->
+            <div class="text-center mb-3" style="display: none;">
                 <p class="text-[11px] text-slate-400 font-medium">
                     Opens the live preview.
                 </p>
             </div>
 
             <!-- Disclaimer (looks like disclaimer; no container) -->
-            <div class="mb-2 text-center">
+            <div class="mb-8 text-center">
                 <p class="mt-1 text-[12px] text-slate-300/90 font-medium leading-relaxed">
                     This is a sample design. Images are placeholders and reviews are examples. This preview will not be published anywhere — it's only for you.
                 </p>
@@ -1624,16 +1714,29 @@
                 <div class="hidden lg:flex items-start gap-10 mt-10">
                     <div class="flex-1 min-w-0">
                         <div class="text-white/80 text-[11px] font-black uppercase tracking-[0.25em] mb-3">Desktop template preview</div>
-                        <div id="proposal-viewport" class="relative overflow-hidden bg-white rounded-3xl shadow-2xl border border-slate-200/50">
-                            <div id="proposal-scale">
-                                <iframe
-                                    id="proposal-iframe"
-                                    src="<%= preview_desktop_url %>"
-                                    title="Desktop Template Preview"
-                                    loading="lazy"
-                                    scrolling="no"
-                                    style="height: 1200px;"
-                                ></iframe>
+                        <div class="preview-blur-container">
+                            <div id="proposal-viewport" class="preview-blur relative overflow-hidden bg-white rounded-3xl shadow-2xl border border-slate-200/50">
+                                <div id="proposal-scale">
+                                    <iframe
+                                        id="proposal-iframe"
+                                        src="<%= preview_desktop_url %>"
+                                        title="Desktop Template Preview"
+                                        loading="lazy"
+                                        scrolling="no"
+                                        style="height: 1200px;"
+                                    ></iframe>
+                                </div>
+                            </div>
+                            <!-- Overlay with CTA -->
+                            <div class="preview-overlay rounded-3xl">
+                                <div class="text-center max-w-lg">
+                                    <h3 class="text-2xl md:text-3xl font-black text-white mb-8">
+                                        Want to see your custom homepage?
+                                    </h3>
+                                    <a href="/web-project-form.html" class="inline-flex items-center justify-center px-10 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-lg hover:bg-blue-700 shadow-2xl transition-all transform hover:scale-105 active:scale-95">
+                                        Generate my preview (free)
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1641,21 +1744,24 @@
                     <div class="w-[460px] flex-shrink-0 flex flex-col gap-6">
                         <div>
                             <div class="text-white/80 text-[11px] font-black uppercase tracking-[0.25em] mb-3 text-center">Mobile template preview</div>
-                            <div class="phone-frame">
-                                <div class="phone-notch"></div>
-                                <div class="phone-screen">
-                                    <iframe
-                                        src="<%= preview_mobile_url %>"
-                                        title="Mobile Template Preview"
-                                        loading="lazy"
-                                        scrolling="yes"
-                                    ></iframe>
+                            <div class="preview-blur-container">
+                                <div class="phone-frame preview-blur">
+                                    <div class="phone-notch"></div>
+                                    <div class="phone-screen">
+                                        <iframe
+                                            src="<%= preview_mobile_url %>"
+                                            title="Mobile Template Preview"
+                                            loading="lazy"
+                                            scrolling="yes"
+                                        ></iframe>
+                                    </div>
                                 </div>
+                                <!-- Mobile overlay is handled by desktop overlay on large screens -->
                             </div>
                         </div>
 
                         <!-- Desktop: stat cards next to mobile preview -->
-                        <div class="space-y-4">
+                        <div id="preview-benefits" class="space-y-4">
                             <div class="text-center">
                                 <h3 class="text-white text-lg font-black tracking-tight mb-1">Performance Improvements</h3>
                                 <p class="text-slate-300 font-medium text-xs leading-relaxed">
@@ -1689,21 +1795,34 @@
 
                 <!-- Mobile (< lg): show ONLY mobile template preview -->
                 <div class="lg:hidden flex justify-center">
-                    <div class="phone-frame">
-                        <div class="phone-notch"></div>
-                        <div class="phone-screen">
-                            <iframe
-                                src="<%= preview_mobile_url %>"
-                                title="Mobile Template Preview"
-                                loading="lazy"
-                                scrolling="yes"
-                            ></iframe>
+                    <div class="preview-blur-container">
+                        <div class="phone-frame preview-blur">
+                            <div class="phone-notch"></div>
+                            <div class="phone-screen">
+                                <iframe
+                                    src="<%= preview_mobile_url %>"
+                                    title="Mobile Template Preview"
+                                    loading="lazy"
+                                    scrolling="yes"
+                                ></iframe>
+                            </div>
+                        </div>
+                        <!-- Overlay with CTA for mobile -->
+                        <div class="preview-overlay rounded-[3rem]">
+                            <div class="text-center max-w-sm px-4">
+                                <h3 class="text-xl font-black text-white mb-6">
+                                    Want to see your custom homepage?
+                                </h3>
+                                <a href="/web-project-form.html" class="inline-flex items-center justify-center px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black text-base hover:bg-blue-700 shadow-2xl transition-all transform hover:scale-105 active:scale-95">
+                                    Generate my preview (free)
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Mobile chips row (appears right after mobile preview on mobile/tablet) -->
-                <div class="lg:hidden mt-12 max-w-md mx-auto pb-8">
+                <div id="preview-benefits" class="lg:hidden mt-12 max-w-md mx-auto pb-8">
                     <div class="text-center mb-8">
                         <h3 class="text-white text-2xl font-black tracking-tight mb-2">Performance Improvements</h3>
                         <p class="text-slate-300 font-medium text-sm leading-relaxed">
@@ -1738,8 +1857,8 @@
         </div>
     </section>
 
-    <!-- FORM SECTION -->
-    <section class="py-24 px-6" id="form">
+    <!-- FORM SECTION (HIDDEN - keeping for future use) -->
+    <section class="py-24 px-6" id="form" style="display: none;">
         <div class="max-w-7xl mx-auto flex flex-col-reverse lg:flex-row gap-8 items-start lg:items-stretch">
             
             <!-- LEFT: Original Form Card (unchanged) -->

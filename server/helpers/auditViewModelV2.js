@@ -185,8 +185,8 @@ function buildHero(job, a6_hero, llm_context) {
       'AI follow-up system so leads get a fast response',
       'A 7-day ship plan (priorities + scope)'
     ],
-    primary_cta_text: 'Show me the upgrade',
-    secondary_cta_text: 'View the Details',
+    primary_cta_text: 'Get free site preview in 48h',
+    secondary_cta_text: 'See a sample preview',
     company_name: company_name,
     brand_or_domain: display_name,
     niche: niche,
@@ -1017,12 +1017,23 @@ function buildHealthSnapshot(job, llm_context, ux_audit, seo_audit, seo_local, s
   const hasServiceArea = seo_audit?.local_signals?.service_area?.detected === true;
   
   const rawGeoScore = computeGeoSignalsScore(seo_audit);
-  const geoSignalsScore = applyRealityAdjustment(rawGeoScore, [
-    { condition: cityMentionsCount !== null && cityMentionsCount < 3, value: 18 },
-    { condition: cityMentionsCount === 0, value: 10 }, // Extra penalty for zero mentions
-    { condition: !hasLocalBusinessSchema, value: 12 },
-    { condition: !hasServiceArea, value: 10 }
-  ]);
+  // IMPORTANT: Don't change legacy (LLM) audits unexpectedly.
+  // For template-generated audits we avoid double-penalizing factor-based GEO scores
+  // (it can drive real-but-low audits to 0% and looks empty/untrustworthy).
+  // For legacy audits we keep the previous behavior to preserve existing production outputs.
+  const hasGeoFactors =
+    (seo_audit && seo_audit.geo_ready_score && Array.isArray(seo_audit.geo_ready_score.factors) && seo_audit.geo_ready_score.factors.length > 0);
+  const processingMethod = (job && job.processing_method) ? String(job.processing_method) : '';
+  const isTemplateAudit = processingMethod.startsWith('template_engine_');
+
+  const geoSignalsScore = (isTemplateAudit && hasGeoFactors)
+    ? applyRealityAdjustment(rawGeoScore, [])
+    : applyRealityAdjustment(rawGeoScore, [
+        { condition: cityMentionsCount !== null && cityMentionsCount < 3, value: 18 },
+        { condition: cityMentionsCount === 0, value: 10 }, // Extra penalty for zero mentions
+        { condition: !hasLocalBusinessSchema, value: 12 },
+        { condition: !hasServiceArea, value: 10 }
+      ]);
 
   // RECALIBRATED trust score mapping: strong=70, ok=50, weak=25
   const trustScore = clamp01To100(scoreFromLevel(scoreboard.trust.level, { strong: 70, ok: 50, weak: 25 }));
@@ -1934,7 +1945,7 @@ function buildFormConfig(job, public_page) {
       niche: job.niche,
       city: job.city
     },
-    cta_button_text: 'Request my 7-Day Build — No payment now',
+    cta_button_text: 'Get free site preview in 48h',
     disclaimer: 'No payment now. This form only reserves your request.<br>Your audit is free.',
     capacity_slots: capacity_slots,
     this_week_slots: this_week_slots,
