@@ -34,6 +34,9 @@ const USE_SCRAPER_V3 = process.env.USE_SCRAPER_V3 !== 'false' && process.env.USE
 // Homepage Builder (dynamic homepage proposals)
 const homepageBuilder = require('./homepageBuilder');
 
+// Template Audit Engine (replaces LLM assistants for fast, deterministic audits)
+const templateEngine = require('./templateAuditEngine');
+
 const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'you', 'our',
   'are', 'was', 'were', 'can', 'will', 'have', 'has', 'had', 'but', 'not',
@@ -2900,106 +2903,27 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
   // Using custom personal templates for natural, human-like communication
   let htmlTemplate = '';
   
+  // Using unified template for all variants
+  const senderEmail = 'jacob@maxandjacob.com';
+  
   switch(variant) {
     case 1:
-      // VARIANT 1: Personal introduction with brother mention
-      htmlTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Quick audit</title></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
-<div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">I'm Jacob — me and my brother Max run Max & Jacob.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We look at local business websites and do a quick audit for free. I checked yours today and wrote down what we'd improve to help you get more calls/leads (mostly mobile flow + clarity).</p>
-<p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;">Here's the audit:</p>
-<p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">If you tell me what matters most for you (more calls, more quote requests, faster site, Google visibility), I'll point you to the top fixes first.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob<br>Max & Jacob</p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
-</div>
-</body></html>`;
-      break;
-      
     case 2:
-      // VARIANT 2: Practical focus with free audit mention
+    case 3:
+    case 4:
+    case 5:
+      // NEW UNIFIED TEMPLATE: Clear value proposition with homepage preview offer
       htmlTemplate = `
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Free audit</title></head>
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
 <div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Jacob here. My brother Max and I build websites for local businesses.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We made a free audit for your website — just practical notes on what's working and what's likely costing you leads, especially on mobile.</p>
-<p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;">Audit preview:</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName} — Jacob here (Max & Jacob).</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We help local businesses get more calls from their website. I made a free audit for your site (safe preview):</p>
 <p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Take a look when you have a minute. If you want, I can also summarize the biggest 3 changes that would make the fastest difference.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob<br>Max & Jacob</p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
-</div>
-</body></html>`;
-      break;
-      
-    case 3:
-      // VARIANT 3: Short and specific with goal focus
-      htmlTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Website audit</title></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
-<div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">I'm Jacob (Max & Jacob). Max is my brother — it's just the two of us.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We've been reviewing local business websites and I made a free audit for yours. It's short and specific — what we'd change if this was our own business site.</p>
-<p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;">Here it is:</p>
-<p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">If you already know where you want more results (calls vs. form requests), tell me and I'll focus the recommendations around that.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob<br>Max & Jacob</p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
-</div>
-</body></html>`;
-      break;
-      
-    case 4:
-      // VARIANT 4: No hard pitch approach
-      htmlTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Site review</title></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
-<div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Jacob here — my brother Max and I help local businesses turn their websites into something that actually brings leads.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">I looked at your site and made a free audit with a few clear improvements (mobile experience, call-to-action clarity, trust, speed).</p>
-<p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;">Audit link:</p>
-<p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">No hard pitch — just sharing it because I think it can help.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob<br>Max & Jacob</p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
-</div>
-</body></html>`;
-      break;
-      
-    case 5:
-      // VARIANT 5: Focus on conversions and mobile
-      htmlTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Audit for your site</title></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
-<div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName},</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Jacob here. My brother Max and I were going through local business sites today and I put together a free audit for yours.</p>
-<p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;">Audit link:</p>
-<p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">It highlights a few small things that usually make a big difference in conversions, especially for mobile visitors.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">If you want, I can also send a quick "what to fix first" list based on your main goal.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob<br>Max & Jacob</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
+<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br>${senderEmail}</p>
 <p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
 <a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
 </div>
@@ -3562,7 +3486,41 @@ async function processAuditJob(jobId, options = {}) {
       status: 'evaluating'
     });
 
-    // LLM Assistants v1: Run full 6-assistant pipeline
+    // Choose between Template Engine (fast, deterministic) or LLM Assistants (legacy)
+    const useTemplateEngine = options.useTemplates !== false; // Default: true (use templates)
+    
+    if (useTemplateEngine) {
+      // NEW: Template-based audit generation (fast, no LLM cost)
+      await runTemplateAuditPipeline(jobId, options);
+      
+      // Template engine generates everything - just build mini_audit for backwards compat and we're done
+      job = await loadJob(jobId);
+      const assistant_outputs = job.assistant_outputs_json || {};
+      const miniAudit = {
+        top_3_leaks: assistant_outputs.ux_audit_json?.top_issues || [],
+        seven_day_plan: assistant_outputs.ux_audit_json?.quick_wins || [],
+        copy_suggestions: assistant_outputs.offer_copy_json?.offer_package?.deliverables?.map(d => d.item) || [],
+        concept_headline: assistant_outputs.offer_copy_json?.offer_package?.headline || '',
+        concept_subhead: assistant_outputs.offer_copy_json?.offer_package?.value_prop || '',
+        tone: 'evidence-based',
+        assistant_results: assistant_outputs
+      };
+      
+      await updateJob(jobId, {
+        mini_audit_json: JSON.stringify(miniAudit),
+        llm_config_snapshot: JSON.stringify({
+          pipeline_version: 'template_engine_v1',
+          settings: options.settings || {},
+          timestamp: new Date().toISOString()
+        }),
+        status: 'ready'
+      });
+      
+      await logStep(jobId, 'outputs', 'Template audit generation completed');
+      return; // EXIT EARLY - template engine already generated email & public page
+    }
+    
+    // LEGACY PATH: LLM Assistants v1 pipeline
     await runAssistantsPipeline(jobId, options);
     
     // Reload job to get assistant outputs
@@ -4484,6 +4442,147 @@ async function runSingleAssistant(jobId, assistant_key, payload_data = {}, optio
 }
 
 /**
+ * Run Template-based Audit Pipeline (replaces LLM Assistants)
+ * Fast, deterministic, and zero-cost alternative to LLM-based generation
+ * @param {number} jobId 
+ * @param {Object} options 
+ * @returns {Promise<void>}
+ */
+async function runTemplateAuditPipeline(jobId, options = {}) {
+  await logStep(jobId, 'template_pipeline', 'Starting Template Audit Engine (deterministic, no LLM)');
+
+  const job = await loadJob(jobId);
+  const evidencePack = job.evidence_pack_v2_json || {};
+  const siteSnapshot = job.site_snapshot_json || {};
+
+  // Enrich site snapshot with crawled page extracts for template scoring.
+  // The stored site_snapshot_json is intentionally lightweight (index metadata only),
+  // but the template engine needs body text + headings + jsonld extracts to produce
+  // credible SEO/GEO + opportunity outputs.
+  const crawledPages = await new Promise((resolve, reject) => {
+    getCrawledPagesByJobId(jobId, (err, pages) => {
+      if (err) return reject(err);
+      resolve(pages || []);
+    });
+  });
+
+  const toHeadingArray = (pageRow) => {
+    const out = [];
+    const push = (tag, text) => {
+      const t = (text || '').toString().trim();
+      if (!t) return;
+      out.push({ tag, text: t });
+    };
+    push('h1', pageRow && pageRow.h1_text);
+    const h2 = Array.isArray(pageRow && pageRow.h2_json) ? pageRow.h2_json : [];
+    const h3 = Array.isArray(pageRow && pageRow.h3_json) ? pageRow.h3_json : [];
+    const h6 = Array.isArray(pageRow && pageRow.h6_json) ? pageRow.h6_json : [];
+    h2.forEach((t) => push('h2', t && (t.text || t.title || t)));
+    h3.forEach((t) => push('h3', t && (t.text || t.title || t)));
+    h6.forEach((t) => push('h6', t && (t.text || t.title || t)));
+    return out;
+  };
+
+  const enrichedPagesIndex = crawledPages.map((p) => ({
+    url: p.url,
+    normalized_url: p.normalized_url,
+    page_type: p.page_type,
+    title: p.title || null,
+    word_count: p.word_count || 0,
+    // Content used for city/entity signals (keep it bounded)
+    body_text: (p.content_text || p.text_snippet || '').toString().slice(0, 20000),
+    headings: toHeadingArray(p),
+    // Structured data extract (normalized)
+    jsonld_extracted_json: p.jsonld_extracted_json || null
+  }));
+
+  const siteSnapshotForTemplates = {
+    ...(siteSnapshot && typeof siteSnapshot === 'object' ? siteSnapshot : {}),
+    pages_index: enrichedPagesIndex.length > 0 ? enrichedPagesIndex : (Array.isArray(siteSnapshot.pages_index) ? siteSnapshot.pages_index : [])
+  };
+
+  // If admin prefilled a non-city placeholder (e.g. "USA"), try to infer a better city signal
+  // from the homepage title/H1 so local SEO/GEO scoring isn't artificially zeroed out.
+  const isBadCity = (c) => {
+    const s = (c || '').toString().trim().toLowerCase();
+    return !s || s === 'usa' || s === 'us' || s === 'united states' || s === 'united states of america';
+  };
+  if (isBadCity(job.city)) {
+    const home = enrichedPagesIndex.find(p => p.page_type === 'home') || enrichedPagesIndex[0] || null;
+    const title = (home && home.title) ? String(home.title) : '';
+    const h1 = (home && Array.isArray(home.headings)) ? (home.headings.find(h => h.tag === 'h1') || {}).text : '';
+    const candidateSource = title || h1 || '';
+    // Very conservative: "Snohomish Plumbing ..." -> "Snohomish"
+    const m = candidateSource.match(/^([A-Za-z][A-Za-z\s]{2,24})\s+(plumbing|hvac|electric|roofing|remodel|painting|landscaping)\b/i);
+    const candidate = m ? m[1].trim() : null;
+    if (candidate && !/mcauliffe/i.test(candidate)) {
+      await updateJob(jobId, { city: candidate });
+      job.city = candidate;
+      await logStep(jobId, 'template_pipeline', `City inferred from page signals: ${candidate}`);
+    }
+  }
+  
+  // Ensure a stable public slug exists BEFORE generating email/public page
+  // This ensures the audit URL is available for email links
+  if (!job.public_page_slug) {
+    const slug = generatePublicSlug(job);
+    await updateJob(jobId, { public_page_slug: slug });
+    job.public_page_slug = slug;
+    await logStep(jobId, 'template_pipeline', `Public page slug generated: ${slug}`);
+  }
+  
+  try {
+    // Step 1: Generate llm_context (replaces A1: Evidence Normalizer)
+    await logStep(jobId, 'template_a1', 'Generating normalized context from evidence pack');
+    const llmContext = templateEngine.generateLlmContext(evidencePack, siteSnapshotForTemplates);
+    
+    // Step 2: Run UX analysis (replaces A2: UX Auditor)
+    await logStep(jobId, 'template_a2', 'Analyzing UX and conversion path');
+    const uxAudit = templateEngine.analyzeUxConversion(llmContext, job, siteSnapshotForTemplates);
+    
+    // Step 3: Run SEO analysis (replaces A3: SEO Auditor)
+    await logStep(jobId, 'template_a3', 'Analyzing Local SEO and GEO signals');
+    const seoAudit = templateEngine.analyzeLocalSeo(llmContext, siteSnapshotForTemplates, job);
+    
+    // Step 4: Generate offer (replaces A4: Offer Strategist)
+    await logStep(jobId, 'template_a4', 'Generating offer copy');
+    const offerCopy = templateEngine.generateOfferCopy(job, uxAudit, seoAudit);
+    
+    // Step 5: Generate email (replaces A5: Email Writer)
+    await logStep(jobId, 'template_a5', 'Generating outreach email');
+    const emailHtml = templateEngine.generateOutreachEmail(job, llmContext, uxAudit, seoAudit);
+    
+    // Step 6: Generate public page (replaces A6: Page Composer)
+    await logStep(jobId, 'template_a6', 'Generating public audit page data');
+    const publicPageData = templateEngine.generatePublicPageData(job, llmContext, uxAudit, seoAudit, offerCopy);
+    
+    // Save all outputs in the same format as LLM assistants (for backwards compatibility)
+    await updateJob(jobId, {
+      llm_context_json: JSON.stringify(llmContext),
+      assistant_outputs_json: JSON.stringify({
+        ux_audit_json: uxAudit,
+        local_seo_audit_json: seoAudit,
+        offer_copy_json: offerCopy,
+        llm_context_json: llmContext // Also store in assistant_outputs for easy access
+      }),
+      public_page_json: JSON.stringify(publicPageData),
+      email_html: emailHtml,
+      processing_method: 'template_engine_v1' // Flag to track which method was used
+    });
+
+    // Step 7: Generate Homepage Proposal (if preset configured)
+    // (Keeps parity with the legacy LLM pipeline so "Sample Homepage Preview" isn't blank.)
+    await generateHomepageProposal(jobId, job);
+    
+    await logStep(jobId, 'template_pipeline', 'Template Audit Engine completed successfully');
+    
+  } catch (error) {
+    await logStep(jobId, 'template_pipeline', `Template pipeline error: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Run full assistants pipeline (all 6 assistants in correct order)
  * 
  * Pipeline stages:
@@ -4887,6 +4986,7 @@ module.exports = {
   generateEvidencePackV2,
   runSingleAssistant,
   runAssistantsPipeline,
+  runTemplateAuditPipeline,
   regenerateWithNewBusinessName
 };
 

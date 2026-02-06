@@ -180,6 +180,14 @@ function initDatabase() {
           console.log('Column raw_dump_json added to audit_jobs');
         }
       });
+      // Add processing_method column (migration for template engine)
+      db.run('ALTER TABLE audit_jobs ADD COLUMN processing_method TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column processing_method already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column processing_method added to audit_jobs');
+        }
+      });
       // Add evidence_pack_json column (migration for existing databases)
       db.run('ALTER TABLE audit_jobs ADD COLUMN evidence_pack_json TEXT', (alterErr) => {
         if (alterErr && !alterErr.message.includes('duplicate column')) {
@@ -1163,6 +1171,7 @@ const AUDIT_JOB_UPDATE_FIELDS = new Set([
   'email_html',
   'public_page_slug',
   'public_page_json',
+  'processing_method',
   'error_message',
   'raw_dump_json',
   'evidence_pack_json',

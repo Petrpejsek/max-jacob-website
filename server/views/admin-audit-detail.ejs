@@ -2037,6 +2037,12 @@
                     <button class="btn" type="submit" onclick="setLoadingMessage('Running LLM evaluators...')">Run LLM Evaluators</button>
                     <button class="btn" type="submit" formaction="/admin/audits/<%= auditJob.id %>/regenerate-email" onclick="setLoadingMessage('Regenerating email...')">Regenerate Email</button>
                     <button class="btn" type="submit" formaction="/admin/audits/<%= auditJob.id %>/regenerate-public" onclick="setLoadingMessage('Regenerating public page...')">Regenerate Public Page</button>
+                    
+                    <% if (auditJob.processing_method === 'template_engine_v1') { %>
+                        <button class="btn btn-secondary" type="button" onclick="enhanceWithLlm(<%= auditJob.id %>)" style="background: #8b5cf6; border-color: #8b5cf6;">
+                            ✨ Enhance with AI
+                        </button>
+                    <% } %>
                 </div>
                 <% if (auditJob.llm_config_snapshot) { %>
                     <div class="field-group" style="margin-top: 12px;">
@@ -4115,6 +4121,42 @@ STYLE:
         })();
 
         // Regenerate email with updated unsubscribe links
+        async function enhanceWithLlm(auditId) {
+            if (!confirm('This will run LLM assistants to enhance the template-generated audit. This may take 1-2 minutes and will use API credits. Continue?')) {
+                return;
+            }
+            
+            // Show loading state
+            const loadingDiv = document.createElement('div');
+            loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 9999; text-align: center;';
+            loadingDiv.innerHTML = '<div style="font-size: 24px; margin-bottom: 10px;">✨</div><div style="font-weight: 600; margin-bottom: 5px;">Enhancing with AI...</div><div style="color: #666; font-size: 14px;">Running LLM assistants (1-2 minutes)</div>';
+            document.body.appendChild(loadingDiv);
+            
+            try {
+                const response = await fetch(`/admin/audits/${auditId}/enhance-with-llm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    loadingDiv.innerHTML = '<div style="font-size: 24px; margin-bottom: 10px;">✅</div><div style="font-weight: 600; color: #10b981;">Enhancement Started!</div><div style="color: #666; font-size: 14px; margin-top: 10px;">Page will reload in 3 seconds...</div>';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'Enhancement failed');
+                }
+            } catch (error) {
+                console.error('Enhancement error:', error);
+                loadingDiv.innerHTML = '<div style="font-size: 24px; margin-bottom: 10px;">❌</div><div style="font-weight: 600; color: #ef4444;">Error</div><div style="color: #666; font-size: 14px; margin-top: 10px;">' + error.message + '</div><div style="margin-top: 15px;"><button onclick="this.parentElement.parentElement.remove()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button></div>';
+            }
+        }
+        
         async function regenerateEmail() {
             const btn = document.getElementById('regenerateEmailBtn');
             if (!btn) return;

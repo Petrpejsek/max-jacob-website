@@ -235,6 +235,8 @@ const US_CITIES = [
 function normalizeUrl(urlString) {
   try {
     const url = new URL(urlString);
+    // Treat www/non-www as the same site for deduplication.
+    url.hostname = url.hostname.replace(/^www\./i, '');
     // Remove trailing slash, hash, and common query params
     url.hash = '';
     url.searchParams.delete('utm_source');
@@ -277,7 +279,13 @@ function calculatePriorityScore(url) {
  * Discover URLs from page
  */
 async function discoverUrlsFromPage(page, baseUrl) {
-  const discovered = await page.evaluate((baseOrigin) => {
+  const u = new URL(baseUrl);
+  const originA = u.origin;
+  const altHost = u.hostname.startsWith('www.') ? u.hostname.slice(4) : `www.${u.hostname}`;
+  const altOrigin = `${u.protocol}//${altHost}${u.port ? `:${u.port}` : ''}`;
+  const allowedOrigins = Array.from(new Set([originA, altOrigin]));
+
+  const discovered = await page.evaluate((origins) => {
     const links = Array.from(document.querySelectorAll('a[href]'));
     return links.map(link => {
       const href = link.getAttribute('href');
@@ -286,8 +294,8 @@ async function discoverUrlsFromPage(page, baseUrl) {
       try {
         // Handle relative URLs
         const absoluteUrl = new URL(href, window.location.href);
-        // Only include same-origin URLs
-        if (absoluteUrl.origin === baseOrigin) {
+        // Only include allowed origins (treat www/non-www as same)
+        if (origins.includes(absoluteUrl.origin)) {
           return absoluteUrl.href;
         }
       } catch (err) {
@@ -295,7 +303,7 @@ async function discoverUrlsFromPage(page, baseUrl) {
       }
       return null;
     }).filter(Boolean);
-  }, new URL(baseUrl).origin);
+  }, allowedOrigins);
 
   return discovered;
 }
@@ -305,8 +313,13 @@ async function discoverUrlsFromPage(page, baseUrl) {
  * This is intentionally lightweight: used to boost menu pages in the crawl queue.
  */
 async function extractNavSeedUrls(page, baseUrl) {
-  const baseOrigin = new URL(baseUrl).origin;
-  const urls = await page.evaluate((origin) => {
+  const u = new URL(baseUrl);
+  const originA = u.origin;
+  const altHost = u.hostname.startsWith('www.') ? u.hostname.slice(4) : `www.${u.hostname}`;
+  const altOrigin = `${u.protocol}//${altHost}${u.port ? `:${u.port}` : ''}`;
+  const allowedOrigins = Array.from(new Set([originA, altOrigin]));
+
+  const urls = await page.evaluate((origins) => {
     function toAbs(href) {
       try {
         return new URL(href, window.location.href).href;
@@ -329,7 +342,7 @@ async function extractNavSeedUrls(page, baseUrl) {
         if (!href) return false;
         const abs = toAbs(href);
         if (!abs) return false;
-        try { return new URL(abs).origin === origin; } catch { return false; }
+        try { return origins.includes(new URL(abs).origin); } catch { return false; }
       });
       if (internal.length > bestCount) {
         best = el;
@@ -344,10 +357,10 @@ async function extractNavSeedUrls(page, baseUrl) {
       .map(toAbs)
       .filter(Boolean)
       .filter((u) => {
-        try { return new URL(u).origin === origin; } catch { return false; }
+        try { return origins.includes(new URL(u).origin); } catch { return false; }
       })
       .slice(0, 80);
-  }, baseOrigin);
+  }, allowedOrigins);
 
   return urls || [];
 }

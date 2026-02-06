@@ -1,11 +1,27 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-// Render production fix: ensure Playwright uses browsers installed within the app (node_modules),
-// not an external cache path that may be missing at runtime.
-if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
-}
+// Playwright browser location
+// - In production, we want browsers bundled in the app (PLAYWRIGHT_BROWSERS_PATH=0)
+// - In Cursor/dev, Playwright may inherit an ephemeral cache path (e.g. "cursor-sandbox-cache"),
+//   which can disappear between runs and cause:
+//   "browserType.launch: Executable doesn't exist ..."
+// To keep local + prod stable, force bundled browsers unless the user explicitly set a different path.
+(() => {
+  const nodeEnv = String(process.env.NODE_ENV || '').toLowerCase();
+  const existing = process.env.PLAYWRIGHT_BROWSERS_PATH;
+
+  const looksEphemeral =
+    !existing ||
+    String(existing).includes('cursor-sandbox-cache') ||
+    String(existing).includes('/var/folders/') ||
+    String(existing).includes('/tmp/') ||
+    String(existing).includes('/private/var/');
+
+  if (nodeEnv === 'production' || looksEphemeral) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
+  }
+})();
 
 const express = require('express');
 const session = require('express-session');

@@ -1267,6 +1267,64 @@ router.post('/audits/:id/regenerate-business-name', requireAdmin, auditJobLimite
   }
 });
 
+// POST /admin/audits/:id/enhance-with-llm - Run LLM enhancement on template-generated audit
+router.post('/audits/:id/enhance-with-llm', requireAdmin, auditJobLimiter, async (req, res) => {
+  const id = req.params.id;
+  
+  try {
+    console.log(`[LLM ENHANCEMENT] Starting for audit ID ${id}`);
+    
+    // Load job to check if it was template-generated
+    getAuditJobById(id, async (err, job) => {
+      if (err || !job) {
+        console.error('[LLM ENHANCEMENT] Job not found:', err);
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Audit job not found' 
+        });
+      }
+      
+      // Run LLM assistants pipeline to enhance the template outputs
+      // This will overwrite the template outputs with LLM-enhanced versions
+      auditQueue.enqueue(id, async () => {
+        await auditPipeline.runAssistantsPipeline(id, {
+          useTemplates: false // Explicitly use LLM assistants
+        });
+        
+        // Update processing_method to indicate LLM enhancement was applied
+        await new Promise((resolve, reject) => {
+          updateAuditJob(id, { 
+            processing_method: 'template_engine_v1_llm_enhanced' 
+          }, (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+      });
+      
+      console.log(`[LLM ENHANCEMENT] Queued for audit ID ${id}`);
+      
+      if ((req.headers.accept || '').includes('application/json')) {
+        return res.status(202).json({ 
+          success: true, 
+          message: 'LLM enhancement started',
+          jobId: Number(id)
+        });
+      }
+      return res.redirect(`/admin/audits/${id}`);
+    });
+  } catch (error) {
+    console.error('[LLM ENHANCEMENT] Error:', error);
+    if ((req.headers.accept || '').includes('application/json')) {
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+    return res.redirect(`/admin/audits/${id}`);
+  }
+});
+
 // POST /admin/audits/:id/regenerate-public
 router.post('/audits/:id/regenerate-public', requireAdmin, async (req, res) => {
   const id = req.params.id;
