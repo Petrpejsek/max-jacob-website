@@ -2925,7 +2925,7 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
 <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
 <p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br>${senderEmail}</p>
 <p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
+<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
 </div>
 </body></html>`;
       break;

@@ -346,7 +346,7 @@ function generateOutreachEmail(job, llmContext, topIssues) {
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
   
   <p style="font-size: 12px; color: #94a3b8; text-align: center;">
-    Max & Jacob • Building trust engines for elite local service providers
+    Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131
   </p>
   
 </body>

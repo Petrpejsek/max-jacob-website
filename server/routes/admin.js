@@ -128,7 +128,7 @@ function generatePlainTextFromHtml(html, recipientEmail) {
   if (recipientEmail) {
     const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
     const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
-    text += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · maxandjacob.com`;
+    text += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
   }
   
   return text;
@@ -154,7 +154,7 @@ function addUnsubscribeFooterToHtml(html, recipientEmail) {
         <a href="${unsubscribeUrl}" style="color: #6a82fb; text-decoration: underline;">Unsubscribe</a>
       </p>
       <p style="font-size: 12px; color: #999; margin: 0;">
-        Max &amp; Jacob · <a href="https://maxandjacob.com" style="color: #6a82fb; text-decoration: none;">maxandjacob.com</a>
+        Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color: #6a82fb; text-decoration: none;">maxandjacob.com</a>
       </p>
     </div>`;
   
@@ -982,7 +982,7 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
       // If plain text is provided but doesn't have unsubscribe, add it
       const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
       const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipient)}`;
-      textBody += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · maxandjacob.com`;
+      textBody += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
     }
 
     // Send email via Resend (with BOTH html and text for best deliverability)

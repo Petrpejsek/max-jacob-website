@@ -34,9 +34,10 @@ async function sendEmail({ to, subject, html, text }) {
       headers: {
         // List-Unsubscribe header (RFC 8058) - enables one-click unsubscribe in Gmail/Outlook
         'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:jacob@maxandjacob.com?subject=Unsubscribe>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        // Optional: Precedence header (helps avoid auto-responders)
-        'Precedence': 'bulk'
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+        // NOTE: Precedence: bulk REMOVED — it tells Gmail/Outlook "this is bulk mail"
+        // which causes inbox→spam demotion even with 10/10 mail-tester score.
+        // The header only suppresses auto-replies but fatally hurts deliverability.
       },
       tags: [
         { name: 'category', value: 'audit-outreach' }

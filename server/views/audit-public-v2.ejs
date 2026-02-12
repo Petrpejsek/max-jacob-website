@@ -519,13 +519,13 @@
             // Return single color based on score zone
             // GREEN MUST BE RARE (90+). Most sites should be amber/red.
             if (score >= 90) return '#10b981'; // Green (top)
-            if (score >= 65) return '#f59e0b'; // Amber (average-good)
+            if (score >= 50) return '#f59e0b'; // Amber (average-good)
             return '#ef4444'; // Red
         }
         
         function getTextColor(score) {
             if (score >= 90) return 'text-emerald-500';
-            if (score >= 65) return 'text-amber-500';
+            if (score >= 50) return 'text-amber-500';
             return 'text-red-500';
         }
     %>
@@ -2150,6 +2150,7 @@
             <div class="text-center md:text-left">
                 <div class="font-black text-4xl tracking-tighter text-blue-600 mb-4">Max & Jacob</div>
                 <p class="text-md text-slate-500 font-bold max-w-xs">Building trust engines for elite local service providers.</p>
+                <p class="text-xs text-slate-400 mt-2">1221 Brickell Ave, Suite 900, Miami, FL 33131</p>
             </div>
             <div class="text-center md:text-right">
                 <p class="text-xs text-slate-400 font-black uppercase tracking-[0.3em] mb-4 italic">No guarantees, just clarity.</p>
