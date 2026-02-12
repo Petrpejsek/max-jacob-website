@@ -137,7 +137,7 @@ app.all('/health', (req, res) => {
       env: process.env.NODE_ENV || 'development',
       timestamp: new Date().toISOString(),
       server: 'express',
-      deploy_version: 'email-fix-v3-no-headers'
+      deploy_version: 'email-fix-v4-no-spam-phrases'
     });
   });
 });

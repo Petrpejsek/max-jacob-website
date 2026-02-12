@@ -306,7 +306,7 @@ function generateOutreachEmail(job, llmContext, topIssues) {
 <p><a href="${auditUrl}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
 <p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
-<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;">Max & Jacob · ${addressLine} · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="https://maxandjacob.com/unsubscribe" style="color:#999;">Unsubscribe</a> · Max & Jacob · ${addressLine} · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
 </div>`;
 }
 

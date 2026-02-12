@@ -124,11 +124,11 @@ function generatePlainTextFromHtml(html, recipientEmail) {
   text = text.replace(/  +/g, ' '); // Multiple spaces to single
   text = text.trim();
   
-  // Add unsubscribe link at the end (REQUIRED for deliverability!)
+  // Add unsubscribe footer (NO "You received this email because..." — that's a top spam trigger)
   if (recipientEmail) {
     const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
     const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
-    text += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
+    text += `\n\n—\nUnsubscribe: ${unsubscribeUrl}\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
   }
   
   return text;
@@ -146,17 +146,11 @@ function addUnsubscribeFooterToHtml(html, recipientEmail) {
     return html; // Already has unsubscribe, don't duplicate
   }
   
-  // Footer HTML (Gmail-friendly, simple design)
+  // Footer HTML - personal style, NO "You received this email because..." (classic spam phrase)
   const footer = `
-    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: Arial, sans-serif;">
-      <p style="font-size: 12px; line-height: 1.5; color: #999; margin: 0 0 8px 0;">
-        You received this email because we analyzed your website and wanted to share a complimentary audit.
-        <a href="${unsubscribeUrl}" style="color: #6a82fb; text-decoration: underline;">Unsubscribe</a>
-      </p>
-      <p style="font-size: 12px; color: #999; margin: 0;">
-        Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color: #6a82fb; text-decoration: none;">maxandjacob.com</a>
-      </p>
-    </div>`;
+    <p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;font-family:Arial,sans-serif;">
+      <a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a> · Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a>
+    </p>`;
   
   // Try to insert before </body> or </html>, or just append
   if (html.includes('</body>')) {
@@ -982,7 +976,7 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
       // If plain text is provided but doesn't have unsubscribe, add it
       const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
       const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipient)}`;
-      textBody += `\n\n---\nYou received this email because we analyzed your website. If you'd like to stop receiving emails from us, unsubscribe here: ${unsubscribeUrl}\n\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
+      textBody += `\n\n—\nUnsubscribe: ${unsubscribeUrl}\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;
     }
 
     // Send email via Resend (with BOTH html and text for best deliverability)
