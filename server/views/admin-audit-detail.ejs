@@ -925,24 +925,20 @@
                     // Email subject
                     const mjEmailSubject = `${mjBusinessName} x Max & Jacob`;
                     
-                    // Plaintext version (for copying into tools that don't support HTML)
-                    const mjDefaultOutreachEmailPlain = `Hi ${mjBusinessName} — Jacob here (Max & Jacob).\n\nWe're a small team of devs. We turn local sites into traffic + lead magnets.\n\nI made a quick audit for ${mjBusinessName} (safe preview, no login):\n${mjAuditLink}\n\nIf it looks useful, we can rebuild it in 7 days — mobile-first, higher conversions, and AI/SEO-ready, more traffic and more leads.`; 
+                    // Fallback plaintext (only used when pipeline email_html is missing)
+                    const mjFallbackPlain = `Hi ${mjBusinessName} — Jacob here (Max & Jacob).\n\nWe help local businesses get more calls from their website. I made a free audit for your site (safe preview):\n${mjAuditLink}\n\nNext step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.\n\nJacob Liesner\nMax & Jacob\njacob@maxandjacob.com`;
                     
-                    // HTML version (for email clients - clickable link)
-                    const mjDefaultOutreachEmailHtml = `<p>Hi ${mjBusinessName} — Jacob here (Max & Jacob).</p>
-<p>We're a small team of devs. We turn local sites into traffic + lead magnets.</p>
-<p>I made a quick audit for ${mjBusinessName} (safe preview, no login):<br><strong>${mjAuditLinkHtml}</strong></p>
-<p>If it looks useful, we can rebuild it in 7 days — mobile-first, higher conversions, and AI/SEO-ready, more traffic and more leads.</p>
-<br>
-<p style="margin-top: 20px;">
-<strong>Jacob Liesner</strong><br>
-<a href="mailto:jacob@maxandjacob.com" style="color: #4F46E5; text-decoration: none;">jacob@maxandjacob.com</a>
-</p>
-<p>
-<a href="https://maxandjacob.com" style="text-decoration: none;">
-<span style="font-family: 'Inter', Arial, sans-serif; font-size: 24px; font-weight: 700; color: #4F46E5; letter-spacing: -0.02em;">Max&Jacob</span>
-</a>
-</p>`;
+                    // Fallback HTML (only used when pipeline email_html is missing)
+                    const mjFallbackHtml = `<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${mjBusinessName} — Jacob here (Max & Jacob).</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We help local businesses get more calls from their website. I made a free audit for your site (safe preview):</p>
+<p style="margin:0 0 20px 0;">${mjAuditLinkHtml}</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
+<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#4F46E5;text-decoration:none;">jacob@maxandjacob.com</a></p>
+<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>`;
+
+                    // USE PIPELINE EMAIL if available, otherwise fallback
+                    const mjDefaultOutreachEmailHtml = (auditJob.email_html && auditJob.email_html.trim()) ? auditJob.email_html : mjFallbackHtml;
+                    const mjDefaultOutreachEmailPlain = mjFallbackPlain;
                 %>
 
                 <div id="outreachEmailContainer" style="display: none;">
