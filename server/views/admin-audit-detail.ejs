@@ -936,8 +936,13 @@
 <p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#4F46E5;text-decoration:none;">jacob@maxandjacob.com</a></p>
 <p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>`;
 
-                    // USE PIPELINE EMAIL if available, otherwise fallback
-                    const mjDefaultOutreachEmailHtml = (auditJob.email_html && auditJob.email_html.trim()) ? auditJob.email_html : mjFallbackHtml;
+                    // Prefer pipeline email ONLY if it matches our intended "human" 48h preview template.
+                    // Some older pipeline versions stored a long "Quick diagnosis / Top issues" template which:
+                    // - should NOT be used for outreach
+                    // - can also break the admin page when rendered inline
+                    const mjCandidateEmailHtml = (auditJob.email_html && auditJob.email_html.trim()) ? auditJob.email_html : '';
+                    const mjLooksLikeHuman48hTemplate = /48\s*(hours|h)\b/i.test(mjCandidateEmailHtml) || /homepage preview/i.test(mjCandidateEmailHtml);
+                    const mjDefaultOutreachEmailHtml = (mjCandidateEmailHtml && mjLooksLikeHuman48hTemplate) ? mjCandidateEmailHtml : mjFallbackHtml;
                     const mjDefaultOutreachEmailPlain = mjFallbackPlain;
                 %>
 
@@ -1016,8 +1021,15 @@
                                 ⚠️ No customer email found in scrape data
                             </div>
                         <% } %>
-                        <div id="outreachEmailHtmlPreview" style="background: #fff; color: #333; padding: 16px; border-radius: 6px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">
-                            <%- mjDefaultOutreachEmailHtml %>
+                        <div id="outreachEmailHtmlPreview" style="background: #fff; color: #333; padding: 0; border-radius: 6px; overflow: hidden;">
+                            <!-- Render email HTML inside an iframe so it can never break this admin page -->
+                            <iframe
+                                id="outreachEmailHtmlIframe"
+                                title="HTML Email Preview"
+                                style="width: 100%; height: 560px; border: 0; display: block; background: #fff;"
+                                sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                referrerpolicy="no-referrer"
+                            ></iframe>
                         </div>
                         <textarea id="outreachEmailHtml" style="display:none;"><%- mjDefaultOutreachEmailHtml %></textarea>
                     </div>
@@ -3780,9 +3792,19 @@ STYLE:
         (function outreachEmailModule() {
             function $(id) { return document.getElementById(id); }
 
+            function syncHtmlPreview() {
+                const htmlTa = $('outreachEmailHtml');
+                const iframe = $('outreachEmailHtmlIframe');
+                if (!htmlTa || !iframe) return;
+                const html = String(htmlTa.value || '').trim();
+                // srcdoc isolates full HTML documents (<!doctype><html>...) without affecting the admin DOM.
+                iframe.srcdoc = html || '<div style="padding:16px;font-family:Arial,sans-serif;color:#333;">(No HTML email)</div>';
+            }
+
             function show() {
                 const container = $('outreachEmailContainer');
                 if (container) container.style.display = 'block';
+                syncHtmlPreview();
             }
 
             function regenerate() {

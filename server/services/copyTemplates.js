@@ -286,69 +286,35 @@ function generateSevenDayPlan(job, llmContext, topIssues) {
  * @returns {String} HTML email content
  */
 function generateOutreachEmail(job, llmContext, topIssues) {
+  // NOTE: This email is intentionally written as a short, human outreach note.
+  // Do NOT include audit issue lists in the email body (hurts deliverability and UX).
+  // Also keep the audit link as a simple blue "Audit - {Company}" anchor.
   const companyName = llmContext.company_profile?.name || job.company_name || 'your business';
-  const niche = job.niche || 'service';
-  const city = job.city || 'your area';
-  const inputUrl = job.input_url || '';
-  
-  // Get top 3 issues for email
-  const top3 = topIssues.slice(0, 3);
-  const issuesList = top3.map((issue, idx) => {
-    const title = issue.title || issue.problem || 'Issue detected';
-    const why = issue.why_it_matters || 'Impacts conversion and lead generation';
-    return `<li><strong>${idx + 1}. ${title}</strong><br>${why}</li>`;
-  }).join('\n');
-  
   const publicSlug = job.public_page_slug || '';
-  const auditUrl = publicSlug ? `https://maxandjacob.com/${publicSlug}` : inputUrl;
-  
+  const auditUrl = publicSlug ? `https://maxandjacob.com/${publicSlug}?v=2` : (job.input_url || 'https://maxandjacob.com');
+
+  const auditLinkLabel = `Audit - ${companyName}`;
+  const addressLine = '1221 Brickell Ave, Suite 900, Miami, FL 33131';
+
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Website Audit: ${companyName}</title>
+  <title>Audit</title>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  
-  <h1 style="color: #2563eb; font-size: 24px; margin-bottom: 10px;">
-    Quick diagnosis for ${companyName}
-  </h1>
-  
-  <p style="font-size: 16px; color: #64748b; margin-bottom: 20px;">
-    We analyzed your website for ${niche} services in ${city}.
-  </p>
-  
-  <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-    <h2 style="font-size: 18px; margin-top: 0; color: #0f172a;">
-      🚨 Top Issues Found:
-    </h2>
-    <ol style="margin: 0; padding-left: 20px;">
-      ${issuesList}
-    </ol>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
+  <div style="max-width:600px;margin:40px auto;padding:0 20px;">
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName} — Jacob here (Max &amp; Jacob).</p>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We help local businesses get more calls from their website. I made a free audit for your site (safe preview):</p>
+    <p style="margin:0 0 20px 0;">
+      <a href="${auditUrl}" style="color:#2563eb;font-size:16px;font-weight:700;text-decoration:underline;">${auditLinkLabel}</a>
+    </p>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
+    <p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;text-decoration:none;">jacob@maxandjacob.com</a></p>
+    <p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#94a3b8;">Max &amp; Jacob · ${addressLine} · <a href="https://maxandjacob.com" style="color:#2563eb;text-decoration:none;">maxandjacob.com</a></p>
   </div>
-  
-  <p style="font-size: 16px; margin-bottom: 20px;">
-    <strong>Good news:</strong> These are fixable in 7 days with our lead magnet rebuild.
-  </p>
-  
-  <div style="text-align: center; margin: 30px 0;">
-    <a href="${auditUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-      View Full Audit →
-    </a>
-  </div>
-  
-  <p style="font-size: 14px; color: #64748b; margin-top: 30px;">
-    This audit is specific to ${companyName}. We analyzed ${niche} visibility in ${city} and found exactly what needs fixing.
-  </p>
-  
-  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-  
-  <p style="font-size: 12px; color: #94a3b8; text-align: center;">
-    Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131
-  </p>
-  
 </body>
 </html>
 `;
