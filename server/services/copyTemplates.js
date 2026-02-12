@@ -306,12 +306,12 @@ function generateOutreachEmail(job, llmContext, topIssues) {
 </head>
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
   <div style="max-width:600px;margin:40px auto;padding:0 20px;">
-    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName} — Jacob here (Max &amp; Jacob).</p>
-    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We help local businesses get more calls from their website. I made a free audit for your site (safe preview):</p>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName} — Jacob here from Max &amp; Jacob.</p>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">I created a quick free audit of your website. No login required, just a safe preview:</p>
     <p style="margin:0 0 20px 0;">
-      <a href="${auditUrl}" style="color:#2563eb;font-size:16px;font-weight:700;text-decoration:underline;">${auditLinkLabel}</a>
+      <a href="${auditUrl}" target="_blank" rel="noopener" style="color:#2563eb;font-size:16px;font-weight:700;text-decoration:underline;">${auditLinkLabel}</a>
     </p>
-    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
+    <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">If it's useful, we can also design a new homepage concept for you in 48 hours — completely free. Just fill out a short brief. No commitment, no sales calls.</p>
     <p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;text-decoration:none;">jacob@maxandjacob.com</a></p>
     <p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#94a3b8;">Max &amp; Jacob · ${addressLine} · <a href="https://maxandjacob.com" style="color:#2563eb;text-decoration:none;">maxandjacob.com</a></p>
   </div>
