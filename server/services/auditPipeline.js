@@ -2912,22 +2912,18 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
     case 3:
     case 4:
     case 5:
-      // NEW UNIFIED TEMPLATE: Clear value proposition with homepage preview offer
-      htmlTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Free audit</title></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;background:#fff;color:#111;">
-<div style="max-width:600px;margin:40px auto;padding:0 20px;">
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${companyName} — Jacob here (Max & Jacob).</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">We help local businesses get more calls from their website. I made a free audit for your site (safe preview):</p>
-<p style="margin:0 0 20px 0;"><a href="${auditUrl}" style="color:#4F46E5;font-size:16px;text-decoration:underline;">${auditUrl}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Next step (optional): we'll design a personalized homepage preview for you in 48 hours (free). Fill the brief and we'll send it over — no calls, no pressure.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br>${senderEmail}</p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:12px;color:#999;">
-<a href="${unsubscribeUrl}" style="color:#6366f1;text-decoration:underline;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#6366f1;text-decoration:none;">maxandjacob.com</a></p>
-</div>
-</body></html>`;
+      // PERSONAL EMAIL TEMPLATE - looks like a real human-written email
+      // NO <!DOCTYPE>, <html>, <head>, <body> wrappers (Gmail fingerprints those as mass template)
+      const auditLinkLabel = companyName ? `Audit - ${companyName}` : 'Your free audit';
+      htmlTemplate = `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
+<p>Hi ${companyName},</p>
+<p>Jacob here from Max & Jacob.</p>
+<p>I put together a quick free audit of your website — no login needed, totally safe to open:</p>
+<p><a href="${auditUrl}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
+<p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
+<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+</div>`;
       break;
       
     default:

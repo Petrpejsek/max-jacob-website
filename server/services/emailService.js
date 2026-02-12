@@ -19,26 +19,22 @@ async function sendEmail({ to, subject, html, text }) {
       throw new Error('RESEND_API_KEY not configured in environment variables');
     }
 
-    // Build unsubscribe URL
-    const unsubscribeUrl = `https://maxandjacob.com/unsubscribe?email=${encodeURIComponent(to)}`;
-
     // Send email via Resend
     // NOTE: Resend Node SDK returns { data, error } (v4+).
+    //
+    // DELIVERABILITY NOTES (Feb 2026):
+    // - NO Precedence:bulk (tells Gmail "this is bulk" → spam)
+    // - NO List-Unsubscribe headers (signals "marketing email" for cold outreach;
+    //   unsubscribe link in email body is sufficient for CAN-SPAM compliance)
+    // - FROM name is personal "Jacob Liesner" (not "Jacob from Max & Jacob"
+    //   which mimics SaaS/marketing tool patterns Gmail recognizes)
     const result = await resend.emails.send({
-      from: 'Jacob from Max & Jacob <jacob@maxandjacob.com>',
+      from: 'Jacob Liesner <jacob@maxandjacob.com>',
       to,
       subject,
       html: html || undefined,
       text: text || undefined,
       reply_to: 'jacob@maxandjacob.com',
-      headers: {
-        // List-Unsubscribe header (RFC 8058) - enables one-click unsubscribe in Gmail/Outlook
-        'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:jacob@maxandjacob.com?subject=Unsubscribe>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
-        // NOTE: Precedence: bulk REMOVED — it tells Gmail/Outlook "this is bulk mail"
-        // which causes inbox→spam demotion even with 10/10 mail-tester score.
-        // The header only suppresses auto-replies but fatally hurts deliverability.
-      },
       tags: [
         { name: 'category', value: 'audit-outreach' }
       ]

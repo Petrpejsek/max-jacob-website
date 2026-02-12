@@ -926,15 +926,19 @@
                     const mjEmailSubject = `${mjBusinessName} x Max & Jacob`;
                     
                     // Fallback plaintext (only used when pipeline email_html is missing)
-                    const mjFallbackPlain = `Hi ${mjBusinessName} — Jacob here from Max & Jacob.\n\nI created a quick free audit of your website. No login required, just a safe preview:\n${mjAuditLink}\n\nIf it's useful, we can also design a new homepage concept for you in 48 hours — completely free. Just fill out a short brief. No commitment, no sales calls.\n\nJacob Liesner\nMax & Jacob\njacob@maxandjacob.com`;
+                    const mjFallbackPlain = `Hi ${mjBusinessName},\n\nJacob here from Max & Jacob.\n\nI put together a quick free audit of your website — no login needed, totally safe to open:\n${mjAuditLink}\n\nIf you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.\n\nBest,\nJacob Liesner\nMax & Jacob\njacob@maxandjacob.com`;
                     
                     // Fallback HTML (only used when pipeline email_html is missing)
-                    const mjFallbackHtml = `<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hi ${mjBusinessName} — Jacob here from Max & Jacob.</p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">I created a quick free audit of your website. No login required, just a safe preview:</p>
-<p style="margin:0 0 20px 0;"><a href="${mjAuditLink}" target="_blank" rel="noopener" style="color:#2563eb;font-size:16px;font-weight:700;text-decoration:underline;">Audit - ${mjBusinessName}</a></p>
-<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">If it's useful, we can also design a new homepage concept for you in 48 hours — completely free. Just fill out a short brief. No commitment, no sales calls.</p>
-<p style="margin:24px 0 0 0;font-size:16px;line-height:1.6;">Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;text-decoration:none;">jacob@maxandjacob.com</a></p>
-<p style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#94a3b8;">Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#2563eb;text-decoration:none;">maxandjacob.com</a></p>`;
+                    // NOTE: No <!DOCTYPE>/<html>/<head>/<body> wrappers - those fingerprint as mass template
+                    const mjFallbackHtml = `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
+<p>Hi ${mjBusinessName},</p>
+<p>Jacob here from Max & Jacob.</p>
+<p>I put together a quick free audit of your website — no login needed, totally safe to open:</p>
+<p><a href="${mjAuditLink}" style="color:#2563eb;font-weight:bold;">Audit - ${mjBusinessName}</a></p>
+<p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
+<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;">Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+</div>`;
 
                     // Prefer pipeline email ONLY if it matches our intended "human" 48h preview template.
                     // Some older pipeline versions stored a long "Quick diagnosis / Top issues" template which:
