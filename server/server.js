@@ -480,14 +480,17 @@ app.use((req, res) => {
 
 // Start server
 // CRITICAL: On Render, server must listen on 0.0.0.0, not just localhost!
-app.listen(PORT, '0.0.0.0', () => {
+// In local dev (macOS), 0.0.0.0 can cause EPERM, so use 127.0.0.1
+const listenHost = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
+
+app.listen(PORT, listenHost, () => {
   console.log(`\n=== SERVER STARTED SUCCESSFULLY ===`);
-  console.log(`Server listening on 0.0.0.0:${PORT}`);
-  console.log(`Health: http://0.0.0.0:${PORT}/health`);
-  console.log(`Diagnostic: http://0.0.0.0:${PORT}/diagnostic`);
-  console.log(`API Test: http://0.0.0.0:${PORT}/api/test-direct`);
-  console.log(`API Routes: http://0.0.0.0:${PORT}/api/test`);
-  console.log(`Admin: http://0.0.0.0:${PORT}/admin`);
+  console.log(`Server listening on ${listenHost}:${PORT}`);
+  console.log(`Health: http://localhost:${PORT}/health`);
+  console.log(`Diagnostic: http://localhost:${PORT}/diagnostic`);
+  console.log(`API Test: http://localhost:${PORT}/api/test-direct`);
+  console.log(`API Routes: http://localhost:${PORT}/api/test`);
+  console.log(`Admin: http://localhost:${PORT}/admin`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`PORT: ${PORT}`);
   console.log(`Repo root: ${repoRoot}`);

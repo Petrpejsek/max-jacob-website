@@ -82,7 +82,7 @@ start_server() {
     fi
     
     # Start server in background
-    nohup env PLAYWRIGHT_BROWSERS_PATH=0 node "$SERVER_FILE" > "$LOG_FILE" 2>&1 &
+    PORT=$PORT node "$SERVER_FILE" > "$LOG_FILE" 2>&1 & disown
     SERVER_PID=$!
     
     # Save PID
