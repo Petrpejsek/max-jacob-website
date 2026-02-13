@@ -64,9 +64,25 @@ start_server() {
     
     print_info "Starting server..."
     cd "$PROJECT_DIR"
+
+    # Playwright: force browsers to live inside node_modules (stable across restarts).
+    # Cursor/dev shells sometimes inherit an ephemeral PLAYWRIGHT_BROWSERS_PATH which breaks audits with:
+    # "browserType.launch: Executable doesn't exist ..."
+    export PLAYWRIGHT_BROWSERS_PATH=0
+
+    # Ensure Chromium is installed (only when missing)
+    node -e "const fs=require('fs');const {chromium}=require('playwright');const p=chromium.executablePath();process.exit(fs.existsSync(p)?0:1)" >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        print_warning "Playwright Chromium missing; installing (one-time)..."
+        npx playwright install chromium || {
+            print_error "Playwright install failed. Try: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium"
+            return 1
+        }
+        print_success "Playwright Chromium installed"
+    fi
     
     # Start server in background
-    nohup node "$SERVER_FILE" > "$LOG_FILE" 2>&1 &
+    nohup env PLAYWRIGHT_BROWSERS_PATH=0 node "$SERVER_FILE" > "$LOG_FILE" 2>&1 &
     SERVER_PID=$!
     
     # Save PID
@@ -229,11 +245,14 @@ show_help() {
     echo "  status        Show server status"
     echo "  logs          Show server logs"
     echo "  logs -f       Follow server logs in real-time"
+    echo "  sync          Sync local DB from production (single source of truth)"
+    echo "  sync --force  Sync without confirmation prompt"
     echo "  clean         Clean up logs and old files"
     echo "  help          Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./dev.sh start"
+    echo "  ./dev.sh sync          # Download production database"
     echo "  ./dev.sh restart"
     echo "  ./dev.sh logs -f"
     echo ""
@@ -255,6 +274,10 @@ case "${1:-help}" in
         ;;
     logs)
         show_logs "$2"
+        ;;
+    sync)
+        # Pass through any extra args (--force, --dry-run)
+        "$PROJECT_DIR/sync-db.sh" $2 $3
         ;;
     clean)
         clean

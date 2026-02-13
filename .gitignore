@@ -19,6 +19,8 @@ mj-dev.pid
 *.bak
 *.bak2
 *.bak3
+.db-backups/
+.db-sync-temp.db
 
 # Generated screenshots / crawls (should live on persistent disk in prod)
 public/preaudit_screenshots/

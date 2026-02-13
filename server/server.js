@@ -219,6 +219,87 @@ app.post('/api/track-page-view', express.json(), (req, res) => {
   });
 });
 
+// ========================================
+// DATABASE BACKUP ENDPOINT (for sync-db.sh)
+// ========================================
+// Allows downloading a safe, consistent copy of the production database.
+// Auth: Bearer token (ADMIN_PASSWORD) or active admin session.
+// This endpoint is used by sync-db.sh to keep local dev in sync with production.
+app.get('/api/db-backup', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  const isTokenAuth = token && adminPassword && token === adminPassword;
+  const isSessionAuth = req.session && req.session.isAdmin;
+
+  if (!isTokenAuth && !isSessionAuth) {
+    console.log('[DB-BACKUP] Unauthorized access attempt from', req.ip);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  console.log('[DB-BACKUP] Authorized backup request from', req.ip);
+
+  const { db: dbInstance } = require('./db');
+  const os = require('os');
+  const tmpPath = path.join(os.tmpdir(), `maxjacob-backup-${Date.now()}.db`);
+
+  function sendBackupFile(filePath) {
+    const stat = fs.statSync(filePath);
+    console.log('[DB-BACKUP] Sending backup file:', stat.size, 'bytes');
+
+    res.set({
+      'Content-Type': 'application/x-sqlite3',
+      'Content-Disposition': 'attachment; filename="data.db"',
+      'Content-Length': stat.size,
+      'X-Backup-Timestamp': new Date().toISOString(),
+      'X-Backup-Size': stat.size
+    });
+
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    stream.on('end', () => {
+      try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+      console.log('[DB-BACKUP] Backup download completed');
+    });
+    stream.on('error', (streamErr) => {
+      console.error('[DB-BACKUP] Stream error:', streamErr.message);
+      try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Stream failed' });
+      }
+    });
+  }
+
+  // Strategy 1: Use VACUUM INTO for a safe, consistent backup (SQLite 3.27.0+)
+  // This creates a complete, standalone copy without WAL/SHM dependencies.
+  const safeTmpPath = tmpPath.replace(/'/g, "''");
+  dbInstance.run(`VACUUM INTO '${safeTmpPath}'`, [], function(vacuumErr) {
+    if (!vacuumErr) {
+      console.log('[DB-BACKUP] VACUUM INTO succeeded');
+      return sendBackupFile(tmpPath);
+    }
+
+    console.warn('[DB-BACKUP] VACUUM INTO failed:', vacuumErr.message, '- falling back to WAL checkpoint + file copy');
+
+    // Strategy 2: Checkpoint WAL then copy the main DB file
+    dbInstance.run('PRAGMA wal_checkpoint(TRUNCATE)', [], function(cpErr) {
+      if (cpErr) {
+        console.warn('[DB-BACKUP] WAL checkpoint warning:', cpErr.message);
+      }
+      try {
+        const dbPath = getSqliteDbPath();
+        fs.copyFileSync(dbPath, tmpPath);
+        console.log('[DB-BACKUP] Fallback file copy succeeded');
+        sendBackupFile(tmpPath);
+      } catch (copyErr) {
+        console.error('[DB-BACKUP] File copy also failed:', copyErr.message);
+        return res.status(500).json({ error: 'Backup failed', message: copyErr.message });
+      }
+    });
+  });
+});
+
 // Unsubscribe endpoint (public, must be before other routes)
 app.get('/unsubscribe', (req, res) => {
   const email = req.query.email;
