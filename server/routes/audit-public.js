@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const { getAuditJobBySlug, getAllSiteSettings } = require('../db');
 const { buildViewModelV2 } = require('../helpers/auditViewModelV2');
 const homepageBuilder = require('../services/homepageBuilder');
@@ -15,6 +17,26 @@ function isValidNicheCity(value) {
 // Privacy Policy route
 router.get('/privacy', (req, res) => {
   res.render('privacy');
+});
+
+// Custom preview route for ASAP Plumbing Los Angeles (audit 615)
+// This serves a standalone React build for customer preview
+router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
+  const previewPath = path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles/index.html');
+  
+  console.log('[PREVIEW] ASAP Plumbing preview requested');
+  console.log('[PREVIEW] Preview path:', previewPath);
+  
+  if (!fs.existsSync(previewPath)) {
+    console.error('[PREVIEW] Preview file not found:', previewPath);
+    return res.status(404).send('Preview not found');
+  }
+  
+  // Set appropriate headers for HTML preview
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+  
+  res.sendFile(previewPath);
 });
 
 // Serve generated homepage proposal HTML inside iframe (public audit link scope)

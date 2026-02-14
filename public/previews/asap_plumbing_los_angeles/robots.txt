@@ -1,0 +1,13 @@
+# robots.txt for ASAP Plumbing Solutions
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://asapplumbingsolutions.com/sitemap.xml
+
+# Block specific bots if needed (optional)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
