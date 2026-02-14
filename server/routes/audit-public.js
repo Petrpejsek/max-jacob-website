@@ -19,23 +19,9 @@ router.get('/privacy', (req, res) => {
   res.render('privacy');
 });
 
-// ASAP Plumbing Preview - Serve static assets (JS, CSS, images)
-// This middleware serves assets from the preview folder with proper paths
-router.use('/preview_asap_plumbing_los_angeles', express.static(
-  path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles'),
-  { 
-    maxAge: '1h',
-    setHeaders: (res, filepath) => {
-      // Set CORS headers for assets if needed
-      if (filepath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      }
-    }
-  }
-));
-
 // Custom preview route for ASAP Plumbing Los Angeles (audit 615)
 // This serves the main HTML file for the preview
+// IMPORTANT: Must be BEFORE static middleware to handle exact path match
 router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
   const previewPath = path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles/index.html');
   
@@ -66,6 +52,23 @@ router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
   
   res.send(html);
 });
+
+// ASAP Plumbing Preview - Serve static assets (JS, CSS, images)
+// This middleware serves assets from the preview folder with proper paths
+// IMPORTANT: Must be AFTER the GET route to avoid directory index redirects
+router.use('/preview_asap_plumbing_los_angeles', express.static(
+  path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles'),
+  { 
+    maxAge: '1h',
+    index: false, // Disable directory index to prevent trailing slash redirect
+    setHeaders: (res, filepath) => {
+      // Set CORS headers for assets if needed
+      if (filepath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      }
+    }
+  }
+));
 
 // Serve generated homepage proposal HTML inside iframe (public audit link scope)
 router.get('/:nicheCity/:slug/homepage-proposal.html', (req, res, next) => {
