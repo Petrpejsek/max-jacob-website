@@ -19,6 +19,18 @@ router.get('/privacy', (req, res) => {
   res.render('privacy');
 });
 
+// ASAP Plumbing Preview fallback:
+// Older cached versions of the preview HTML referenced root paths like `/assets/...`.
+// If a browser has that HTML cached, the page would look blank because JS/CSS 404.
+// This keeps the preview resilient even with stale HTML caches.
+router.use(
+  '/assets',
+  express.static(path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles/assets'), {
+    maxAge: '1h',
+    index: false
+  })
+);
+
 // Custom preview route for ASAP Plumbing Los Angeles (audit 615)
 // This serves the main HTML file for the preview
 // IMPORTANT: Must be BEFORE static middleware to handle exact path match
@@ -48,7 +60,8 @@ router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
   
   // Set appropriate headers for HTML preview
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+  // Don't cache HTML: we want changes to propagate immediately and avoid stale asset paths.
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
   
   res.send(html);
 });
@@ -61,6 +74,7 @@ router.use('/preview_asap_plumbing_los_angeles', express.static(
   { 
     maxAge: '1h',
     index: false, // Disable directory index to prevent trailing slash redirect
+    redirect: false,
     setHeaders: (res, filepath) => {
       // Set CORS headers for assets if needed
       if (filepath.endsWith('.js')) {
