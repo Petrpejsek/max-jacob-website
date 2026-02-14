@@ -19,8 +19,23 @@ router.get('/privacy', (req, res) => {
   res.render('privacy');
 });
 
+// ASAP Plumbing Preview - Serve static assets (JS, CSS, images)
+// This middleware serves assets from the preview folder with proper paths
+router.use('/preview_asap_plumbing_los_angeles', express.static(
+  path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles'),
+  { 
+    maxAge: '1h',
+    setHeaders: (res, filepath) => {
+      // Set CORS headers for assets if needed
+      if (filepath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      }
+    }
+  }
+));
+
 // Custom preview route for ASAP Plumbing Los Angeles (audit 615)
-// This serves a standalone React build for customer preview
+// This serves the main HTML file for the preview
 router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
   const previewPath = path.join(__dirname, '../../public/previews/asap_plumbing_los_angeles/index.html');
   
@@ -32,11 +47,24 @@ router.get('/preview_asap_plumbing_los_angeles', (req, res) => {
     return res.status(404).send('Preview not found');
   }
   
+  // Read the HTML and modify asset paths to be relative to preview base
+  let html = fs.readFileSync(previewPath, 'utf-8');
+  
+  // Fix asset paths: /assets/ -> /preview_asap_plumbing_los_angeles/assets/
+  html = html.replace(/src="\/assets\//g, 'src="/preview_asap_plumbing_los_angeles/assets/');
+  html = html.replace(/href="\/assets\//g, 'href="/preview_asap_plumbing_los_angeles/assets/');
+  
+  // Fix other root-relative paths (favicon, images, etc.)
+  html = html.replace(/href="\/favicon\./g, 'href="/preview_asap_plumbing_los_angeles/favicon.');
+  html = html.replace(/src="\/favicon\./g, 'src="/preview_asap_plumbing_los_angeles/favicon.');
+  html = html.replace(/content="\/og-image\./g, 'content="/preview_asap_plumbing_los_angeles/og-image.');
+  html = html.replace(/href="\/index\.css"/g, 'href="/preview_asap_plumbing_los_angeles/index.css"');
+  
   // Set appropriate headers for HTML preview
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
   
-  res.sendFile(previewPath);
+  res.send(html);
 });
 
 // Serve generated homepage proposal HTML inside iframe (public audit link scope)
