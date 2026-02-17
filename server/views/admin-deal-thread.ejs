@@ -545,7 +545,9 @@
     </div>
     <% } %>
 
-    <!-- Messages -->
+    <!-- Messages (container updated by polling for live new messages) -->
+    <script type="application/json" id="admin-deal-thread-init"><%- JSON.stringify({ clientName: deal.client_name || '', messages: messages }).replace(/<\/script>/gi, '<\\/script>') %></script>
+    <div id="messagesContainer" data-messages-url="/admin/deals/<%= deal.id %>/messages">
     <% if (messages.length === 0) { %>
       <div class="empty-chat">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
@@ -573,9 +575,16 @@
             <% if (msg.attachments && msg.attachments.length > 0) { %>
               <div class="attachments">
                 <% msg.attachments.forEach(function(att) { %>
-                  <% if (att.mime_type && att.mime_type.startsWith('image/')) { %>
+                  <% if (att.mime_type && att.mime_type.startsWith('image/') && att.mime_type !== 'image/heic') { %>
                     <div class="att-image">
                       <img src="/public/<%= att.filename %>" alt="<%= att.original_name %>" loading="lazy" onclick="openLightbox('/public/<%= att.filename %>')">
+                    </div>
+                  <% } else if (att.mime_type === 'image/heic') { %>
+                    <div class="att-file">
+                      <a href="/public/<%= att.filename %>" download="<%= att.original_name %>">
+                        <span>🖼️</span>
+                        <div><div class="att-file-name"><%= att.original_name %> (HEIC)</div><div class="att-file-size"><%= Math.round(att.size / 1024) %> KB</div></div>
+                      </a>
                     </div>
                   <% } else if (att.mime_type && att.mime_type.startsWith('video/')) { %>
                     <div class="att-video">
@@ -601,6 +610,7 @@
       <% }); %>
     </div>
     <% } %>
+    </div>
 
     <!-- Composer -->
     <div class="composer">
@@ -720,6 +730,80 @@
     if (m) m.scrollTop = m.scrollHeight;
   })();
 
+  // ── Live updates: poll for new messages and re-render ─────────
+  function escapeHtml(s) {
+    if (s == null) return ''; s = String(s);
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function renderAtt(att) {
+    var url = '/public/' + escapeHtml(att.filename);
+    var name = escapeHtml(att.original_name);
+    var size = Math.round((att.size||0)/1024) + ' KB';
+    var m = att.mime_type || '';
+    if (m.indexOf('image/') === 0 && m !== 'image/heic') {
+      return '<div class="att-image"><img src="'+url+'" alt="'+name+'" loading="lazy" onclick="openLightbox(\''+url.replace(/'/g,"\\'")+'\')"></div>';
+    }
+    if (m === 'image/heic') {
+      return '<div class="att-file"><a href="'+url+'" download="'+name+'"><span>🖼️</span><div><div class="att-file-name">'+name+' (HEIC)</div><div class="att-file-size">'+size+'</div></div></a></div>';
+    }
+    if (m.indexOf('video/') === 0) {
+      return '<div class="att-video"><video controls preload="metadata"><source src="'+url+'" type="'+escapeHtml(m)+'"></video></div>';
+    }
+    var icon = m === 'application/pdf' ? '📄' : (m.indexOf('word')>=0 ? '📝' : (m.indexOf('excel')>=0 ? '📊' : (m.indexOf('zip')>=0 ? '🗜️' : '📎')));
+    return '<div class="att-file"><a href="'+url+'" download="'+name+'"><span>'+icon+'</span><div><div class="att-file-name">'+name+'</div><div class="att-file-size">'+size+'</div></div></a></div>';
+  }
+  function renderMessages(messages, clientName) {
+    var clientInitial = (clientName || '').charAt(0).toUpperCase();
+    if (!messages || messages.length === 0) {
+      return '<div class="empty-chat"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><span>No messages yet</span></div>';
+    }
+    var html = '<div class="messages" id="messagesList"><div class="date-sep">' + new Date(messages[0].created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '</div>';
+    for (var i = 0; i < messages.length; i++) {
+      var msg = messages[i];
+      var isAdmin = msg.sender === 'admin';
+      var showSender = i === 0 || messages[i-1].sender !== msg.sender;
+      html += '<div class="msg-row ' + (isAdmin ? 'mine' : '') + '">';
+      html += isAdmin ? '<div class="avatar avatar-admin">MJ</div>' : '<div class="avatar avatar-client">' + escapeHtml(clientInitial) + '</div>';
+      html += '<div class="msg-col">';
+      if (showSender) html += '<div class="msg-sender">' + (isAdmin ? 'You' : escapeHtml(clientName)) + '</div>';
+      if (msg.body) html += '<div class="bubble ' + (isAdmin ? 'bubble-admin' : 'bubble-client') + '">' + escapeHtml(msg.body).replace(/\n/g,'<br>') + '</div>';
+      if (msg.attachments && msg.attachments.length) {
+        html += '<div class="attachments">';
+        for (var j = 0; j < msg.attachments.length; j++) html += renderAtt(msg.attachments[j]);
+        html += '</div>';
+      }
+      html += '<div class="msg-time">' + new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+      html += '</div></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+  (function pollMessages() {
+    var container = document.getElementById('messagesContainer');
+    var messagesUrl = container && container.getAttribute('data-messages-url');
+    var lastCount = 0;
+    try {
+      var init = JSON.parse(document.getElementById('admin-deal-thread-init').textContent);
+      lastCount = (init.messages || []).length;
+    } catch (e) {}
+    if (messagesUrl) {
+      setInterval(function() {
+        fetch(messagesUrl, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(data) {
+          var messages = data.messages || [];
+          if (messages.length !== lastCount) {
+            lastCount = messages.length;
+            try {
+              var init = JSON.parse(document.getElementById('admin-deal-thread-init').textContent);
+              container.innerHTML = renderMessages(messages, init.clientName);
+              var list = document.getElementById('messagesList');
+              if (list) list.scrollTop = list.scrollHeight;
+            } catch (err) {}
+          }
+        }).catch(function() {});
+      }, 2500);
+    }
+  })();
+
   // ── Files ────────────────────────────────────────────────────
   let selectedFiles = [];
   function addFiles(list) { selectedFiles = selectedFiles.concat(Array.from(list)); renderChips(); }
@@ -784,13 +868,31 @@
     if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
   });
 
-  // ── Submit ───────────────────────────────────────────────────
+  // ── Submit (FormData + fetch so attachments are always sent) ───
   function handleEnterKey(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('composeForm')?.submit(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); document.getElementById('composeForm')?.requestSubmit(); }
   }
-  document.getElementById('composeForm')?.addEventListener('submit', () => {
+  document.getElementById('composeForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = (document.getElementById('bodyInput')?.value || '').trim();
+    if (!body && !selectedFiles.length) return;
+    const formEl = document.getElementById('composeForm');
     const btn = document.getElementById('sendBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    const formData = new FormData();
+    formData.append('body', body);
+    selectedFiles.forEach((f) => formData.append('attachments', f));
+    try {
+      const resp = await fetch(formEl.action, { method: 'POST', body: formData, credentials: 'same-origin' });
+      if (resp.redirected) { window.location.href = resp.url; return; }
+      const url = new URL(resp.url);
+      const errMsg = url.searchParams.get('error') || (resp.ok ? '' : 'Send failed');
+      if (errMsg) window.location.href = formEl.action.replace(/\/messages$/, '') + '?error=' + encodeURIComponent(errMsg);
+      else window.location.href = formEl.action.replace(/\/messages$/, '') + '?success=1';
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Send to Client'; }
+      window.location.href = formEl.action.replace(/\/messages$/, '') + '?error=' + encodeURIComponent(err.message || 'Network error');
+    }
   });
 
   // ── Copy link ────────────────────────────────────────────────

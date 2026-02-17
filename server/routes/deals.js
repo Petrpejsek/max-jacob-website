@@ -30,9 +30,9 @@ const clientMessageLimiter = rateLimit({
 // ---------------------------------------------------------------------------
 const ALLOWED_MIME_TYPES = new Set([
   // Images
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic',
   // Videos
-  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2',
   // Documents
   'application/pdf',
   'application/msword',
@@ -88,6 +88,21 @@ const upload = multer({
 function getBaseUrl(req) {
   return process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 }
+
+// ---------------------------------------------------------------------------
+// GET /deal/:token/messages — JSON list of messages (for polling / live updates)
+// ---------------------------------------------------------------------------
+router.get('/:token/messages', (req, res) => {
+  const { token } = req.params;
+  if (!token || token.length < 32) return res.status(404).json({ error: 'Not found' });
+  getDealByToken(token, (err, deal) => {
+    if (err || !deal) return res.status(404).json({ error: 'Deal not found' });
+    getDealMessages(deal.id, (msgErr, messages) => {
+      if (msgErr) return res.status(500).json({ error: 'Failed to load messages' });
+      res.json({ messages: messages || [] });
+    });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // GET /deal/:token — Client thread view

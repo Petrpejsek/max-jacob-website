@@ -3193,13 +3193,15 @@ const multerDeal = require('multer');
 const { getPersistentPublicDir: getPubDir } = require('../runtimePaths');
 
 const DEAL_ALLOWED_MIME = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic',
+  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed'
 ]);
 
@@ -3289,6 +3291,15 @@ router.post('/deals', requireAdmin, (req, res) => {
 
       res.redirect(`/admin/deals/${dealId}?success=Deal+created+and+magic+link+sent.`);
     });
+  });
+});
+
+// GET /admin/deals/:id/messages — JSON list of messages (for polling / live updates)
+router.get('/deals/:id/messages', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  getDealMessages(id, (err, messages) => {
+    if (err) return res.status(500).json({ error: 'Failed to load messages' });
+    res.json({ messages: messages || [] });
   });
 });
 
