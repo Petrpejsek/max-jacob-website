@@ -20,7 +20,7 @@ function getResend() {
  * @param {string} [options.text] - Plain text email body
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
-async function sendEmail({ to, subject, html, text }) {
+async function sendEmail({ to, subject, html, text, tags }) {
   try {
     const resend = getResend();
 
@@ -40,9 +40,7 @@ async function sendEmail({ to, subject, html, text }) {
       html: html || undefined,
       text: text || undefined,
       reply_to: 'jacob@maxandjacob.com',
-      tags: [
-        { name: 'category', value: 'audit-outreach' }
-      ]
+      tags: tags || [{ name: 'category', value: 'audit-outreach' }]
     });
 
     // Normalize response shape across SDK versions
@@ -107,7 +105,8 @@ async function sendDealNotificationToAdmin({ deal, messageBody, attachments = []
   return sendEmail({
     to: 'jacob@maxandjacob.com',
     subject: `[Deal] ${deal.client_name} replied — ${deal.title}`,
-    html
+    html,
+    tags: [{ name: 'category', value: 'deal-thread' }]
   });
 }
 
@@ -149,7 +148,8 @@ async function sendDealNotificationToClient({ deal, messageBody, attachments = [
   return sendEmail({
     to: deal.client_email,
     subject: `New message from Jacob — ${deal.title}`,
-    html
+    html,
+    tags: [{ name: 'category', value: 'deal-thread' }]
   });
 }
 
