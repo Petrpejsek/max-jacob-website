@@ -1,7 +1,15 @@
 const { Resend } = require('resend');
 
-// Initialize Resend client with API key from environment
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-init Resend client so server can start even when RESEND_API_KEY is not set (e.g. deploy before env is configured)
+let resendClient = null;
+function getResend() {
+  if (!resendClient) {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new Error('RESEND_API_KEY not configured in environment variables');
+    resendClient = new Resend(key);
+  }
+  return resendClient;
+}
 
 /**
  * Send email via Resend API
@@ -14,10 +22,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  */
 async function sendEmail({ to, subject, html, text }) {
   try {
-    // Validate Resend API key exists
-    if (!process.env.RESEND_API_KEY) {
-      throw new Error('RESEND_API_KEY not configured in environment variables');
-    }
+    const resend = getResend();
 
     // Send email via Resend
     // NOTE: Resend Node SDK returns { data, error } (v4+).
