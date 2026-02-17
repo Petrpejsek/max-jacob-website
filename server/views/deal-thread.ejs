@@ -654,14 +654,13 @@
                   rows="3" onkeydown="handleEnterKey(event)"></textarea>
         <div class="composer-footer">
           <div class="composer-actions">
-            <label class="attach-btn" for="attachInput" title="Attach files">
+            <label class="attach-btn" title="Attach files">
               <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
               </svg>
               Attach
               <input type="file" name="attachments" id="attachInput" multiple
-                     accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
-                     onchange="handleFiles(this)">
+                     accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip">
             </label>
             <span class="hint-text">
               <span style="color:#e5e7eb">·</span>
@@ -788,10 +787,11 @@
     selectedFiles = selectedFiles.concat(Array.from(list));
     renderChips();
   }
-  function handleFiles(input) {
-    if (input.files && input.files.length) addFiles(input.files);
-    // Do NOT clear input.value on mobile (iOS): it invalidates File refs so send fails
-  }
+  // Bind via addEventListener (more reliable than inline onchange on iOS Safari)
+  document.getElementById('attachInput')?.addEventListener('change', function() {
+    if (this.files && this.files.length) addFiles(this.files);
+    // Do NOT clear this.value on mobile (iOS): it invalidates File refs so send fails
+  });
 
   function renderChips() {
     const wrap = document.getElementById('fileChips');
