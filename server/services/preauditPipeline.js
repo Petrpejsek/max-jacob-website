@@ -71,7 +71,8 @@ async function takeScreenshot(page, filepath, options = {}) {
     await page.screenshot({
       path: filepath,
       fullPage: options.fullPage || false,
-      type: 'png'
+      type: 'jpeg',
+      quality: 80
     });
     
     console.log('[PREAUDIT PIPELINE] Screenshot saved:', filepath);
@@ -217,10 +218,10 @@ async function processWebsite(browser, result, searchData) {
       console.log('[PREAUDIT PIPELINE] Taking screenshots...');
       
       const timestamp = Date.now();
-      const heroPath = path.join(screenshotDir, `${timestamp}_hero.png`);
-      const fullPath = path.join(screenshotDir, `${timestamp}_full.png`);
+      const heroPath = path.join(screenshotDir, `${timestamp}_hero.jpg`);
+      const fullPath = path.join(screenshotDir, `${timestamp}_full.jpg`);
       
-      // Hero screenshot (above the fold)
+      // Hero screenshot (above the fold) — JPEG quality 80 (~5x smaller than PNG)
       await takeScreenshot(page, heroPath, { fullPage: false });
       
       // Full page screenshot (optional; can be disabled in production if memory is tight)
@@ -238,9 +239,9 @@ async function processWebsite(browser, result, searchData) {
           description,
           email: emailResult.email,
           has_email: true,
-          screenshot_hero_path: `public/preaudit_screenshots/${searchId}/${timestamp}_hero.png`,
+          screenshot_hero_path: `public/preaudit_screenshots/${searchId}/${timestamp}_hero.jpg`,
           screenshot_full_path: ENABLE_PREAUDIT_FULLPAGE_SCREENSHOTS
-            ? `public/preaudit_screenshots/${searchId}/${timestamp}_full.png`
+            ? `public/preaudit_screenshots/${searchId}/${timestamp}_full.jpg`
             : null,
           status: 'valid',
           search_position: position

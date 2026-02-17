@@ -1688,15 +1688,19 @@ async function takeScreenshots(page, url, jobId, pageIndex) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(1000); // Wait for content to settle
     
-    const desktopAboveFoldPath = path.join(screenshotDir, `page${pageIndex}-desktop-above-fold.png`);
-    await page.screenshot({ path: desktopAboveFoldPath, fullPage: false });
-    screenshots.desktop_above_fold = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-above-fold.png`;
+    // JPEG quality 80 → ~5x smaller than PNG with negligible visual difference
+    const SCREENSHOT_TYPE = 'jpeg';
+    const SCREENSHOT_QUALITY = 80;
+
+    const desktopAboveFoldPath = path.join(screenshotDir, `page${pageIndex}-desktop-above-fold.jpg`);
+    await page.screenshot({ path: desktopAboveFoldPath, fullPage: false, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
+    screenshots.desktop_above_fold = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-above-fold.jpg`;
 
     // Desktop full page (OPTIONAL - can be disabled to save memory)
     if (ENABLE_FULLPAGE_SCREENSHOTS) {
-      const desktopFullPath = path.join(screenshotDir, `page${pageIndex}-desktop-full.png`);
-      await page.screenshot({ path: desktopFullPath, fullPage: true });
-      screenshots.desktop_full = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-full.png`;
+      const desktopFullPath = path.join(screenshotDir, `page${pageIndex}-desktop-full.jpg`);
+      await page.screenshot({ path: desktopFullPath, fullPage: true, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
+      screenshots.desktop_full = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-desktop-full.jpg`;
     }
 
     // Mobile above-the-fold
@@ -1704,9 +1708,9 @@ async function takeScreenshots(page, url, jobId, pageIndex) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(1000);
     
-    const mobileAboveFoldPath = path.join(screenshotDir, `page${pageIndex}-mobile-above-fold.png`);
-    await page.screenshot({ path: mobileAboveFoldPath, fullPage: false });
-    screenshots.mobile_above_fold = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-mobile-above-fold.png`;
+    const mobileAboveFoldPath = path.join(screenshotDir, `page${pageIndex}-mobile-above-fold.jpg`);
+    await page.screenshot({ path: mobileAboveFoldPath, fullPage: false, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
+    screenshots.mobile_above_fold = `public/audit_screenshots/${jobId}/pages/page${pageIndex}-mobile-above-fold.jpg`;
 
   } catch (err) {
     console.error(`[SCRAPER V3] Screenshot error for ${url}:`, err.message);

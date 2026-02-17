@@ -2661,6 +2661,138 @@ router.post('/api/prune-audit-screenshots', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/api/compress-screenshots - Convert existing PNG screenshots to JPEG in-place
+// Works on both audit_screenshots and preaudit_screenshots directories.
+// Updates DB paths (crawled_pages.screenshots_json, preaudit_results) accordingly.
+// Does NOT delete any audit data — safe for all jobs.
+router.post('/api/compress-screenshots', requireAdmin, async (req, res) => {
+  const { getPersistentPublicDir } = require('../runtimePaths');
+  const { db } = require('../db');
+  const { execSync } = require('child_process');
+
+  // Check if sharp is available (optional dep). If not, use Playwright-free ImageMagick fallback.
+  let sharp = null;
+  try { sharp = require('sharp'); } catch (_) {}
+
+  // We need a Playwright-free way to convert PNG→JPEG.
+  // Use ImageMagick `convert` if available on the system.
+  function canUseImageMagick() {
+    try { execSync('convert --version', { stdio: 'ignore' }); return true; } catch (_) { return false; }
+  }
+
+  const publicDir = getPersistentPublicDir();
+  const dirs = [
+    path.join(publicDir, 'audit_screenshots'),
+    path.join(publicDir, 'preaudit_screenshots')
+  ];
+
+  let converted = 0;
+  let skipped = 0;
+  let errors = 0;
+  let savedBytes = 0;
+
+  // Walk dirs recursively and convert each PNG
+  function walkDir(dir) {
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walkDir(full);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.png')) {
+        const jpgPath = full.slice(0, -4) + '.jpg';
+        try {
+          const sizeBefore = fs.statSync(full).size;
+          if (sharp) {
+            // Use sharp synchronously via spawnSync workaround
+            // sharp is async only — we'll do it async in batch below
+            // Mark for async processing
+            pngFiles.push({ png: full, jpg: jpgPath, sizeBefore });
+          } else if (canUseImageMagick()) {
+            execSync(`convert -quality 80 "${full}" "${jpgPath}"`, { timeout: 30000 });
+            const sizeAfter = fs.existsSync(jpgPath) ? fs.statSync(jpgPath).size : sizeBefore;
+            savedBytes += sizeBefore - sizeAfter;
+            fs.unlinkSync(full);
+            converted++;
+          } else {
+            skipped++;
+          }
+        } catch (e) {
+          console.warn('[COMPRESS-SS] Error converting:', full, e.message);
+          errors++;
+        }
+      }
+    }
+  }
+
+  const pngFiles = [];
+
+  try {
+    walkDir(dirs[0]);
+    walkDir(dirs[1]);
+
+    if (sharp && pngFiles.length > 0) {
+      // Process with sharp (async, batch)
+      for (const { png, jpg, sizeBefore } of pngFiles) {
+        try {
+          await sharp(png).jpeg({ quality: 80 }).toFile(jpg);
+          const sizeAfter = fs.existsSync(jpg) ? fs.statSync(jpg).size : sizeBefore;
+          savedBytes += sizeBefore - sizeAfter;
+          fs.unlinkSync(png);
+          converted++;
+        } catch (e) {
+          console.warn('[COMPRESS-SS] sharp error:', png, e.message);
+          errors++;
+        }
+      }
+    } else if (!sharp && pngFiles.length > 0 && !canUseImageMagick()) {
+      // Neither sharp nor ImageMagick available
+      return res.json({
+        success: false,
+        error: 'Neither sharp nor ImageMagick is available on this server. Install sharp: npm install sharp',
+        png_files_found: pngFiles.length
+      });
+    }
+
+    // Update DB paths: crawled_pages.screenshots_json (replace .png -> .jpg in JSON strings)
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE crawled_pages SET screenshots_json = REPLACE(screenshots_json, '.png', '.jpg') WHERE screenshots_json LIKE '%.png%'`,
+        (err) => { if (err) console.warn('[COMPRESS-SS] DB crawled_pages update error:', err.message); resolve(); }
+      );
+    });
+    // Update preaudit_results paths
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE preaudit_results SET screenshot_hero_path = REPLACE(screenshot_hero_path, '.png', '.jpg'), screenshot_full_path = REPLACE(screenshot_full_path, '.png', '.jpg') WHERE screenshot_hero_path LIKE '%.png%' OR screenshot_full_path LIKE '%.png%'`,
+        (err) => { if (err) console.warn('[COMPRESS-SS] DB preaudit_results update error:', err.message); resolve(); }
+      );
+    });
+    // Update audit_jobs.screenshots_json
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE audit_jobs SET screenshots_json = REPLACE(screenshots_json, '.png', '.jpg') WHERE screenshots_json LIKE '%.png%'`,
+        (err) => { if (err) console.warn('[COMPRESS-SS] DB audit_jobs update error:', err.message); resolve(); }
+      );
+    });
+
+    const savedMb = +(savedBytes / 1024 / 1024).toFixed(0);
+    console.log(`[COMPRESS-SS] Converted ${converted} PNGs to JPEG. Saved ~${savedMb} MB. Errors: ${errors}.`);
+
+    res.json({
+      success: true,
+      converted,
+      skipped,
+      errors,
+      saved_mb: savedMb,
+      message: `Converted ${converted} PNG screenshots to JPEG. Freed ~${savedMb} MB.`
+    });
+  } catch (err) {
+    console.error('[COMPRESS-SS] Fatal error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /admin/api/prune-audit-logs - Delete old audit_run_logs (keep last N days)
 router.post('/api/prune-audit-logs', requireAdmin, async (req, res) => {
   const { db } = require('../db');

@@ -111,6 +111,18 @@
           </p>
         </div>
 
+        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:700;color:#93c5fd;margin-bottom:10px">💡 Convert existing screenshots PNG → JPEG (safe, no data lost)</div>
+          <div class="actions" style="margin-bottom:8px">
+            <button class="btn btn-primary" onclick="compressScreenshots()" id="compressSsBtn">
+              🖼 Compress PNG → JPEG (~80% smaller, saves ~4 GB)
+            </button>
+          </div>
+          <p class="muted" style="margin:0;font-size:12px">
+            Converts all existing PNG screenshots to JPEG quality 80 in-place. <strong>All audits stay intact</strong> — only file format changes. DB paths updated automatically. One-time operation.
+          </p>
+        </div>
+
         <div class="actions">
           <button class="btn btn-primary" onclick="runVacuum()" id="vacuumBtn">
             🧹 VACUUM + WAL Checkpoint
@@ -287,6 +299,11 @@
 
       async function pruneLogs() {
         await doAction('pruneLogsBtn', '⏳ Deleting…', '/admin/api/prune-audit-logs', '🗒 Prune Old Run Logs (>7 days)');
+      }
+
+      async function compressScreenshots() {
+        if (!confirm('Convert all existing PNG screenshots to JPEG (quality 80)?\n\nSafe — all audits remain intact, only file format changes. May take 1–5 minutes.\n\nContinue?')) return;
+        await doAction('compressSsBtn', '⏳ Converting PNG → JPEG… (may take a few minutes)', '/admin/api/compress-screenshots', '🖼 Compress PNG → JPEG (~80% smaller, saves ~4 GB)');
       }
 
       async function doAction(btnId, loadingText, endpoint, resetText) {

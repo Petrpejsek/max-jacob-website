@@ -1466,8 +1466,12 @@ async function scrapeWebsite(url, jobId) {
   const screenshotDir = path.join(getPersistentPublicDir(), 'audit_screenshots', String(jobId));
   fs.mkdirSync(screenshotDir, { recursive: true });
 
+  // JPEG quality 80 → ~5x smaller than PNG with negligible visual difference
+  const SCREENSHOT_TYPE = 'jpeg';
+  const SCREENSHOT_QUALITY = 80;
+
   // Desktop screenshots
-  const aboveFoldPath = path.join(screenshotDir, 'above-fold.png');
+  const aboveFoldPath = path.join(screenshotDir, 'above-fold.jpg');
   
   // Navigate back to homepage for screenshot
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -1475,13 +1479,13 @@ async function scrapeWebsite(url, jobId) {
   // Set desktop viewport
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: aboveFoldPath, fullPage: false });
+  await page.screenshot({ path: aboveFoldPath, fullPage: false, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
 
   // Desktop full page (OPTIONAL - can be disabled to save memory)
   const ENABLE_FULLPAGE_SCREENSHOTS = process.env.ENABLE_FULLPAGE_SCREENSHOTS !== 'false';
   if (ENABLE_FULLPAGE_SCREENSHOTS) {
-    const fullPagePath = path.join(screenshotDir, 'fullpage.png');
-    await page.screenshot({ path: fullPagePath, fullPage: true });
+    const fullPagePath = path.join(screenshotDir, 'fullpage.jpg');
+    await page.screenshot({ path: fullPagePath, fullPage: true, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
   }
 
   // Mobile screenshots
@@ -1489,13 +1493,13 @@ async function scrapeWebsite(url, jobId) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(500);
   
-  const mobileAboveFoldPath = path.join(screenshotDir, 'mobile-above-fold.png');
-  await page.screenshot({ path: mobileAboveFoldPath, fullPage: false });
+  const mobileAboveFoldPath = path.join(screenshotDir, 'mobile-above-fold.jpg');
+  await page.screenshot({ path: mobileAboveFoldPath, fullPage: false, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
 
   // Mobile full page (OPTIONAL - can be disabled to save memory)
   if (ENABLE_FULLPAGE_SCREENSHOTS) {
-    const mobileFullPath = path.join(screenshotDir, 'mobile-full.png');
-    await page.screenshot({ path: mobileFullPath, fullPage: true });
+    const mobileFullPath = path.join(screenshotDir, 'mobile-full.jpg');
+    await page.screenshot({ path: mobileFullPath, fullPage: true, type: SCREENSHOT_TYPE, quality: SCREENSHOT_QUALITY });
   }
 
   await browser.close();
