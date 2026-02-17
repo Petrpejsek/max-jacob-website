@@ -84,6 +84,7 @@ const contactRoutes = require('./routes/contact');
 const adminRoutes = require('./routes/admin');
 const auditPublicRoutes = require('./routes/audit-public');
 const presetsRoutes = require('./routes/presets');
+const dealRoutes = require('./routes/deals');
 
 // ========================================
 // ALL ROUTES - ÚPLNĚ NA ZAČÁTKU!
@@ -371,6 +372,7 @@ app.get('/unsubscribe', (req, res) => {
 app.use('/api', contactRoutes);
 app.use('/api/presets', presetsRoutes);
 app.use('/admin', adminRoutes);
+app.use('/deal', dealRoutes);
 app.use('/', auditPublicRoutes);
 
 // ========================================
@@ -380,6 +382,16 @@ app.use('/', auditPublicRoutes);
 const repoRoot = path.join(__dirname, '..');
 const repoPublicDir = path.join(repoRoot, 'public');
 const persistentPublicDir = process.env.PUBLIC_DIR ? path.resolve(process.env.PUBLIC_DIR) : repoPublicDir;
+
+// Ensure deal_assets directory exists on both public paths
+try {
+  fs.mkdirSync(path.join(repoPublicDir, 'deal_assets'), { recursive: true });
+  if (persistentPublicDir !== repoPublicDir) {
+    fs.mkdirSync(path.join(persistentPublicDir, 'deal_assets'), { recursive: true });
+  }
+} catch (e) {
+  console.warn('[SERVER] Could not create deal_assets directory:', e.message);
+}
 
 console.log('[SERVER] Repo root:', repoRoot);
 console.log('[SERVER] Repo public dir:', repoPublicDir);
@@ -447,7 +459,7 @@ const rootStatic = express.static(repoRoot, { fallthrough: false, dotfiles: 'ign
 
 // Static files middleware - only if request is NOT API/admin/health/diagnostic
 app.use((req, res) => {
-  const skipStaticPaths = ['/api', '/admin', '/health', '/diagnostic'];
+  const skipStaticPaths = ['/api', '/admin', '/health', '/diagnostic', '/deal'];
   const shouldSkip = skipStaticPaths.some((skipPath) => req.path === skipPath || req.path.startsWith(skipPath + '/'));
 
   if (shouldSkip) {
@@ -501,4 +513,74 @@ app.listen(PORT, listenHost, () => {
   // Start memory monitoring (production diagnostics for OOM issues)
   const memoryMonitor = require('./services/memoryMonitor');
   memoryMonitor.startMonitoring();
+
+  // One-time background PNG→JPEG conversion (runs after startup, non-blocking)
+  // Safe to run every deploy — skips files already converted (no .png exists)
+  setImmediate(() => {
+    (async () => {
+      let sharp;
+      try { sharp = require('sharp'); } catch (e) {
+        console.log('[PNG2JPG] sharp not available, skipping PNG conversion:', e.message);
+        return;
+      }
+      const { getPersistentPublicDir } = require('./runtimePaths');
+      const { db } = require('./db');
+      const publicDir = getPersistentPublicDir();
+      const scanDirs = [
+        path.join(publicDir, 'audit_screenshots'),
+        path.join(publicDir, 'preaudit_screenshots')
+      ];
+
+      function collectPngs(dir, out = []) {
+        if (!fs.existsSync(dir)) return out;
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return out; }
+        for (const entry of entries) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) collectPngs(full, out);
+          else if (entry.isFile() && entry.name.toLowerCase().endsWith('.png')) out.push(full);
+        }
+        return out;
+      }
+
+      const pngFiles = [];
+      for (const d of scanDirs) collectPngs(d, pngFiles);
+      if (pngFiles.length === 0) {
+        console.log('[PNG2JPG] No PNG files found — nothing to convert.');
+        return;
+      }
+      console.log(`[PNG2JPG] Starting background conversion of ${pngFiles.length} PNG files...`);
+
+      let converted = 0, errors = 0, savedBytes = 0;
+      for (const pngPath of pngFiles) {
+        const jpgPath = pngPath.slice(0, -4) + '.jpg';
+        try {
+          const sizeBefore = fs.statSync(pngPath).size;
+          await sharp(pngPath).jpeg({ quality: 80 }).toFile(jpgPath);
+          const sizeAfter = fs.existsSync(jpgPath) ? fs.statSync(jpgPath).size : sizeBefore;
+          savedBytes += Math.max(0, sizeBefore - sizeAfter);
+          fs.unlinkSync(pngPath);
+          converted++;
+          if (converted % 200 === 0) {
+            console.log(`[PNG2JPG] ${converted}/${pngFiles.length} done, ~${(savedBytes/1024/1024).toFixed(0)} MB freed so far`);
+          }
+        } catch (e) {
+          try { if (fs.existsSync(jpgPath)) fs.unlinkSync(jpgPath); } catch (_) {}
+          errors++;
+        }
+      }
+
+      // Update DB paths
+      const dbUpdates = [
+        `UPDATE crawled_pages SET screenshots_json = REPLACE(screenshots_json, '.png', '.jpg') WHERE screenshots_json LIKE '%.png%'`,
+        `UPDATE audit_jobs SET screenshots_json = REPLACE(screenshots_json, '.png', '.jpg') WHERE screenshots_json LIKE '%.png%'`,
+        `UPDATE preaudit_results SET screenshot_hero_path = REPLACE(screenshot_hero_path, '.png', '.jpg'), screenshot_full_path = REPLACE(screenshot_full_path, '.png', '.jpg') WHERE screenshot_hero_path LIKE '%.png%' OR screenshot_full_path LIKE '%.png%'`
+      ];
+      for (const sql of dbUpdates) {
+        await new Promise((resolve) => { db.run(sql, () => resolve()); });
+      }
+
+      console.log(`[PNG2JPG] DONE. Converted: ${converted}, Errors: ${errors}, Freed: ~${(savedBytes/1024/1024).toFixed(0)} MB`);
+    })().catch(e => console.error('[PNG2JPG] Fatal:', e.message));
+  });
 });
