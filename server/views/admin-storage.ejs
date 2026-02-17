@@ -94,17 +94,38 @@
       <!-- Actions -->
       <div class="card">
         <h2>Maintenance Actions</h2>
+
+        <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:10px">⚠ Disk critical — free space first</div>
+          <div class="actions" style="margin-bottom:10px">
+            <button class="btn btn-danger" onclick="prunePreauditScreenshots()" id="prunePreauditSsBtn">
+              🗑 Delete ALL Preaudit Screenshots (~3 GB)
+            </button>
+            <button class="btn btn-danger" onclick="pruneAuditScreenshots()" id="pruneAuditSsBtn">
+              🗑 Delete Old Audit Screenshots &gt;14 days (~?? GB)
+            </button>
+          </div>
+          <p class="muted" style="margin:0;font-size:12px">
+            <strong>Preaudit Screenshots</strong> — search preview images, not needed after review. Safe to delete all.<br>
+            <strong>Old Audit Screenshots</strong> — deletes screenshot folders for jobs older than 14 days (ready/sent/failed). Public audit pages use screenshots from scraping data, not these files.
+          </p>
+        </div>
+
         <div class="actions">
           <button class="btn btn-primary" onclick="runVacuum()" id="vacuumBtn">
             🧹 VACUUM + WAL Checkpoint
           </button>
           <button class="btn btn-danger" onclick="prunePayloads()" id="pruneBtn">
-            ✂️ Prune Assistant Payloads
+            ✂️ Prune Assistant Payloads (~31 MB)
+          </button>
+          <button class="btn" onclick="pruneLogs()" id="pruneLogsBtn">
+            🗒 Prune Old Run Logs (&gt;7 days)
           </button>
         </div>
-        <p class="muted" style="margin:0 0 6px">
-          <strong>VACUUM</strong> — shrinks the DB file after deletions, checkpoints WAL. Takes 10–60s. Safe to run anytime.<br>
-          <strong>Prune Payloads</strong> — clears <code>request_payload_json</code> from completed assistant runs (~31 MB). Frees space immediately (run VACUUM after).
+        <p class="muted" style="margin:6px 0 0;font-size:12px">
+          <strong>VACUUM</strong> — shrinks DB file after deletions + checkpoints WAL. Takes 10–60s.<br>
+          <strong>Prune Payloads</strong> — clears <code>request_payload_json</code> from completed assistant runs. Run VACUUM after.<br>
+          <strong>Prune Logs</strong> — deletes <code>audit_run_logs</code> older than 7 days (41k rows). Run VACUUM after.
         </p>
         <div id="actionMsg"></div>
       </div>
@@ -251,61 +272,54 @@
       }
 
       async function runVacuum() {
-        const btn = document.getElementById('vacuumBtn');
+        await doAction('vacuumBtn', '⏳ Running VACUUM… (may take 10–60s)', '/admin/api/vacuum', '🧹 VACUUM + WAL Checkpoint');
+      }
+
+      async function prunePreauditScreenshots() {
+        if (!confirm('Delete ALL preaudit screenshot files? This frees ~3 GB. Files cannot be recovered.\nContinue?')) return;
+        await doAction('prunePreauditSsBtn', '⏳ Deleting…', '/admin/api/prune-preaudit-screenshots', '🗑 Delete ALL Preaudit Screenshots (~3 GB)');
+      }
+
+      async function pruneAuditScreenshots() {
+        if (!confirm('Delete screenshot folders for audit jobs older than 14 days?\nContinue?')) return;
+        await doAction('pruneAuditSsBtn', '⏳ Deleting…', '/admin/api/prune-audit-screenshots', '🗑 Delete Old Audit Screenshots >14 days (~?? GB)');
+      }
+
+      async function pruneLogs() {
+        await doAction('pruneLogsBtn', '⏳ Deleting…', '/admin/api/prune-audit-logs', '🗒 Prune Old Run Logs (>7 days)');
+      }
+
+      async function doAction(btnId, loadingText, endpoint, resetText) {
+        const btn = document.getElementById(btnId);
         const msg = document.getElementById('actionMsg');
         btn.disabled = true;
-        btn.textContent = '⏳ Running VACUUM… (may take 10–60s)';
+        const origText = btn.textContent;
+        btn.textContent = loadingText;
         msg.className = 'status-msg info';
-        msg.textContent = 'Running WAL checkpoint + VACUUM. Please wait…';
-
+        msg.textContent = loadingText + ' Please wait…';
         try {
-          const r = await fetch('/admin/api/vacuum', { method: 'POST' });
+          const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
           const result = await r.json();
           if (result.success) {
             msg.className = 'status-msg ok';
-            msg.textContent = '✓ ' + result.message + (result.freed_mb !== null ? '' : '') ;
+            msg.textContent = '✓ ' + result.message;
           } else {
             msg.className = 'status-msg err';
-            msg.textContent = '✗ VACUUM failed: ' + result.error;
+            msg.textContent = '✗ ' + (result.error || 'Failed');
           }
-          // Reload stats
           await load();
         } catch (e) {
           msg.className = 'status-msg err';
           msg.textContent = 'Error: ' + e.message;
         } finally {
           btn.disabled = false;
-          btn.textContent = '🧹 VACUUM + WAL Checkpoint';
+          btn.textContent = resetText;
         }
       }
 
       async function prunePayloads() {
-        if (!confirm('This will clear request_payload_json from all completed assistant runs. The data cannot be recovered. Continue?')) return;
-        const btn = document.getElementById('pruneBtn');
-        const msg = document.getElementById('actionMsg');
-        btn.disabled = true;
-        btn.textContent = '⏳ Pruning…';
-        msg.className = 'status-msg info';
-        msg.textContent = 'Pruning assistant payloads…';
-
-        try {
-          const r = await fetch('/admin/api/prune-assistant-payloads', { method: 'POST' });
-          const result = await r.json();
-          if (result.success) {
-            msg.className = 'status-msg ok';
-            msg.textContent = '✓ ' + result.message + ' Run VACUUM to reclaim disk space.';
-          } else {
-            msg.className = 'status-msg err';
-            msg.textContent = '✗ ' + result.error;
-          }
-          await load();
-        } catch (e) {
-          msg.className = 'status-msg err';
-          msg.textContent = 'Error: ' + e.message;
-        } finally {
-          btn.disabled = false;
-          btn.textContent = '✂️ Prune Assistant Payloads';
-        }
+        if (!confirm('Clear request_payload_json from all completed assistant runs? Cannot be recovered. Continue?')) return;
+        await doAction('pruneBtn', '⏳ Pruning…', '/admin/api/prune-assistant-payloads', '✂️ Prune Assistant Payloads (~31 MB)');
       }
 
       load();

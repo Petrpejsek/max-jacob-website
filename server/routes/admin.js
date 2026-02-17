@@ -2535,6 +2535,159 @@ router.post('/api/prune-assistant-payloads', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/api/prune-preaudit-screenshots - Delete ALL preaudit screenshot files (3+ GB)
+router.post('/api/prune-preaudit-screenshots', requireAdmin, async (req, res) => {
+  const { getPersistentPublicDir } = require('../runtimePaths');
+  const { db } = require('../db');
+
+  const screenshotsDir = path.join(getPersistentPublicDir(), 'preaudit_screenshots');
+
+  function sqlRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) { if (err) return reject(err); resolve(this.changes); });
+    });
+  }
+
+  try {
+    // Measure before
+    let sizeBefore = 0;
+    let filesDeleted = 0;
+    let dirsDeleted = 0;
+
+    if (fs.existsSync(screenshotsDir)) {
+      // du -sk to measure
+      try {
+        const { execSync } = require('child_process');
+        const out = execSync(`du -sk "${screenshotsDir}"`, { encoding: 'utf8' });
+        sizeBefore = parseInt(String(out).trim().split(/\s+/)[0], 10) * 1024;
+      } catch (_) {}
+
+      // Recursively delete contents (keep the dir itself)
+      const entries = fs.readdirSync(screenshotsDir);
+      for (const entry of entries) {
+        const p = path.join(screenshotsDir, entry);
+        try {
+          const st = fs.statSync(p);
+          if (st.isDirectory()) {
+            fs.rmSync(p, { recursive: true, force: true });
+            dirsDeleted++;
+          } else {
+            fs.unlinkSync(p);
+            filesDeleted++;
+          }
+        } catch (e) {
+          console.warn('[PRUNE-PREAUDIT-SS] Could not delete:', p, e.message);
+        }
+      }
+    }
+
+    // Clear screenshot paths in DB (they no longer exist on disk)
+    const dbChanges = await sqlRun(
+      "UPDATE preaudit_results SET screenshot_hero_path = NULL, screenshot_full_path = NULL WHERE screenshot_hero_path IS NOT NULL OR screenshot_full_path IS NOT NULL"
+    );
+
+    const freedMb = +((sizeBefore) / 1024 / 1024).toFixed(0);
+    console.log(`[PRUNE-PREAUDIT-SS] Deleted ${filesDeleted} files, ${dirsDeleted} dirs. ~${freedMb} MB. DB rows cleared: ${dbChanges}`);
+
+    res.json({
+      success: true,
+      files_deleted: filesDeleted,
+      dirs_deleted: dirsDeleted,
+      db_rows_cleared: dbChanges,
+      freed_mb: freedMb,
+      message: `Deleted preaudit screenshots (~${freedMb} MB freed). ${dbChanges} DB records updated.`
+    });
+  } catch (err) {
+    console.error('[PRUNE-PREAUDIT-SS] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /admin/api/prune-audit-screenshots - Delete audit screenshot files for old/sent jobs
+// By default: deletes screenshots for jobs older than 14 days with status 'ready' or 'sent'
+router.post('/api/prune-audit-screenshots', requireAdmin, async (req, res) => {
+  const { getPersistentPublicDir } = require('../runtimePaths');
+  const { db } = require('../db');
+  const daysOld = parseInt(req.body && req.body.days_old, 10) || 14;
+
+  function sqlAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rows) => { if (err) return reject(err); resolve(rows || []); });
+    });
+  }
+
+  const screenshotsBase = path.join(getPersistentPublicDir(), 'audit_screenshots');
+
+  try {
+    // Find old jobs whose screenshots we can safely remove
+    const oldJobs = await sqlAll(
+      `SELECT id FROM audit_jobs WHERE created_at < datetime('now', '-${daysOld} days') AND status IN ('ready','sent','failed')`,
+      []
+    );
+
+    let dirsDeleted = 0;
+    let sizeFreed = 0;
+    const { execSync } = require('child_process');
+
+    for (const job of oldJobs) {
+      const dir = path.join(screenshotsBase, String(job.id));
+      if (!fs.existsSync(dir)) continue;
+      try {
+        const out = execSync(`du -sk "${dir}"`, { encoding: 'utf8' });
+        sizeFreed += parseInt(String(out).trim().split(/\s+/)[0], 10) * 1024;
+      } catch (_) {}
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        dirsDeleted++;
+      } catch (e) {
+        console.warn('[PRUNE-AUDIT-SS] Could not delete dir:', dir, e.message);
+      }
+    }
+
+    const freedMb = +(sizeFreed / 1024 / 1024).toFixed(0);
+    console.log(`[PRUNE-AUDIT-SS] Deleted ${dirsDeleted} job dirs (>${daysOld} days old). ~${freedMb} MB freed.`);
+
+    res.json({
+      success: true,
+      jobs_checked: oldJobs.length,
+      dirs_deleted: dirsDeleted,
+      days_old: daysOld,
+      freed_mb: freedMb,
+      message: `Deleted screenshots for ${dirsDeleted} jobs older than ${daysOld} days. ~${freedMb} MB freed.`
+    });
+  } catch (err) {
+    console.error('[PRUNE-AUDIT-SS] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /admin/api/prune-audit-logs - Delete old audit_run_logs (keep last N days)
+router.post('/api/prune-audit-logs', requireAdmin, async (req, res) => {
+  const { db } = require('../db');
+  const daysOld = parseInt(req.body && req.body.days_old, 10) || 7;
+
+  function sqlRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) { if (err) return reject(err); resolve(this.changes); });
+    });
+  }
+
+  try {
+    const changes = await sqlRun(
+      `DELETE FROM audit_run_logs WHERE created_at < datetime('now', '-${daysOld} days')`
+    );
+    console.log(`[PRUNE-LOGS] Deleted ${changes} audit_run_logs older than ${daysOld} days`);
+    res.json({
+      success: true,
+      rows_deleted: changes,
+      message: `Deleted ${changes} log rows older than ${daysOld} days. Run VACUUM to reclaim space.`
+    });
+  } catch (err) {
+    console.error('[PRUNE-LOGS] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== PREAUDIT ROUTES ====================
 
 // GET /admin/preaudits - Preaudit management page
