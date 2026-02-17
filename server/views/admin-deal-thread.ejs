@@ -860,14 +860,10 @@
       chip.appendChild(rm);
       wrap.appendChild(chip);
     });
-    // Sync the hidden file input — may fail on older iOS (DataTransfer not fully supported),
-    // but not critical: form submission uses selectedFiles array directly.
-    try {
-      const dt = new DataTransfer();
-      selectedFiles.forEach(f => dt.items.add(f));
-      const inp = document.getElementById('attachInput');
-      if (inp) inp.files = dt.files;
-    } catch (e) { /* DataTransfer not supported — files sent via selectedFiles */ }
+    // NOTE: Do NOT sync inp.files via DataTransfer — on iOS Safari it invalidates
+    // the original File object temp references, causing FormData to send empty data.
+    // Form submission uses selectedFiles array directly (via fetch + FormData), so
+    // the native input's FileList is irrelevant.
   }
 
   document.getElementById('fileChips')?.addEventListener('click', e => {

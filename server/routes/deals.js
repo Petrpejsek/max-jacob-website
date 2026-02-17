@@ -30,7 +30,7 @@ const clientMessageLimiter = rateLimit({
 // ---------------------------------------------------------------------------
 const ALLOWED_MIME_TYPES = new Set([
   // Images
-  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic',
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic', 'image/heif',
   // Videos
   'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2',
   // Documents
