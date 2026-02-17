@@ -33,6 +33,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic', 'image/heif',
   // Videos
   'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2',
+  'video/mpeg', 'video/x-matroska',
   // Documents
   'application/pdf',
   'application/msword',
@@ -44,10 +45,20 @@ const ALLOWED_MIME_TYPES = new Set([
   'text/plain',
   'text/csv',
   'application/zip',
-  'application/x-zip-compressed'
+  'application/x-zip-compressed',
+  // Catch-all: iOS/Android sometimes send files with generic MIME
+  'application/octet-stream'
 ]);
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+// Allowed extensions — fallback when MIME type is empty or unrecognized
+const ALLOWED_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.heic', '.heif',
+  '.mp4', '.mov', '.webm', '.ogg', '.m4v', '.3gp', '.mkv', '.mpeg',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.txt', '.csv', '.zip'
+]);
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB (iPhone videos need more than 50 MB)
 
 // ---------------------------------------------------------------------------
 // Multer storage: store files per-deal
@@ -70,10 +81,16 @@ const dealStorage = multer.diskStorage({
 
 function fileFilter(req, file, cb) {
   if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`File type not allowed: ${file.mimetype}`), false);
+    return cb(null, true);
   }
+  // Fallback: check extension (iOS/Android sometimes send empty or wrong MIME)
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ext && ALLOWED_EXTENSIONS.has(ext)) {
+    console.log(`[DEAL] Accepted file by extension: ${file.originalname} (mime: "${file.mimetype}", ext: ${ext})`);
+    return cb(null, true);
+  }
+  console.warn(`[DEAL] Rejected file: ${file.originalname} (mime: "${file.mimetype}", ext: ${ext})`);
+  cb(new Error(`File type not allowed: ${file.mimetype || 'unknown'}`), false);
 }
 
 const upload = multer({

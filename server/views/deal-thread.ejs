@@ -698,8 +698,8 @@
 </div>
 
 <!-- Lightbox -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
-  <div class="lightbox-close" onclick="document.getElementById('lightbox').classList.remove('open')">×</div>
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-close">×</div>
   <img id="lightboxImg" src="" alt="">
 </div>
 
@@ -787,9 +787,20 @@
     selectedFiles = selectedFiles.concat(Array.from(list));
     renderChips();
   }
+  var MAX_CLIENT_FILE_SIZE = 100 * 1024 * 1024; // 100 MB — matches server limit
+
   // Bind via addEventListener (more reliable than inline onchange on iOS Safari)
   document.getElementById('attachInput')?.addEventListener('change', function() {
-    if (this.files && this.files.length) addFiles(this.files);
+    if (!this.files || !this.files.length) return;
+    // Client-side size check — reject before upload so user gets instant feedback
+    for (var i = 0; i < this.files.length; i++) {
+      if (this.files[i].size > MAX_CLIENT_FILE_SIZE) {
+        var sizeMB = Math.round(this.files[i].size / 1024 / 1024);
+        alert('File "' + this.files[i].name + '" is too large (' + sizeMB + ' MB). Maximum is 100 MB.');
+        return;
+      }
+    }
+    addFiles(this.files);
     // Do NOT clear this.value on mobile (iOS): it invalidates File refs so send fails
   });
 
@@ -882,15 +893,40 @@
     }
   });
 
-  // ── Lightbox ─────────────────────────────────────────────────
+  // ── Lightbox (event delegation — works reliably after polling DOM replacement) ──
   function openLightbox(src) {
-    document.getElementById('lightboxImg').src = src;
-    document.getElementById('lightbox').classList.add('open');
+    var lb = document.getElementById('lightbox');
+    var img = document.getElementById('lightboxImg');
+    if (!lb || !img) return;
+    img.src = src;
+    lb.classList.add('open');
   }
-  function closeLightbox(e) {
-    if (e.target === document.getElementById('lightbox')) document.getElementById('lightbox').classList.remove('open');
+  function closeLightbox() {
+    var lb = document.getElementById('lightbox');
+    if (lb) lb.classList.remove('open');
   }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('open'); });
+
+  // Delegated click handler: open lightbox when clicking any image inside .att-image
+  document.addEventListener('click', function(e) {
+    var img = e.target.closest ? e.target.closest('.att-image img') : null;
+    if (!img && e.target.tagName === 'IMG' && e.target.parentElement && e.target.parentElement.classList.contains('att-image')) {
+      img = e.target;
+    }
+    if (img) {
+      e.preventDefault();
+      e.stopPropagation();
+      openLightbox(img.src);
+      return;
+    }
+    // Close lightbox on background click
+    var lb = document.getElementById('lightbox');
+    if (lb && lb.classList.contains('open')) {
+      if (e.target === lb || e.target.classList.contains('lightbox-close')) {
+        closeLightbox();
+      }
+    }
+  });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
 </script>
 </body>
 </html>
