@@ -515,9 +515,13 @@ app.listen(PORT, listenHost, () => {
   memoryMonitor.startMonitoring();
 
   // One-time background PNG→JPEG conversion (runs after startup, non-blocking)
-  // Safe to run every deploy — skips files already converted (no .png exists)
+  // Skipped in production: avoids segfault/memory pressure with 10k+ files and full disk (ENOSPC)
   setImmediate(() => {
     (async () => {
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[PNG2JPG] Skipping in production (run manually if needed).');
+        return;
+      }
       let sharp;
       try { sharp = require('sharp'); } catch (e) {
         console.log('[PNG2JPG] sharp not available, skipping PNG conversion:', e.message);
