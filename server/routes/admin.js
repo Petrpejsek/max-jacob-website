@@ -52,6 +52,7 @@ const {
   deletePreauditResult,
   addToBlacklist,
   // Deal threads
+  ensureDealTables,
   createDeal,
   getAllDeals,
   getDealById,
@@ -3229,14 +3230,20 @@ function getAdminBaseUrl(req) {
   return process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 }
 
-// GET /admin/deals — list all deals
+// GET /admin/deals — list all deals (ensures deal tables exist on first load, e.g. production)
 router.get('/deals', requireAdmin, (req, res) => {
-  getAllDeals((err, deals) => {
-    if (err) {
-      console.error('[DEALS] Error listing deals:', err);
-      return res.status(500).send('Error loading deals.');
+  ensureDealTables((ensureErr) => {
+    if (ensureErr) {
+      console.error('[DEALS] Error ensuring deal tables:', ensureErr);
+      return res.status(500).send('Error loading deals. Database may be read-only or out of space.');
     }
-    res.render('admin-deals', { deals, error: req.query.error || null, success: req.query.success || null });
+    getAllDeals((err, deals) => {
+      if (err) {
+        console.error('[DEALS] Error listing deals:', err);
+        return res.status(500).send('Error loading deals.');
+      }
+      res.render('admin-deals', { deals, error: req.query.error || null, success: req.query.success || null });
+    });
   });
 });
 
@@ -3289,27 +3296,33 @@ router.post('/deals', requireAdmin, (req, res) => {
 router.get('/deals/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
 
-  getDealById(id, (err, deal) => {
-    if (err || !deal) {
-      return res.status(404).send('Deal not found.');
+  ensureDealTables((ensureErr) => {
+    if (ensureErr) {
+      console.error('[DEALS] Error ensuring deal tables:', ensureErr);
+      return res.status(500).send('Error loading deal. Database may be read-only or out of space.');
     }
-
-    getDealMessages(deal.id, (msgErr, messages) => {
-      if (msgErr) {
-        console.error('[DEALS] Error fetching messages:', msgErr);
-        return res.status(500).send('Error loading messages.');
+    getDealById(id, (err, deal) => {
+      if (err || !deal) {
+        return res.status(404).send('Deal not found.');
       }
 
-      const baseUrl = getAdminBaseUrl(req);
-      const threadLink = `${baseUrl}/deal/${deal.magic_token}`;
+      getDealMessages(deal.id, (msgErr, messages) => {
+        if (msgErr) {
+          console.error('[DEALS] Error fetching messages:', msgErr);
+          return res.status(500).send('Error loading messages.');
+        }
 
-      res.render('admin-deal-thread', {
-        deal,
-        messages,
-        threadLink,
-        baseUrl,
-        error: req.query.error || null,
-        success: req.query.success || null
+        const baseUrl = getAdminBaseUrl(req);
+        const threadLink = `${baseUrl}/deal/${deal.magic_token}`;
+
+        res.render('admin-deal-thread', {
+          deal,
+          messages,
+          threadLink,
+          baseUrl,
+          error: req.query.error || null,
+          success: req.query.success || null
+        });
       });
     });
   });

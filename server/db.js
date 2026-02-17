@@ -2796,6 +2796,47 @@ function createDeal(data, callback) {
   });
 }
 
+/** Ensure deal tables exist (e.g. on production if init ran before tables were added or disk was full). Idempotent. */
+function ensureDealTables(callback) {
+  const sqls = [
+    `CREATE TABLE IF NOT EXISTS deals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_email TEXT NOT NULL,
+      magic_token TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS deal_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      deal_id INTEGER NOT NULL,
+      sender TEXT NOT NULL,
+      body TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (deal_id) REFERENCES deals(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS deal_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      FOREIGN KEY (message_id) REFERENCES deal_messages(id)
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_deal_messages_deal_id ON deal_messages(deal_id)',
+    'CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)'
+  ];
+  let i = 0;
+  function next(err) {
+    if (err) return callback(err);
+    if (i >= sqls.length) return callback(null);
+    db.run(sqls[i++], next);
+  }
+  next(null);
+}
+
 function getAllDeals(callback) {
   const sql = `
     SELECT d.*,
@@ -2963,6 +3004,7 @@ module.exports = {
   getBlacklistedUrls,
   removeFromBlacklist,
   // Deal threads
+  ensureDealTables,
   createDeal,
   getAllDeals,
   getDealById,
