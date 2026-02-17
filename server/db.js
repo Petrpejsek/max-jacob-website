@@ -912,11 +912,77 @@ function initDatabase() {
     }
   });
 
+  // ==================== DEAL THREADS TABLES ====================
+
+  // Deals table - one row per client deal/project
+  const createDealsTableSQL = `
+    CREATE TABLE IF NOT EXISTS deals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_email TEXT NOT NULL,
+      magic_token TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  db.run(createDealsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating deals table:', err);
+    } else {
+      console.log('Table deals ready');
+    }
+  });
+
+  // Deal messages table - chat messages within a deal thread
+  const createDealMessagesTableSQL = `
+    CREATE TABLE IF NOT EXISTS deal_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      deal_id INTEGER NOT NULL,
+      sender TEXT NOT NULL,
+      body TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (deal_id) REFERENCES deals(id)
+    )
+  `;
+
+  db.run(createDealMessagesTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating deal_messages table:', err);
+    } else {
+      console.log('Table deal_messages ready');
+    }
+  });
+
+  // Deal attachments table - files attached to messages
+  const createDealAttachmentsTableSQL = `
+    CREATE TABLE IF NOT EXISTS deal_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      FOREIGN KEY (message_id) REFERENCES deal_messages(id)
+    )
+  `;
+
+  db.run(createDealAttachmentsTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating deal_attachments table:', err);
+    } else {
+      console.log('Table deal_attachments ready');
+    }
+  });
+
   // Indexes for performance (safe IF NOT EXISTS)
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_search_id ON preaudit_results(search_id)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_status ON preaudit_results(status)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_blacklist_url ON preaudit_blacklist(url)', () => {});
-  
+  db.run('CREATE INDEX IF NOT EXISTS idx_deal_messages_deal_id ON deal_messages(deal_id)', () => {});
+  db.run('CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)', () => {});
+
   // Test zápisu do databáze
   db.run('SELECT 1', (err) => {
     if (err) {
@@ -2711,6 +2777,120 @@ function removeFromBlacklist(url, callback) {
   });
 }
 
+// ==================== DEAL THREADS FUNCTIONS ====================
+
+function createDeal(data, callback) {
+  const sql = `
+    INSERT INTO deals (title, client_name, client_email, magic_token, status)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+  db.run(sql, [
+    data.title,
+    data.client_name,
+    data.client_email,
+    data.magic_token,
+    data.status || 'active'
+  ], function(err) {
+    if (err) callback(err, null);
+    else callback(null, { id: this.lastID });
+  });
+}
+
+function getAllDeals(callback) {
+  const sql = `
+    SELECT d.*,
+      (SELECT COUNT(*) FROM deal_messages WHERE deal_id = d.id) as message_count,
+      (SELECT MAX(created_at) FROM deal_messages WHERE deal_id = d.id) as last_message_at
+    FROM deals d
+    ORDER BY d.created_at DESC
+  `;
+  db.all(sql, [], (err, rows) => {
+    if (err) callback(err, null);
+    else callback(null, rows || []);
+  });
+}
+
+function getDealById(id, callback) {
+  const sql = `SELECT * FROM deals WHERE id = ?`;
+  db.get(sql, [id], (err, row) => {
+    if (err) callback(err, null);
+    else callback(null, row);
+  });
+}
+
+function getDealByToken(token, callback) {
+  const sql = `SELECT * FROM deals WHERE magic_token = ?`;
+  db.get(sql, [token], (err, row) => {
+    if (err) callback(err, null);
+    else callback(null, row);
+  });
+}
+
+function updateDealStatus(id, status, callback) {
+  const sql = `UPDATE deals SET status = ? WHERE id = ?`;
+  db.run(sql, [status, id], function(err) {
+    if (err) callback(err, null);
+    else callback(null, { changes: this.changes });
+  });
+}
+
+function getDealMessages(dealId, callback) {
+  const sql = `
+    SELECT m.*, 
+      GROUP_CONCAT(
+        a.id || '|' || a.filename || '|' || a.original_name || '|' || a.mime_type || '|' || a.size,
+        ';;'
+      ) as attachments_raw
+    FROM deal_messages m
+    LEFT JOIN deal_attachments a ON a.message_id = m.id
+    WHERE m.deal_id = ?
+    GROUP BY m.id
+    ORDER BY m.created_at ASC
+  `;
+  db.all(sql, [dealId], (err, rows) => {
+    if (err) return callback(err, null);
+    const parsed = (rows || []).map(row => {
+      const attachments = [];
+      if (row.attachments_raw) {
+        row.attachments_raw.split(';;').forEach(part => {
+          const [id, filename, original_name, mime_type, size] = part.split('|');
+          if (id) attachments.push({ id: parseInt(id), filename, original_name, mime_type, size: parseInt(size) });
+        });
+      }
+      return { ...row, attachments_raw: undefined, attachments };
+    });
+    callback(null, parsed);
+  });
+}
+
+function createDealMessage(data, callback) {
+  const sql = `
+    INSERT INTO deal_messages (deal_id, sender, body)
+    VALUES (?, ?, ?)
+  `;
+  db.run(sql, [data.deal_id, data.sender, data.body || null], function(err) {
+    if (err) callback(err, null);
+    else callback(null, { id: this.lastID });
+  });
+}
+
+function createDealAttachment(data, callback) {
+  const sql = `
+    INSERT INTO deal_attachments (message_id, filename, original_name, mime_type, size)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+  db.run(sql, [
+    data.message_id,
+    data.filename,
+    data.original_name,
+    data.mime_type,
+    data.size
+  ], function(err) {
+    if (err) callback(err, null);
+    else callback(null, { id: this.lastID });
+  });
+}
+
 module.exports = {
   db,
   insertSubmission,
@@ -2781,7 +2961,16 @@ module.exports = {
   getPreauditEmailCandidateByUrl,
   getPreauditCountsBySearchId,
   getBlacklistedUrls,
-  removeFromBlacklist
+  removeFromBlacklist,
+  // Deal threads
+  createDeal,
+  getAllDeals,
+  getDealById,
+  getDealByToken,
+  updateDealStatus,
+  getDealMessages,
+  createDealMessage,
+  createDealAttachment
 };
 
 // Site Settings functions

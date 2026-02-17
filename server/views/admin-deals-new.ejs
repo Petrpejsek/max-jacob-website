@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Deal — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #f7f8fa; color: #111827; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 0 24px; height: 60px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .back-btn {
+      font-size: 13px; font-weight: 500; color: #6b7280;
+      text-decoration: none; padding: 5px 10px; border-radius: 8px;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .back-btn:hover { background: #f3f4f6; color: #374151; }
+    .topbar-divider { width: 1px; height: 20px; background: #e5e7eb; }
+    .topbar-title { font-size: 15px; font-weight: 600; color: #111827; }
+
+    .page { max-width: 520px; margin: 0 auto; padding: 36px 24px; }
+
+    .page-title { font-size: 22px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+    .page-sub { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
+
+    .info-box {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #0369a1;
+      line-height: 1.6;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .info-box svg { flex-shrink: 0; margin-top: 1px; }
+
+    .alert { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 18px; }
+    .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 24px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+
+    input[type="text"],
+    input[type="email"] {
+      width: 100%; padding: 10px 13px;
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 9px;
+      color: #111827; font-size: 14px; font-family: inherit;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      border-color: #a5b4fc;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+    }
+    input::placeholder { color: #9ca3af; }
+
+    .help { font-size: 12px; color: #9ca3af; margin-top: 5px; }
+
+    .form-actions { display: flex; gap: 10px; margin-top: 24px; }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #6366f1; color: #fff; border: none; border-radius: 9px;
+      padding: 10px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #4f46e5; }
+
+    .btn-ghost {
+      display: inline-flex; align-items: center;
+      background: none; color: #6b7280; border: 1.5px solid #e5e7eb; border-radius: 9px;
+      padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: inherit;
+      cursor: pointer; text-decoration: none; transition: background 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { background: #f3f4f6; color: #374151; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/admin/deals" class="back-btn">
+    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Deal Threads
+  </a>
+  <div class="topbar-divider"></div>
+  <span class="topbar-title">New Deal</span>
+</div>
+
+<div class="page">
+  <div class="page-title">Create a deal thread</div>
+  <div class="page-sub">Open a secure, private conversation with a client.</div>
+
+  <div class="info-box">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-4m0-4h.01"/></svg>
+    <span>The client will receive an email with a unique magic link — no account or password needed. You'll be notified whenever they reply.</span>
+  </div>
+
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="card">
+    <form action="/admin/deals" method="POST">
+      <div class="form-group">
+        <label for="title">Project / Deal Title</label>
+        <input type="text" id="title" name="title" placeholder="e.g. Website Redesign — Acme Corp" required autofocus>
+        <p class="help">Shown in the thread header for both you and the client.</p>
+      </div>
+      <div class="form-group">
+        <label for="client_name">Client Name</label>
+        <input type="text" id="client_name" name="client_name" placeholder="e.g. John Smith" required>
+      </div>
+      <div class="form-group">
+        <label for="client_email">Client Email</label>
+        <input type="email" id="client_email" name="client_email" placeholder="client@example.com" required>
+        <p class="help">Magic link and all notifications will be sent here.</p>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          Create &amp; Send Link
+        </button>
+        <a href="/admin/deals" class="btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>

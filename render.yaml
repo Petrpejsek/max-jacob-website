@@ -32,6 +32,8 @@ services:
       # Preaudits: fullpage screenshots for modal review (can be toggled off if memory is tight)
       - key: ENABLE_PREAUDIT_FULLPAGE_SCREENSHOTS
         value: "true"
+      # Set in Render dashboard: BASE_URL = your production URL (e.g. https://yourservice.onrender.com)
+      # so deal-thread magic links and email notifications use the correct domain.
       # IMPORTANT: Secrets MUST be set in the Render dashboard (or your VPS env),
       # never committed to git.
       # Required:
@@ -39,6 +41,7 @@ services:
       # - SESSION_SECRET (for session security)
       # - OPENROUTER_API_KEY (for LLM audit pipeline)
       # - RESEND_API_KEY (for email sending & tracking)
+      # - BASE_URL (production URL for deal magic links and emails; e.g. https://maxandjacob.com)
       # PORT je automaticky nastavený Renderem, nepotřebujeme ho explicitně nastavovat
     healthCheckPath: /health
     autoDeploy: true

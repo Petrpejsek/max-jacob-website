@@ -3183,6 +3183,249 @@ router.get('/api/email-health', requireAdmin, async (req, res) => {
   }
 });
 
+// ============================================================
+// DEAL THREADS ADMIN ROUTES
+// ============================================================
+
+const crypto = require('crypto');
+const multerDeal = require('multer');
+const { getPersistentPublicDir: getPubDir } = require('../runtimePaths');
+
+const DEAL_ALLOWED_MIME = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed'
+]);
+
+const dealAdminStorage = multerDeal.diskStorage({
+  destination: (req, file, cb) => {
+    const dealId = req.params.id || 'admin';
+    const uploadDir = path.join(getPubDir(), 'deal_assets', `deal-${dealId}`);
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const uploadDealAdmin = multerDeal({
+  storage: dealAdminStorage,
+  limits: { fileSize: 50 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) => {
+    if (DEAL_ALLOWED_MIME.has(file.mimetype)) cb(null, true);
+    else cb(new Error(`File type not allowed: ${file.mimetype}`), false);
+  }
+});
+
+function getAdminBaseUrl(req) {
+  return process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+}
+
+// GET /admin/deals — list all deals
+router.get('/deals', requireAdmin, (req, res) => {
+  getAllDeals((err, deals) => {
+    if (err) {
+      console.error('[DEALS] Error listing deals:', err);
+      return res.status(500).send('Error loading deals.');
+    }
+    res.render('admin-deals', { deals, error: req.query.error || null, success: req.query.success || null });
+  });
+});
+
+// GET /admin/deals/new — create new deal form
+router.get('/deals/new', requireAdmin, (req, res) => {
+  res.render('admin-deals-new', { error: req.query.error || null });
+});
+
+// POST /admin/deals — create new deal
+router.post('/deals', requireAdmin, (req, res) => {
+  const { title, client_name, client_email } = req.body;
+
+  if (!title || !client_name || !client_email) {
+    return res.redirect('/admin/deals/new?error=' + encodeURIComponent('All fields are required.'));
+  }
+
+  const magic_token = crypto.randomBytes(32).toString('hex');
+
+  createDeal({ title, client_name, client_email, magic_token }, (err, result) => {
+    if (err) {
+      console.error('[DEALS] Error creating deal:', err);
+      return res.redirect('/admin/deals/new?error=' + encodeURIComponent('Failed to create deal.'));
+    }
+
+    const dealId = result.id;
+    const baseUrl = getAdminBaseUrl(req);
+    const threadLink = `${baseUrl}/deal/${magic_token}`;
+
+    // Send magic link email to client
+    const { sendDealNotificationToClient: sendLink } = require('../services/emailService');
+    const fakeDeal = { id: dealId, title, client_name, client_email, magic_token };
+
+    // Send welcome message as first admin message then email
+    createDealMessage({ deal_id: dealId, sender: 'admin', body: `Hi ${client_name},\n\nWelcome to your dedicated project thread! This is a secure space where we can communicate, share files, and track progress on your project.\n\nYou can always return to this conversation using the link in this email — no password needed.\n\nLooking forward to working with you!\n\nJacob` }, (msgErr) => {
+      if (msgErr) console.error('[DEALS] Error creating welcome message:', msgErr);
+
+      sendLink({
+        deal: fakeDeal,
+        messageBody: `Hi ${client_name},\n\nWe've opened a dedicated project thread for your deal: "${title}".\n\nUse the button below to access your secure conversation — no password needed.`,
+        attachments: [],
+        baseUrl
+      }).catch(emailErr => console.error('[DEALS] Error sending welcome email:', emailErr));
+
+      res.redirect(`/admin/deals/${dealId}?success=Deal+created+and+magic+link+sent.`);
+    });
+  });
+});
+
+// GET /admin/deals/:id — view deal thread (admin)
+router.get('/deals/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+
+  getDealById(id, (err, deal) => {
+    if (err || !deal) {
+      return res.status(404).send('Deal not found.');
+    }
+
+    getDealMessages(deal.id, (msgErr, messages) => {
+      if (msgErr) {
+        console.error('[DEALS] Error fetching messages:', msgErr);
+        return res.status(500).send('Error loading messages.');
+      }
+
+      const baseUrl = getAdminBaseUrl(req);
+      const threadLink = `${baseUrl}/deal/${deal.magic_token}`;
+
+      res.render('admin-deal-thread', {
+        deal,
+        messages,
+        threadLink,
+        baseUrl,
+        error: req.query.error || null,
+        success: req.query.success || null
+      });
+    });
+  });
+});
+
+// POST /admin/deals/:id/messages — admin sends a message
+router.post('/deals/:id/messages', requireAdmin, (req, res) => {
+  const { id } = req.params;
+
+  getDealById(id, (err, deal) => {
+    if (err || !deal) {
+      return res.status(404).send('Deal not found.');
+    }
+
+    uploadDealAdmin.array('attachments', 10)(req, res, (uploadErr) => {
+      if (uploadErr) {
+        console.error('[DEALS] Upload error:', uploadErr.message);
+        return res.redirect(`/admin/deals/${id}?error=${encodeURIComponent(uploadErr.message)}`);
+      }
+
+      const body = (req.body.body || '').trim();
+      const files = req.files || [];
+
+      if (!body && files.length === 0) {
+        return res.redirect(`/admin/deals/${id}?error=Message+cannot+be+empty.`);
+      }
+
+      createDealMessage({ deal_id: deal.id, sender: 'admin', body: body || null }, (msgErr, msgResult) => {
+        if (msgErr) {
+          console.error('[DEALS] Error creating message:', msgErr);
+          return res.redirect(`/admin/deals/${id}?error=Failed+to+send+message.`);
+        }
+
+        const messageId = msgResult.id;
+        const pubDir = getPubDir();
+
+        const attachmentPromises = files.map(file => {
+          return new Promise((resolve, reject) => {
+            const relPath = path.relative(pubDir, file.path).replace(/\\/g, '/');
+            createDealAttachment({
+              message_id: messageId,
+              filename: relPath,
+              original_name: file.originalname,
+              mime_type: file.mimetype,
+              size: file.size
+            }, (aErr, aResult) => {
+              if (aErr) reject(aErr);
+              else resolve({ filename: relPath, original_name: file.originalname, mime_type: file.mimetype, size: file.size });
+            });
+          });
+        });
+
+        Promise.all(attachmentPromises)
+          .then(savedAttachments => {
+            // Send email notification to client (non-blocking)
+            sendDealNotificationToClient({
+              deal,
+              messageBody: body,
+              attachments: savedAttachments,
+              baseUrl: getAdminBaseUrl(req)
+            }).catch(emailErr => console.error('[DEALS] Failed to send client notification:', emailErr));
+
+            res.redirect(`/admin/deals/${id}?success=1`);
+          })
+          .catch(aErr => {
+            console.error('[DEALS] Error saving attachments:', aErr);
+            res.redirect(`/admin/deals/${id}?success=1`);
+          });
+      });
+    });
+  });
+});
+
+// POST /admin/deals/:id/status — toggle deal status open/closed
+router.post('/deals/:id/status', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!['active', 'closed'].includes(status)) {
+    return res.redirect(`/admin/deals/${id}?error=Invalid+status.`);
+  }
+
+  updateDealStatus(id, status, (err) => {
+    if (err) {
+      console.error('[DEALS] Error updating status:', err);
+      return res.redirect(`/admin/deals/${id}?error=Failed+to+update+status.`);
+    }
+    res.redirect(`/admin/deals/${id}?success=Status+updated.`);
+  });
+});
+
+// POST /admin/deals/:id/resend-link — resend magic link to client
+router.post('/deals/:id/resend-link', requireAdmin, (req, res) => {
+  const { id } = req.params;
+
+  getDealById(id, (err, deal) => {
+    if (err || !deal) {
+      return res.status(404).send('Deal not found.');
+    }
+
+    const baseUrl = getAdminBaseUrl(req);
+
+    sendDealNotificationToClient({
+      deal,
+      messageBody: `Hi ${deal.client_name},\n\nHere is your secure link to access your project conversation with Max & Jacob.\n\nNo password needed — just click the button below.`,
+      attachments: [],
+      baseUrl
+    })
+      .then(() => res.redirect(`/admin/deals/${id}?success=Magic+link+resent+to+${encodeURIComponent(deal.client_email)}.`))
+      .catch(emailErr => {
+        console.error('[DEALS] Error resending magic link:', emailErr);
+        res.redirect(`/admin/deals/${id}?error=Failed+to+resend+link.`);
+      });
+  });
+});
+
 module.exports = router;
 
 

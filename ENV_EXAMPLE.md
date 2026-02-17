@@ -29,6 +29,10 @@ ENABLE_FULLPAGE_SCREENSHOTS=true
 # PUBLIC_DIR=/path/to/persistent/storage
 # DB_PATH=/path/to/persistent/data.db
 
+# Production URL for deal threads (magic links and email notifications)
+# Set to your live app URL, e.g. https://yourservice.onrender.com or https://maxandjacob.com
+# BASE_URL=https://your-production-domain.com
+
 # Node Environment
 NODE_ENV=development
 ```

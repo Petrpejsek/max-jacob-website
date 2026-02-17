@@ -43,6 +43,9 @@ Make sure these are still set (don't change them):
 - ✅ `DB_PATH` - Path to SQLite database
 - ✅ `PUBLIC_DIR` - Path to public/persistent storage
 
+**For Deal Threads (magic-link client chat):**
+- ✅ `BASE_URL` - Your production app URL (e.g. `https://max-jacob-website.onrender.com` or custom domain). Used in magic-link emails and "View conversation" links. If unset, the app uses the request host (works behind a single domain).
+
 ### Step 3: Deploy on Render
 
 **Option A: Automatic Deploy (if enabled)**
@@ -82,6 +85,14 @@ After deployment completes:
    - Path should be: `PUBLIC_DIR/preaudit_screenshots/`
    - Verify screenshots load in UI
 
+5. **Test Deal Threads (client chat):**
+   - In admin go to: **Deal Threads** (or `/admin/deals`)
+   - Create a new deal (title, client name, email) → client receives magic-link email if `RESEND_API_KEY` is set
+   - Open the deal thread, copy **Client Link**, open it in an incognito window — you should see the client chat (no sidebar)
+   - Send a message as client; you should get an email at jacob@maxandjacob.com (if Resend is configured)
+   - Reply from admin; client should get an email with "View conversation" pointing to production URL
+   - **BASE_URL:** If magic links in emails point to localhost or wrong domain, set `BASE_URL` in Render to your production URL (e.g. `https://max-jacob-website.onrender.com`)
+
 ## 📋 Post-Deployment Verification
 
 ### Database Tables Created
@@ -94,7 +105,8 @@ You should see:
 - ✅ `preaudit_searches`
 - ✅ `preaudit_results`
 - ✅ `preaudit_blacklist`
-- ✅ All existing tables (audit_jobs, companies, etc.)
+- ✅ `deals`, `deal_messages`, `deal_attachments` (deal threads)
+- ✅ All existing tables (audit_jobs, etc.)
 
 ### Logs to Monitor
 ```bash
@@ -122,6 +134,9 @@ You should see:
 - Check Render logs for specific error
 - All migrations use `CREATE TABLE IF NOT EXISTS` - safe to rerun
 - Existing data is preserved
+
+### Issue: Deal thread magic links point to wrong URL in emails
+**Solution:** Set `BASE_URL` in Render dashboard to your production URL (e.g. `https://max-jacob-website.onrender.com` or your custom domain). Redeploy not required; restart is enough.
 
 ### Issue: Search fails
 **Solution:**
