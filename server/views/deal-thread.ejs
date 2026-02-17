@@ -797,9 +797,8 @@
     const wrap = document.getElementById('fileChips');
     if (!wrap) return;
     wrap.innerHTML = '';
-    const dt = new DataTransfer();
+    // Render chips first — independent of DataTransfer so it always works on mobile
     selectedFiles.forEach((f, i) => {
-      dt.items.add(f);
       const chip = document.createElement('div');
       chip.className = 'file-chip';
       const name = document.createElement('span');
@@ -814,8 +813,14 @@
       chip.appendChild(rm);
       wrap.appendChild(chip);
     });
-    const inp = document.getElementById('attachInput');
-    if (inp) inp.files = dt.files;
+    // Sync the hidden file input — may fail on older iOS (DataTransfer not fully supported),
+    // but not critical: form submission uses selectedFiles array directly.
+    try {
+      const dt = new DataTransfer();
+      selectedFiles.forEach(f => dt.items.add(f));
+      const inp = document.getElementById('attachInput');
+      if (inp) inp.files = dt.files;
+    } catch (e) { /* DataTransfer not supported — files sent via selectedFiles */ }
   }
 
   document.getElementById('fileChips')?.addEventListener('click', e => {
