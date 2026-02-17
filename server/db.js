@@ -27,21 +27,47 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CR
     console.error('Error message:', err.message);
   } else {
     console.log('Connected to SQLite database at:', dbPath);
-    // Test, jestli můžeme psát do databáze
-  // Production-ready SQLite configuration
-  db.run('PRAGMA journal_mode=WAL;', (pragmaErr) => {
-    if (pragmaErr) {
-      console.error('Error setting WAL mode:', pragmaErr);
-    } else {
-      console.log('Database WAL mode enabled');
-    }
-  });
-  
-  db.run('PRAGMA busy_timeout=5000;', () => {}); // 5s timeout for locks
-  db.run('PRAGMA foreign_keys=ON;', () => {}); // Enforce foreign keys
-  db.run('PRAGMA synchronous=NORMAL;', () => {}); // Good balance for WAL mode
-  
-  initDatabase();
+
+    // Production-ready SQLite configuration
+    // Keep WAL from growing indefinitely and reduce "disk full" surprises.
+    db.serialize(() => {
+      db.run('PRAGMA journal_mode=WAL;', (pragmaErr) => {
+        if (pragmaErr) {
+          console.error('Error setting WAL mode:', pragmaErr);
+        } else {
+          console.log('Database WAL mode enabled');
+        }
+      });
+
+      // Locks / concurrency
+      db.run('PRAGMA busy_timeout=5000;', () => {}); // 5s timeout for locks
+      db.run('PRAGMA foreign_keys=ON;', () => {}); // Enforce foreign keys
+      db.run('PRAGMA synchronous=NORMAL;', () => {}); // Good balance for WAL mode
+
+      // WAL management (important on small disks)
+      db.run('PRAGMA wal_autocheckpoint=1000;', () => {}); // checkpoint every ~1000 pages
+      db.run('PRAGMA journal_size_limit=67108864;', () => {}); // 64MB soft limit for -wal size
+
+      // Reduce temp file pressure (best-effort; safe if ignored)
+      db.run('PRAGMA temp_store=MEMORY;', () => {});
+
+      // Best-effort truncation on startup (helps when WAL ballooned)
+      db.run('PRAGMA wal_checkpoint(TRUNCATE);', (cpErr) => {
+        if (cpErr) console.warn('[DB] WAL checkpoint(TRUNCATE) on startup failed:', cpErr.message);
+      });
+
+      // Init schema after pragmas are queued
+      initDatabase();
+    });
+
+    // Periodic WAL checkpoint to avoid runaway -wal file growth.
+    // Note: does NOT help if the underlying filesystem is already full.
+    const intervalMs = 15 * 60 * 1000; // 15 minutes
+    setInterval(() => {
+      db.run('PRAGMA wal_checkpoint(TRUNCATE);', (cpErr) => {
+        if (cpErr) console.warn('[DB] Periodic WAL checkpoint failed:', cpErr.message);
+      });
+    }, intervalMs).unref();
   }
 });
 
@@ -285,6 +311,43 @@ function initDatabase() {
           console.log('Column homepage_proposal_data_json already exists or error:', alterErr.message);
         } else if (!alterErr) {
           console.log('Column homepage_proposal_data_json added to audit_jobs');
+        }
+      });
+
+      // Add Full Scraping (Stage 2) columns
+      db.run('ALTER TABLE audit_jobs ADD COLUMN full_scraping_status TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column full_scraping_status already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column full_scraping_status added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN full_scraping_started_at DATETIME', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column full_scraping_started_at already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column full_scraping_started_at added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN full_scraping_completed_at DATETIME', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column full_scraping_completed_at already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column full_scraping_completed_at added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN full_scraping_json TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column full_scraping_json already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column full_scraping_json added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN full_scraping_error TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column full_scraping_error already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column full_scraping_error added to audit_jobs');
         }
       });
 
@@ -1190,7 +1253,13 @@ const AUDIT_JOB_UPDATE_FIELDS = new Set([
   'site_snapshot_json',
   // Homepage proposal
   'homepage_proposal_html',
-  'homepage_proposal_data_json'
+  'homepage_proposal_data_json',
+  // Full Scraping (Stage 2)
+  'full_scraping_status',
+  'full_scraping_started_at',
+  'full_scraping_completed_at',
+  'full_scraping_json',
+  'full_scraping_error'
 ]);
 
 function updateAuditJob(id, updates, callback) {

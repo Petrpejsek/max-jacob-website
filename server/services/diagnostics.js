@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execSync } = require('child_process');
 
 const { db } = require('../db');
 const { getRepoRoot, getPersistentPublicDir, getSqliteDbPath } = require('../runtimePaths');
@@ -35,6 +36,39 @@ function canWriteDir(dir) {
     fs.writeFileSync(probe, 'ok', 'utf8');
     fs.unlinkSync(probe);
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function statFile(filePath) {
+  try {
+    const st = fs.statSync(filePath);
+    return {
+      exists: true,
+      path: filePath,
+      size_bytes: st.size,
+      mtime: st.mtime ? st.mtime.toISOString() : null
+    };
+  } catch (e) {
+    return {
+      exists: false,
+      path: filePath,
+      error: e && e.code ? String(e.code) : e.message
+    };
+  }
+}
+
+function dfForPath(p) {
+  try {
+    // -k for stable, parseable output in KB across unix platforms (mac/linux)
+    const out = execSync(`df -k "${String(p).replace(/"/g, '\\"')}"`, { encoding: 'utf8' });
+    const lines = String(out || '').trim().split('\n');
+    if (lines.length < 2) return { ok: false, output: out };
+    // Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on
+    const header = lines[0];
+    const row = lines[lines.length - 1];
+    return { ok: true, header, row, raw: out };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -202,7 +236,17 @@ async function collectDiagnostics() {
       persistent_public_dir: publicDir,
       sqlite_db_path: dbPath,
       persistent_public_writable: canWriteDir(publicDir),
-      db_dir_writable: canWriteDir(path.dirname(dbPath))
+      db_dir_writable: canWriteDir(path.dirname(dbPath)),
+      sqlite_files: {
+        main: statFile(dbPath),
+        wal: statFile(`${dbPath}-wal`),
+        shm: statFile(`${dbPath}-shm`)
+      },
+      disk: {
+        repo_root: dfForPath(repoRoot),
+        public_dir: dfForPath(publicDir),
+        db_dir: dfForPath(path.dirname(dbPath))
+      }
     },
     env,
     db: {

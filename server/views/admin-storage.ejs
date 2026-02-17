@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Storage Management</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #0f172a;
+        --muted: rgba(255,255,255,0.60);
+        --border: rgba(255,255,255,0.10);
+        --btn: rgba(255,255,255,0.10);
+        --btnHover: rgba(255,255,255,0.18);
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --info: #3b82f6;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      body { font-family: var(--sans); margin: 0; padding: 24px; background: var(--bg); color: #e5e7eb; min-height: 100vh; }
+      a { color: #93c5fd; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+      h1 { margin: 0; font-size: 22px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+      .card h2 { margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+      .muted { color: var(--muted); font-size: 13px; }
+      .big-num { font-size: 36px; font-weight: 700; line-height: 1; }
+      .label { font-size: 13px; color: var(--muted); margin-top: 2px; }
+      .bar-wrap { background: rgba(255,255,255,.08); border-radius: 999px; height: 10px; margin: 10px 0 4px; overflow: hidden; }
+      .bar { height: 100%; border-radius: 999px; transition: width .4s; }
+      .bar.green { background: var(--success); }
+      .bar.yellow { background: var(--warning); }
+      .bar.red { background: var(--danger); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+      td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.05); }
+      tr:last-child td { border-bottom: none; }
+      .btn { border: 1px solid var(--border); background: var(--btn); color: #e5e7eb; border-radius: 10px; padding: 10px 18px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all .2s; }
+      .btn:hover { background: var(--btnHover); }
+      .btn:disabled { opacity: .5; cursor: not-allowed; }
+      .btn-danger { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.3); color: #fca5a5; }
+      .btn-danger:hover { background: rgba(239,68,68,.25); }
+      .btn-primary { background: rgba(59,130,246,.2); border-color: rgba(59,130,246,.4); color: #93c5fd; }
+      .btn-primary:hover { background: rgba(59,130,246,.3); }
+      .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+      .status-msg { margin-top: 12px; padding: 12px 16px; border-radius: 8px; font-size: 13px; display: none; }
+      .status-msg.ok { background: rgba(16,185,129,.15); border: 1px solid rgba(16,185,129,.3); color: #6ee7b7; display: block; }
+      .status-msg.err { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; display: block; }
+      .status-msg.info { background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.25); color: #93c5fd; display: block; }
+      #refreshBtn { gap: 6px; display: flex; align-items: center; }
+      .spin { animation: spin 1s linear infinite; display: inline-block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+      .tag.warn { background: rgba(245,158,11,.2); color: #fbbf24; }
+      .tag.ok { background: rgba(16,185,129,.15); color: #6ee7b7; }
+      .tag.crit { background: rgba(239,68,68,.15); color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <h1>💾 Storage Management</h1>
+        <p class="muted" style="margin:4px 0 0">Disk usage, database size and cleanup tools</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a href="/admin" class="btn">← Admin</a>
+        <button id="refreshBtn" class="btn" onclick="load()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div id="loading" class="muted" style="margin-bottom:20px">Loading storage data…</div>
+    <div id="content" style="display:none">
+
+      <!-- Disk bar -->
+      <div class="card" style="margin-bottom:16px">
+        <h2>Render Persistent Disk</h2>
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <span class="big-num" id="diskUsedGb">—</span>
+          <span class="muted" id="diskTotalGb" style="font-size:16px">/ — GB used</span>
+          <span class="tag" id="diskTag">—</span>
+        </div>
+        <div class="bar-wrap"><div class="bar" id="diskBar" style="width:0%"></div></div>
+        <div class="muted" id="diskAvail">—</div>
+      </div>
+
+      <!-- Stats grid -->
+      <div class="grid" id="statsGrid">
+        <!-- filled by JS -->
+      </div>
+
+      <!-- Actions -->
+      <div class="card">
+        <h2>Maintenance Actions</h2>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="runVacuum()" id="vacuumBtn">
+            🧹 VACUUM + WAL Checkpoint
+          </button>
+          <button class="btn btn-danger" onclick="prunePayloads()" id="pruneBtn">
+            ✂️ Prune Assistant Payloads
+          </button>
+        </div>
+        <p class="muted" style="margin:0 0 6px">
+          <strong>VACUUM</strong> — shrinks the DB file after deletions, checkpoints WAL. Takes 10–60s. Safe to run anytime.<br>
+          <strong>Prune Payloads</strong> — clears <code>request_payload_json</code> from completed assistant runs (~31 MB). Frees space immediately (run VACUUM after).
+        </p>
+        <div id="actionMsg"></div>
+      </div>
+
+      <!-- DB table breakdown -->
+      <div class="card" style="margin-top:16px">
+        <h2>Database Table Sizes</h2>
+        <table>
+          <thead><tr><th>Table</th><th style="text-align:right">Size (MB)</th><th style="text-align:right">Rows</th></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Column breakdown -->
+      <div class="card" style="margin-top:16px">
+        <h2>Largest Column Data</h2>
+        <table>
+          <thead><tr><th>Column</th><th style="text-align:right">Size (MB)</th><th style="text-align:right">Rows</th></tr></thead>
+          <tbody id="colBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Files breakdown -->
+      <div class="card" style="margin-top:16px">
+        <h2>DB Files &amp; Public Assets</h2>
+        <table>
+          <thead><tr><th>Path</th><th style="text-align:right">Size (MB)</th></tr></thead>
+          <tbody id="filesBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <script>
+      let data = null;
+
+      async function load() {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('content').style.display = 'none';
+        document.getElementById('refreshBtn').disabled = true;
+
+        try {
+          const r = await fetch('/admin/api/storage');
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          data = await r.json();
+          render(data);
+          document.getElementById('content').style.display = 'block';
+        } catch (e) {
+          document.getElementById('loading').textContent = 'Error loading storage data: ' + e.message;
+        } finally {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('refreshBtn').disabled = false;
+        }
+      }
+
+      function fmb(mb) {
+        if (mb === null || mb === undefined) return '—';
+        if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+        return mb.toFixed(1) + ' MB';
+      }
+
+      function render(d) {
+        // Disk bar
+        const disk = d.disk || {};
+        if (disk.total_mb) {
+          const usedGb = (disk.used_mb / 1024).toFixed(2);
+          const totalGb = (disk.total_mb / 1024).toFixed(1);
+          const pct = disk.used_pct || 0;
+          document.getElementById('diskUsedGb').textContent = usedGb + ' GB';
+          document.getElementById('diskTotalGb').textContent = '/ ' + totalGb + ' GB used';
+          document.getElementById('diskAvail').textContent = fmb(disk.avail_mb) + ' free  ·  ' + pct + '% used';
+          const bar = document.getElementById('diskBar');
+          bar.style.width = pct + '%';
+          bar.className = 'bar ' + (pct >= 90 ? 'red' : pct >= 75 ? 'yellow' : 'green');
+          const tag = document.getElementById('diskTag');
+          if (pct >= 90) { tag.textContent = 'CRITICAL'; tag.className = 'tag crit'; }
+          else if (pct >= 75) { tag.textContent = 'WARNING'; tag.className = 'tag warn'; }
+          else { tag.textContent = 'OK'; tag.className = 'tag ok'; }
+        } else {
+          document.getElementById('diskUsedGb').textContent = '—';
+          document.getElementById('diskTotalGb').textContent = disk.error || '';
+        }
+
+        // Stats grid
+        const dbMain = (d.db_files && d.db_files.main) || {};
+        const dbWal = (d.db_files && d.db_files.wal) || {};
+        const rc = d.row_counts || {};
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = `
+          <div class="card">
+            <h2>data.db</h2>
+            <div class="big-num">${fmb(dbMain.mb)}</div>
+            <div class="label">${(rc.audit_jobs||0)} audit jobs · ${(rc.crawled_pages||0)} crawled pages</div>
+          </div>
+          <div class="card">
+            <h2>WAL File</h2>
+            <div class="big-num" style="color:${dbWal.mb > 100 ? '#f87171' : '#e5e7eb'}">${fmb(dbWal.mb)}</div>
+            <div class="label">${dbWal.exists ? 'Active WAL' : 'No WAL / already checkpointed'}</div>
+          </div>
+          <div class="card">
+            <h2>Screenshots</h2>
+            <div class="big-num">${fmb(d.public && d.public.dirs && d.public.dirs.audit_screenshots && d.public.dirs.audit_screenshots.mb)}</div>
+            <div class="label">audit_screenshots on disk</div>
+          </div>
+          <div class="card">
+            <h2>Preaudit Screenshots</h2>
+            <div class="big-num">${fmb(d.public && d.public.dirs && d.public.dirs.preaudit_screenshots && d.public.dirs.preaudit_screenshots.mb)}</div>
+            <div class="label">preaudit_screenshots on disk</div>
+          </div>
+        `;
+
+        // Table breakdown
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = (d.db_tables || []).map(t =>
+          `<tr><td>${t.name}</td><td style="text-align:right;${t.mb>50?'color:#f87171;font-weight:700':''}">${t.mb.toFixed(1)}</td><td style="text-align:right;color:var(--muted)">${(rc[t.name]!==undefined?rc[t.name]:'—')}</td></tr>`
+        ).join('');
+
+        // Column breakdown
+        const colTbody = document.getElementById('colBody');
+        colTbody.innerHTML = (d.db_column_sizes || []).map(c =>
+          `<tr><td><code style="font-size:12px">${c.col}</code></td><td style="text-align:right;${c.mb>20?'color:#f87171;font-weight:700':''}">${c.mb.toFixed(1)}</td><td style="text-align:right;color:var(--muted)">${c.rows.toLocaleString()}</td></tr>`
+        ).join('');
+
+        // Files
+        const filesTbody = document.getElementById('filesBody');
+        const files = [];
+        if (d.db_files) {
+          ['main','wal','shm'].forEach(k => {
+            const f = d.db_files[k];
+            if (f) files.push({ name: 'DB ' + k + ': ' + (f.path || ''), mb: f.mb, exists: f.exists });
+          });
+        }
+        if (d.public && d.public.dirs) {
+          Object.entries(d.public.dirs).forEach(([k, v]) => {
+            files.push({ name: 'public/' + k + '/', mb: v && v.mb !== null ? v.mb : null, exists: v && v.exists });
+          });
+        }
+        if (d.public && d.public.total) {
+          files.push({ name: 'public/ (total)', mb: d.public.total.mb, exists: d.public.total.exists, bold: true });
+        }
+        filesTbody.innerHTML = files.map(f =>
+          `<tr><td style="${f.bold?'font-weight:700':''}"><span style="color:var(--muted)">${f.exists===false?'⚠ missing  ':''}</span>${f.name}</td><td style="text-align:right;${f.mb>500?'color:#f87171;font-weight:700':''}">${f.mb!==null&&f.mb!==undefined?fmb(f.mb):'—'}</td></tr>`
+        ).join('');
+      }
+
+      async function runVacuum() {
+        const btn = document.getElementById('vacuumBtn');
+        const msg = document.getElementById('actionMsg');
+        btn.disabled = true;
+        btn.textContent = '⏳ Running VACUUM… (may take 10–60s)';
+        msg.className = 'status-msg info';
+        msg.textContent = 'Running WAL checkpoint + VACUUM. Please wait…';
+
+        try {
+          const r = await fetch('/admin/api/vacuum', { method: 'POST' });
+          const result = await r.json();
+          if (result.success) {
+            msg.className = 'status-msg ok';
+            msg.textContent = '✓ ' + result.message + (result.freed_mb !== null ? '' : '') ;
+          } else {
+            msg.className = 'status-msg err';
+            msg.textContent = '✗ VACUUM failed: ' + result.error;
+          }
+          // Reload stats
+          await load();
+        } catch (e) {
+          msg.className = 'status-msg err';
+          msg.textContent = 'Error: ' + e.message;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '🧹 VACUUM + WAL Checkpoint';
+        }
+      }
+
+      async function prunePayloads() {
+        if (!confirm('This will clear request_payload_json from all completed assistant runs. The data cannot be recovered. Continue?')) return;
+        const btn = document.getElementById('pruneBtn');
+        const msg = document.getElementById('actionMsg');
+        btn.disabled = true;
+        btn.textContent = '⏳ Pruning…';
+        msg.className = 'status-msg info';
+        msg.textContent = 'Pruning assistant payloads…';
+
+        try {
+          const r = await fetch('/admin/api/prune-assistant-payloads', { method: 'POST' });
+          const result = await r.json();
+          if (result.success) {
+            msg.className = 'status-msg ok';
+            msg.textContent = '✓ ' + result.message + ' Run VACUUM to reclaim disk space.';
+          } else {
+            msg.className = 'status-msg err';
+            msg.textContent = '✗ ' + result.error;
+          }
+          await load();
+        } catch (e) {
+          msg.className = 'status-msg err';
+          msg.textContent = 'Error: ' + e.message;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '✂️ Prune Assistant Payloads';
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

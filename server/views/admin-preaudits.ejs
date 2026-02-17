@@ -665,7 +665,8 @@
                 const result = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(result.error || 'Search failed');
+                    // Prefer human-friendly message from API (e.g. SQLITE_FULL / storage full)
+                    throw new Error(result.message || result.error || 'Search failed');
                 }
 
                 console.log('Search started:', result);

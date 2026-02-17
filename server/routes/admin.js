@@ -1755,6 +1755,208 @@ router.post('/audits/:id/regenerate-homepage', requireAdmin, async (req, res) =>
   }
 });
 
+// POST /admin/audits/:id/run-full-scraping - Run Full Scraping (Stage 2)
+router.post('/audits/:id/run-full-scraping', requireAdmin, auditJobLimiter, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    console.log(`[FULL SCRAPING] Starting for audit ${id}`);
+    
+    // Load job to verify it exists and has URL
+    getAuditJobById(id, async (err, job) => {
+      if (err || !job) {
+        console.error('[FULL SCRAPING] Job not found:', err);
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Audit job not found' 
+        });
+      }
+      
+      // Only verify URL exists
+      if (!job.input_url) {
+        return res.status(400).json({
+          success: false,
+          error: 'No URL set',
+          message: 'Please set input_url first.'
+        });
+      }
+      
+      // Check if already running
+      if (job.full_scraping_status === 'running') {
+        return res.status(400).json({
+          success: false,
+          error: 'Full scraping is already running'
+        });
+      }
+      
+      // Run full scraping in background
+      const fullScraper = require('../services/fullScraper');
+      const { appendAuditRunLog } = require('../db');
+      
+      const logFn = (jobId, stage, message) => {
+        return new Promise((resolve) => {
+          appendAuditRunLog(jobId, stage, 'info', message, (err) => {
+            if (err) console.error('Error creating run log:', err);
+            resolve();
+          });
+        });
+      };
+      
+      setImmediate(async () => {
+        try {
+          await fullScraper.runFullScraping(Number(id), logFn);
+          console.log('[FULL SCRAPING] Completed successfully for job', id);
+        } catch (bgErr) {
+          console.error('[FULL SCRAPING] Background error for job', id, ':', bgErr);
+        }
+      });
+      
+      console.log('[FULL SCRAPING] Queued for job', id);
+      
+      if ((req.headers.accept || '').includes('application/json')) {
+        return res.status(202).json({ 
+          success: true, 
+          message: 'Full scraping started in background',
+          jobId: Number(id)
+        });
+      }
+      return res.redirect(`/admin/audits/${id}`);
+    });
+  } catch (error) {
+    console.error('[FULL SCRAPING] Error:', error);
+    if ((req.headers.accept || '').includes('application/json')) {
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+    return res.redirect(`/admin/audits/${id}`);
+  }
+});
+
+// GET /admin/audits/:id/full-scraping-status - Poll full scraping status
+router.get('/audits/:id/full-scraping-status', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  
+  getAuditJobById(id, (err, job) => {
+    if (err || !job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    
+    const stats = job.full_scraping_json ? job.full_scraping_json.stats : null;
+    
+    res.json({
+      status: job.full_scraping_status || 'not_started',
+      error: job.full_scraping_error || null,
+      stats: stats || null
+    });
+  });
+});
+
+// GET /admin/audits/:id/export-full-scraping - Export full scraping data as ZIP
+router.get('/audits/:id/export-full-scraping', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    console.log(`[EXPORT] Starting full scraping export for job ${id}`);
+    
+    const job = await new Promise((resolve, reject) => {
+      getAuditJobById(id, (err, job) => {
+        if (err) return reject(err);
+        resolve(job);
+      });
+    });
+    
+    if (!job) {
+      return res.status(404).send('Audit job not found');
+    }
+    
+    if (!job.full_scraping_json || job.full_scraping_status !== 'completed') {
+      return res.status(400).send('Full scraping not completed yet. Run full scraping first.');
+    }
+    
+    // Create ZIP archive
+    const archiver = require('archiver');
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
+    });
+    
+    const companyName = job.company_name || `audit_${id}`;
+    const sanitizedName = companyName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `${sanitizedName}_full_scraping.zip`;
+    
+    res.attachment(filename);
+    
+    archive.on('error', (err) => {
+      console.error('[EXPORT] Archive error:', err);
+      res.status(500).send('Error creating archive');
+    });
+    
+    archive.pipe(res);
+    
+    // Add metadata JSON
+    const metadata = {
+      audit_id: job.id,
+      company_name: job.company_name,
+      input_url: job.input_url,
+      niche: job.niche,
+      city: job.city,
+      scraped_at: job.created_at,
+      full_scraping_completed_at: job.full_scraping_completed_at,
+      stats: job.full_scraping_json.stats
+    };
+    
+    archive.append(JSON.stringify(metadata, null, 2), { name: 'metadata.json' });
+    
+    // Add full scraping JSON
+    archive.append(JSON.stringify(job.full_scraping_json, null, 2), { name: 'full_scraping_data.json' });
+    
+    // Add crawled pages JSON
+    const crawledPages = await new Promise((resolve, reject) => {
+      getCrawledPagesByJobId(id, (err, pages) => {
+        if (err) return reject(err);
+        resolve(pages || []);
+      });
+    });
+    
+    archive.append(JSON.stringify(crawledPages, null, 2), { name: 'crawled_pages.json' });
+    
+    // Add evidence pack
+    if (job.evidence_pack_v2_json) {
+      archive.append(JSON.stringify(job.evidence_pack_v2_json, null, 2), { name: 'evidence_pack_v2.json' });
+    }
+    
+    // Add site snapshot
+    if (job.site_snapshot_json) {
+      archive.append(JSON.stringify(job.site_snapshot_json, null, 2), { name: 'site_snapshot.json' });
+    }
+    
+    // Add downloaded images directory
+    const fullScrapingDir = path.join(getPersistentPublicDir(), 'full_scraping', String(id));
+    
+    if (fs.existsSync(fullScrapingDir)) {
+      console.log(`[EXPORT] Adding full scraping directory: ${fullScrapingDir}`);
+      archive.directory(fullScrapingDir, 'assets');
+    }
+    
+    // Add screenshots
+    const screenshotsDir = path.join(getPersistentPublicDir(), 'audit_screenshots', String(id));
+    
+    if (fs.existsSync(screenshotsDir)) {
+      console.log(`[EXPORT] Adding screenshots directory: ${screenshotsDir}`);
+      archive.directory(screenshotsDir, 'screenshots');
+    }
+    
+    await archive.finalize();
+    
+    console.log(`[EXPORT] Export completed for job ${id}`);
+    
+  } catch (error) {
+    console.error('[EXPORT] Error:', error);
+    res.status(500).send(`Export failed: ${error.message}`);
+  }
+});
+
 // POST /admin/audits/:id/update-prompts
 router.post('/audits/:id/update-prompts', requireAdmin, (req, res) => {
   const updates = [];
@@ -2077,6 +2279,262 @@ router.post('/api/backup', requireAdmin, (req, res) => {
   });
 });
 
+// ==================== STORAGE MANAGEMENT ROUTES ====================
+
+// GET /admin/storage - Storage overview page
+router.get('/storage', requireAdmin, (req, res) => {
+  res.render('admin-storage');
+});
+
+// GET /admin/api/storage - Detailed storage stats (disk + DB + table sizes)
+router.get('/api/storage', requireAdmin, async (req, res) => {
+  const { execSync } = require('child_process');
+  const { db } = require('../db');
+  const { getSqliteDbPath, getPersistentPublicDir, getRepoRoot } = require('../runtimePaths');
+
+  const dbPath = getSqliteDbPath();
+  const publicDir = getPersistentPublicDir();
+  const repoRoot = getRepoRoot();
+
+  function statFile(p) {
+    try {
+      const st = fs.statSync(p);
+      return { exists: true, path: p, bytes: st.size, mb: +(st.size / 1024 / 1024).toFixed(1) };
+    } catch (e) {
+      return { exists: false, path: p, bytes: 0, mb: 0 };
+    }
+  }
+
+  function dfPath(p) {
+    try {
+      // Try the path itself; if it doesn't exist yet, use parent dir
+      const target = fs.existsSync(p) ? p : path.dirname(p);
+      const out = execSync(`df -k "${String(target).replace(/"/g, '\\"')}"`, { encoding: 'utf8' });
+      const lines = String(out || '').trim().split('\n').filter(Boolean);
+      if (lines.length < 2) return null;
+      // Last data line (handles long filesystem names that wrap)
+      const parts = lines[lines.length - 1].trim().split(/\s+/);
+      const total_kb = parseInt(parts[1], 10);
+      const used_kb  = parseInt(parts[2], 10);
+      const avail_kb = parseInt(parts[3], 10);
+      return {
+        total_mb: +(total_kb / 1024).toFixed(0),
+        used_mb:  +(used_kb  / 1024).toFixed(0),
+        avail_mb: +(avail_kb / 1024).toFixed(0),
+        used_pct: total_kb > 0 ? +((used_kb / total_kb) * 100).toFixed(1) : null
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  function duDir(p) {
+    try {
+      if (!fs.existsSync(p)) return { exists: false, mb: 0 };
+      const out = execSync(`du -sk "${String(p).replace(/"/g, '\\"')}"`, { encoding: 'utf8' });
+      const kb = parseInt(String(out).trim().split(/\s+/)[0], 10);
+      return { exists: true, mb: +(kb / 1024).toFixed(1) };
+    } catch (e) {
+      return { exists: true, mb: null, error: e.message };
+    }
+  }
+
+  function sqlAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      });
+    });
+  }
+
+  function sqlGet(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.get(sql, params, (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      });
+    });
+  }
+
+  try {
+    // --- Disk stats ---
+    const disk = dfPath(dbPath);
+
+    // --- SQLite file sizes ---
+    const dbMain = statFile(dbPath);
+    const dbWal  = statFile(`${dbPath}-wal`);
+    const dbShm  = statFile(`${dbPath}-shm`);
+
+    // --- Public dir breakdown ---
+    const publicDirs = ['audit_screenshots', 'preaudit_screenshots', 'full_scraping', 'brand_assets', 'team', 'previews'];
+    const publicUsage = {};
+    for (const d of publicDirs) {
+      publicUsage[d] = duDir(path.join(publicDir, d));
+    }
+    const publicTotal = duDir(publicDir);
+
+    // --- DB table sizes ---
+    let tableRows = [];
+    try {
+      tableRows = await sqlAll(
+        "SELECT name, SUM(pgsize) as bytes FROM dbstat GROUP BY name ORDER BY bytes DESC LIMIT 20"
+      );
+    } catch (e) {
+      tableRows = [{ name: 'dbstat_unavailable', bytes: 0, error: e.message }];
+    }
+
+    const tables = tableRows.map(r => ({
+      name: r.name,
+      mb: +((r.bytes || 0) / 1024 / 1024).toFixed(1),
+      bytes: r.bytes || 0
+    }));
+
+    // --- Key column sizes ---
+    const colSizes = await Promise.all([
+      sqlGet("SELECT ROUND(SUM(LENGTH(content_text))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM crawled_pages WHERE content_text IS NOT NULL")
+        .then(r => ({ col: 'crawled_pages.content_text', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+      sqlGet("SELECT ROUND(SUM(LENGTH(screenshots_json))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM crawled_pages WHERE screenshots_json IS NOT NULL AND screenshots_json != 'null'")
+        .then(r => ({ col: 'crawled_pages.screenshots_json', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+      sqlGet("SELECT ROUND(SUM(LENGTH(request_payload_json))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM assistant_runs WHERE request_payload_json IS NOT NULL")
+        .then(r => ({ col: 'assistant_runs.request_payload_json', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+      sqlGet("SELECT ROUND(SUM(LENGTH(site_snapshot_json))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM audit_jobs WHERE site_snapshot_json IS NOT NULL")
+        .then(r => ({ col: 'audit_jobs.site_snapshot_json', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+      sqlGet("SELECT ROUND(SUM(LENGTH(assistant_outputs_json))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM audit_jobs WHERE assistant_outputs_json IS NOT NULL")
+        .then(r => ({ col: 'audit_jobs.assistant_outputs_json', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+      sqlGet("SELECT ROUND(SUM(LENGTH(full_scraping_json))/1024.0/1024.0,1) as mb, COUNT(*) as rows FROM audit_jobs WHERE full_scraping_json IS NOT NULL")
+        .then(r => ({ col: 'audit_jobs.full_scraping_json', mb: r && r.mb ? +r.mb : 0, rows: r && r.rows ? r.rows : 0 })).catch(() => null),
+    ]);
+
+    // --- Row counts ---
+    const counts = {};
+    for (const tbl of ['audit_jobs', 'crawled_pages', 'assistant_runs', 'preaudit_results', 'preaudit_searches', 'audit_run_logs']) {
+      try {
+        const row = await sqlGet(`SELECT COUNT(*) as c FROM ${tbl}`);
+        counts[tbl] = row ? row.c : null;
+      } catch (e) {
+        counts[tbl] = null;
+      }
+    }
+
+    res.json({
+      generated_at: new Date().toISOString(),
+      disk,
+      db_files: { main: dbMain, wal: dbWal, shm: dbShm },
+      public: { dirs: publicUsage, total: publicTotal },
+      db_tables: tables,
+      db_column_sizes: colSizes.filter(Boolean),
+      row_counts: counts
+    });
+
+  } catch (err) {
+    console.error('[STORAGE] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /admin/api/vacuum - WAL checkpoint + VACUUM (shrinks DB, may take 10-30s)
+router.post('/api/vacuum', requireAdmin, async (req, res) => {
+  const { db } = require('../db');
+
+  console.log('[VACUUM] Starting WAL checkpoint + VACUUM...');
+
+  function sqlRun(sql) {
+    return new Promise((resolve, reject) => {
+      db.run(sql, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  }
+
+  function sqlGet(sql) {
+    return new Promise((resolve, reject) => {
+      db.get(sql, (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+  }
+
+  try {
+    const before = await sqlGet('PRAGMA page_count').then(r => r && r.page_count ? r.page_count : null).catch(() => null);
+    const pageSize = await sqlGet('PRAGMA page_size').then(r => r && r.page_size ? r.page_size : 4096).catch(() => 4096);
+
+    console.log('[VACUUM] Checkpoint TRUNCATE...');
+    await sqlRun('PRAGMA wal_checkpoint(TRUNCATE)');
+
+    console.log('[VACUUM] Running VACUUM...');
+    await sqlRun('VACUUM');
+
+    const after = await sqlGet('PRAGMA page_count').then(r => r && r.page_count ? r.page_count : null).catch(() => null);
+
+    const freed_mb = before && after ? +((before - after) * pageSize / 1024 / 1024).toFixed(1) : null;
+
+    console.log(`[VACUUM] Done. Pages: ${before} → ${after}, freed ~${freed_mb} MB`);
+
+    res.json({
+      success: true,
+      pages_before: before,
+      pages_after: after,
+      freed_mb,
+      message: `VACUUM completed. Freed ~${freed_mb !== null ? freed_mb : '?'} MB.`
+    });
+  } catch (err) {
+    console.error('[VACUUM] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /admin/api/prune-assistant-payloads - Clear large request_payload_json from old completed runs
+router.post('/api/prune-assistant-payloads', requireAdmin, async (req, res) => {
+  const { db } = require('../db');
+
+  function sqlRun(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) {
+        if (err) return reject(err);
+        resolve(this.changes);
+      });
+    });
+  }
+
+  function sqlGet(sql) {
+    return new Promise((resolve, reject) => {
+      db.get(sql, (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+  }
+
+  try {
+    const before = await sqlGet("SELECT ROUND(SUM(LENGTH(request_payload_json))/1024.0/1024.0,1) as mb FROM assistant_runs WHERE request_payload_json IS NOT NULL");
+    const beforeMb = before && before.mb ? +before.mb : null;
+
+    // Only prune for completed/failed runs (keep 'queued'/'running')
+    const changes = await sqlRun(
+      "UPDATE assistant_runs SET request_payload_json = NULL WHERE status IN ('completed','failed','error') AND request_payload_json IS NOT NULL"
+    );
+
+    const after = await sqlGet("SELECT ROUND(SUM(LENGTH(request_payload_json))/1024.0/1024.0,1) as mb FROM assistant_runs WHERE request_payload_json IS NOT NULL");
+    const afterMb = after && after.mb ? +after.mb : 0;
+    const freed = beforeMb !== null ? +(beforeMb - afterMb).toFixed(1) : null;
+
+    console.log(`[PRUNE] assistant_runs.request_payload_json: ${beforeMb} MB → ${afterMb} MB, ${changes} rows cleared`);
+
+    res.json({
+      success: true,
+      rows_cleared: changes,
+      freed_mb: freed,
+      message: `Cleared payloads from ${changes} completed runs. Freed ~${freed !== null ? freed : '?'} MB (visible after VACUUM).`
+    });
+  } catch (err) {
+    console.error('[PRUNE] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== PREAUDIT ROUTES ====================
 
 // GET /admin/preaudits - Preaudit management page
@@ -2160,9 +2618,23 @@ router.post('/api/preaudits/search', requireAdmin, auditJobLimiter, async (req, 
 
   } catch (error) {
     console.error('[PREAUDIT] Error creating search:', error);
-    res.status(500).json({
+    const msg = String((error && error.message) ? error.message : error);
+    const code = error && error.code ? String(error.code) : '';
+    const isSqliteFull = code.toUpperCase() === 'SQLITE_FULL' || /SQLITE_FULL/i.test(msg) || /database or disk is full/i.test(msg);
+
+    if (isSqliteFull) {
+      // 507 Insufficient Storage (more semantically correct than generic 500)
+      return res.status(507).json({
+        success: false,
+        error: 'storage_full',
+        message: 'SQLite database/disk is full. Free disk space on the server (DB_PATH volume and PUBLIC_DIR assets), then restart the service. After freeing space, run a WAL checkpoint/VACUUM if needed.'
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      error: error.message
+      error: 'preaudit_create_failed',
+      message: msg
     });
   }
 });
