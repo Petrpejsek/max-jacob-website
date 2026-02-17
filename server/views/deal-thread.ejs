@@ -231,7 +231,50 @@
       border-radius: 14px;
       display: block;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      background: #000;
     }
+    .att-video .video-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: #6366f1;
+      text-decoration: none;
+      padding: 3px 8px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .att-video .video-download:hover { background: #eef2ff; }
+    .att-video.cant-play video { display: none !important; }
+    .att-video.cant-play .video-download { display: none !important; }
+    .att-video.cant-play .video-fallback {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 280px;
+      padding: 24px 16px;
+      background: #f9fafb;
+      border-radius: 14px;
+      border: 1px solid #e5e7eb;
+    }
+    .att-video.cant-play .video-fallback .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #6366f1;
+      color: #fff;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .att-video.cant-play .video-fallback .dl-btn:hover { background: #4f46e5; }
+    .att-video.cant-play .video-fallback small { color: #9ca3af; font-size: 11px; }
     .att-file a {
       display: inline-flex;
       align-items: center;
@@ -612,9 +655,15 @@
                 </div>
               <% } else if (att.mime_type && att.mime_type.startsWith('video/')) { %>
                 <div class="att-video">
-                  <video controls preload="metadata">
-                    <source src="/public/<%= att.filename %>" type="<%= att.mime_type %>">
+                  <video controls playsinline preload="metadata">
+                    <source src="/public/<%= att.filename %>#t=0.001" type="<%= att.mime_type %>">
                   </video>
+                  <a class="video-download" href="/public/<%= att.filename %>" download="<%= att.original_name %>">⬇ Download video</a>
+                  <div class="video-fallback" style="display:none">
+                    <span style="font-size:32px">🎬</span>
+                    <a class="dl-btn" href="/public/<%= att.filename %>" download="<%= att.original_name %>">⬇ Download Video</a>
+                    <small><%= att.original_name %> · <%= Math.round(att.size / 1024) %> KB</small>
+                  </div>
                 </div>
               <% } else { %>
                 <div class="att-file">
@@ -724,7 +773,7 @@
       return '<div class="att-file"><a href="'+url+'" download="'+name+'"><span class="att-file-icon">🖼️</span><div class="att-file-info"><span class="att-file-name">'+name+' (HEIC)</span><span class="att-file-size">'+size+'</span></div></a></div>';
     }
     if (m.indexOf('video/') === 0) {
-      return '<div class="att-video"><video controls preload="metadata"><source src="'+url+'" type="'+escapeHtml(m)+'"></video></div>';
+      return '<div class="att-video"><video controls playsinline preload="metadata"><source src="'+url+'#t=0.001" type="'+escapeHtml(m)+'"></video><a class="video-download" href="'+url+'" download="'+name+'">⬇ Download video</a><div class="video-fallback" style="display:none"><span style="font-size:32px">🎬</span><a class="dl-btn" href="'+url+'" download="'+name+'">⬇ Download Video</a><small>'+name+' · '+size+'</small></div></div>';
     }
     var icon = m === 'application/pdf' ? '📄' : (m.indexOf('word')>=0 ? '📝' : (m.indexOf('excel')>=0 ? '📊' : (m.indexOf('zip')>=0 ? '🗜️' : '📎')));
     return '<div class="att-file"><a href="'+url+'" download="'+name+'"><span class="att-file-icon">'+icon+'</span><div class="att-file-info"><span class="att-file-name">'+name+'</span><span class="att-file-size">'+size+'</span></div></a></div>';
@@ -927,6 +976,34 @@
     }
   });
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeLightbox(); });
+
+  // ── Video fallback: detect when browser can't play the video format ────
+  function checkVideos() {
+    document.querySelectorAll('.att-video video').forEach(function(video) {
+      if (video.dataset.checked) return;
+      video.dataset.checked = '1';
+      // Listen for error on the source element (fires when format not supported)
+      var source = video.querySelector('source');
+      if (source) {
+        source.addEventListener('error', function() {
+          var wrap = video.closest('.att-video');
+          if (wrap) wrap.classList.add('cant-play');
+        });
+      }
+      // Also check via canPlayType for known problematic formats
+      if (source && source.type) {
+        var can = video.canPlayType(source.type);
+        if (!can || can === '') {
+          var wrap = video.closest('.att-video');
+          if (wrap) wrap.classList.add('cant-play');
+        }
+      }
+    });
+  }
+  checkVideos();
+  // Re-check after polling updates DOM
+  var _origSetInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  setInterval(checkVideos, 3000);
 </script>
 </body>
 </html>
