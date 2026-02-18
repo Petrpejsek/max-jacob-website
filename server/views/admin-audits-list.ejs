@@ -370,6 +370,12 @@
                                     <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <% if (job.emailSent) { %>
                                             <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80; font-size: 0.75rem; font-weight: 500;">✅ sent</span>
+                                            <% if (job.emailBounced) { %>
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.7rem; font-weight: 500;">↩ bounced</span>
+                                            <% } %>
+                                            <% if (job.emailComplained) { %>
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.4); color: #fb923c; font-size: 0.7rem; font-weight: 500;">🚩 spam</span>
+                                            <% } %>
                                             <% if (job.emailOpens > 0 || job.emailClicks > 0) { %>
                                                 <div style="display: flex; gap: 8px; font-size: 0.7rem; color: #b6b6d6;">
                                                     <% if (job.emailOpens > 0) { %>
@@ -386,6 +392,12 @@
                                                     <% } %>
                                                 </div>
                                             <% } %>
+                                        <% } else if (job.emailBlockedUnsub) { %>
+                                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.4); color: #fb923c; font-size: 0.75rem; font-weight: 500;">🚫 unsubscribed</span>
+                                        <% } else if (job.emailBlockedMx) { %>
+                                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.75rem; font-weight: 500;">❌ dead domain</span>
+                                        <% } else if (job.emailFailed) { %>
+                                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.75rem; font-weight: 500;">✗ failed</span>
                                         <% } else if (!job.hasEmail) { %>
                                             <span class="no-email-indicator">⚠️ No email</span>
                                         <% } else { %>

@@ -551,13 +551,18 @@ router.get('/audits', requireAdmin, (req, res) => {
             hasEmail = !!(scrape && scrape.contacts && scrape.contacts.emails && scrape.contacts.emails.length > 0);
           } catch (_) {}
           
-          const emailStatus = emailStatusMap[job.id] || { sent: false, opens: 0, clicks: 0 };
+          const emailStatus = emailStatusMap[job.id] || { sent: false, failed: false, blockedUnsub: false, blockedMx: false, bounced: false, complained: false, opens: 0, clicks: 0 };
           const pageViewStatus = pageViewStatusMap[job.id] || { views: 0, lastViewed: null, claritySessionId: null };
           
           return {
             ...job,
             hasEmail,
             emailSent: emailStatus.sent,
+            emailFailed: emailStatus.failed,
+            emailBlockedUnsub: emailStatus.blockedUnsub,
+            emailBlockedMx: emailStatus.blockedMx,
+            emailBounced: emailStatus.bounced,
+            emailComplained: emailStatus.complained,
             emailOpens: emailStatus.opens,
             emailClicks: emailStatus.clicks,
             pageViews: pageViewStatus.views,
@@ -987,6 +992,15 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
       });
     });
     if (unsubscribed) {
+      createEmailLog({
+        audit_job_id: parseInt(id),
+        recipient_email: recipient,
+        subject: subject,
+        format: format,
+        status: 'blocked_unsubscribed',
+        resend_id: null,
+        error_message: 'Recipient has unsubscribed'
+      }, () => {});
       return res.status(403).json({
         success: false,
         error: `Cannot send to ${recipient} — this address has unsubscribed.`
@@ -996,6 +1010,15 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
     // Verify email deliverability (MX check) before sending
     const verification = await verifyEmail(recipient, { skipSmtp: true });
     if (!verification.valid) {
+      createEmailLog({
+        audit_job_id: parseInt(id),
+        recipient_email: recipient,
+        subject: subject,
+        format: format,
+        status: 'blocked_mx',
+        resend_id: null,
+        error_message: `MX check failed: ${verification.reason}`
+      }, () => {});
       return res.status(400).json({
         success: false,
         error: `Email verification failed for ${recipient}: ${verification.reason}`,

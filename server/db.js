@@ -2296,6 +2296,11 @@ function getAllEmailLogsStatus(callback) {
   const sql = `
     SELECT audit_job_id, 
            MAX(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as has_sent_email,
+           MAX(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as has_failed,
+           MAX(CASE WHEN status = 'blocked_unsubscribed' THEN 1 ELSE 0 END) as has_blocked_unsub,
+           MAX(CASE WHEN status = 'blocked_mx' THEN 1 ELSE 0 END) as has_blocked_mx,
+           MAX(CASE WHEN bounced = 1 THEN 1 ELSE 0 END) as has_bounced,
+           MAX(CASE WHEN complained = 1 THEN 1 ELSE 0 END) as has_complained,
            SUM(opened) as total_opens,
            SUM(clicked) as total_clicks
     FROM email_logs
@@ -2310,6 +2315,11 @@ function getAllEmailLogsStatus(callback) {
       (rows || []).forEach(row => {
         statusMap[row.audit_job_id] = {
           sent: row.has_sent_email === 1,
+          failed: row.has_failed === 1,
+          blockedUnsub: row.has_blocked_unsub === 1,
+          blockedMx: row.has_blocked_mx === 1,
+          bounced: row.has_bounced === 1,
+          complained: row.has_complained === 1,
           opens: row.total_opens || 0,
           clicks: row.total_clicks || 0
         };
