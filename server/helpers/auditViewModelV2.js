@@ -10,6 +10,16 @@
  */
 
 const { buildDashboardMetrics } = require('./dashboardMetrics');
+
+function safeStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'object') {
+    return val.text || val.title || val.value || val.description || val.message || JSON.stringify(val);
+  }
+  return String(val);
+}
 const {
   normalizeCompanyNameCandidate,
   isLikelyBusinessName,
@@ -185,7 +195,7 @@ function buildHero(job, a6_hero, llm_context) {
       'AI follow-up system so leads get a fast response',
       'A 7-day ship plan (priorities + scope)'
     ],
-    primary_cta_text: 'Get free site preview in 48h',
+    primary_cta_text: 'Get your site preview in 48h',
     secondary_cta_text: 'See a sample preview',
     company_name: company_name,
     brand_or_domain: display_name,
@@ -448,9 +458,10 @@ function buildImprovementBacklog(job, llm_context, ux_audit, seo_audit) {
   // --- UX audit (A2) ---
   const topIssues = (ux_audit && Array.isArray(ux_audit.top_issues)) ? ux_audit.top_issues : [];
   topIssues.forEach((it) => {
-    const title = it.title || it.problem || it.issue;
-    const impact = it.impact || it.why_it_matters || 'Causes visitors to hesitate or leave without contacting you';
-    const fix = (Array.isArray(it.fix_steps) && it.fix_steps[0]) ? it.fix_steps[0] : (it.fix || it.recommendation || 'Rewrite key sections for clarity + add a single dominant CTA');
+    const title = safeStr(it.title) || safeStr(it.problem) || safeStr(it.issue);
+    const impact = safeStr(it.impact) || safeStr(it.why_it_matters) || 'Causes visitors to hesitate or leave without contacting you';
+    const fixRaw = (Array.isArray(it.fix_steps) && it.fix_steps[0]) ? it.fix_steps[0] : (it.fix || it.recommendation || 'Rewrite key sections for clarity + add a single dominant CTA');
+    const fix = safeStr(fixRaw);
     pushItem({
       title,
       impact,
@@ -465,9 +476,9 @@ function buildImprovementBacklog(job, llm_context, ux_audit, seo_audit) {
   quickWins.forEach((w) => {
     if (!w) return;
     pushItem({
-      title: typeof w === 'string' ? w : (w.title || w.problem || 'Quick improvement'),
+      title: typeof w === 'string' ? w : (safeStr(w.title) || safeStr(w.problem) || 'Quick improvement'),
       impact: 'Improves clarity, trust, or conversion flow for local customers',
-      fix: typeof w === 'string' ? w : (w.fix || w.recommendation || 'Implement this improvement in the sprint'),
+      fix: typeof w === 'string' ? w : (safeStr(w.fix) || safeStr(w.recommendation) || 'Implement this improvement in the sprint'),
       severity: 'low',
       category: 'ux',
       source: 'ux_audit_json.quick_wins'
@@ -1817,8 +1828,8 @@ function buildQuickWins(quick_wins, llm_context, evidence_pack) {
     }
     if (win.action || win.fix || win.title) {
       wins.push({
-        title: win.title || win.action || win.fix,
-        description: win.description || win.why || '',
+        title: safeStr(win.title) || safeStr(win.action) || safeStr(win.fix),
+        description: safeStr(win.description) || safeStr(win.why) || '',
         has_evidence: (win.evidence_ref && win.evidence_ref.length > 0)
       });
     }
@@ -1945,8 +1956,8 @@ function buildFormConfig(job, public_page) {
       niche: job.niche,
       city: job.city
     },
-    cta_button_text: 'Get free site preview in 48h',
-    disclaimer: 'No payment now. This form only reserves your request.<br>Your audit is free.',
+    cta_button_text: 'Get your site preview in 48h',
+    disclaimer: 'No payment now. This form only reserves your request.<br>No strings attached.',
     capacity_slots: capacity_slots,
     this_week_slots: this_week_slots,
     earliest_available: earliest_available

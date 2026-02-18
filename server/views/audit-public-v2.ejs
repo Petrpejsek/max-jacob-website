@@ -265,7 +265,7 @@
                 Max & Jacob
             </div>
             <a href="/web-project-form.html" class="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-sm font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all hover:scale-105 active:scale-95">
-                Get free site preview in 48h
+                Get your site preview in 48h
             </a>
         </div>
     </header>
@@ -541,7 +541,7 @@
             <!-- Main Headline -->
             <div class="text-center mb-16">
                 <div class="inline-block px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-300 text-xs font-bold uppercase tracking-wider mb-6">
-                    Free Analysis
+                    Your Analysis
                 </div>
                 <h2 class="text-4xl md:text-6xl font-black text-white tracking-tight mb-4">
                     Audit of Your Current Website
@@ -1145,7 +1145,13 @@
                         return '1–2d';
                     };
 
-                    const dashItemTitle = (it) => String((it && it.title) || '').trim();
+                    const dashItemTitle = (it) => {
+                        const raw = it && it.title;
+                        if (!raw) return '';
+                        if (typeof raw === 'string') return raw.trim();
+                        if (typeof raw === 'object') return (raw.text || raw.title || raw.value || JSON.stringify(raw)).trim();
+                        return String(raw).trim();
+                    };
 
                     const dashCriticalTop3 = dashIssuesCritical.slice(0, 3);
                     const dashCriticalRest = dashIssuesCritical.slice(3);
@@ -1314,10 +1320,10 @@
                     Ready to see your new homepage?
                 </h3>
                 <p class="text-lg text-blue-100 font-medium mb-8 max-w-2xl mx-auto">
-                    We'll analyze your business and deliver a custom homepage preview in 48 hours — completely free.
+                    We'll analyze your business and deliver a custom homepage preview in 48 hours — no strings attached.
                 </p>
                 <a href="/web-project-form.html" class="inline-flex px-12 py-6 bg-white text-blue-600 rounded-[2rem] font-black text-xl hover:bg-blue-50 shadow-xl transition-all transform hover:scale-105 active:scale-95">
-                    Unlock full audit + preview (free)
+                    Unlock full audit + preview
                 </a>
                 <p class="text-sm text-blue-200 font-medium mt-6">
                     Fill the brief (8–12 min) → we deliver in 48h
@@ -1414,7 +1420,7 @@
             const tfImpact = twoFounders.estimated_impact || 'Most local service sites can lift conversions with clearer navigation and stronger trust signals above the fold.';
             const tfProcess = twoFounders.process || 'We handle strategy + design, deliver a clean preview, and give you a clear next-step plan.';
             const tfSignature = twoFounders.signature || 'Max & Jacob';
-            const tfPrimaryCta = twoFounders.primary_cta_text || 'Get my free 48h preview';
+            const tfPrimaryCta = twoFounders.primary_cta_text || 'Get my 48h preview';
             const tfSecondaryCta = twoFounders.secondary_cta_text || 'See a sample preview';
         %>
         <div class="max-w-7xl mx-auto">
@@ -1578,7 +1584,7 @@
             </p>
             <div class="flex flex-col items-center">
                 <a href="/web-project-form.html" class="inline-flex px-16 py-8 bg-blue-600 text-white rounded-[2.5rem] font-black text-3xl hover:bg-blue-700 shadow-[0_35px_60px_-15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105">
-                    Claim free 48h preview
+                    Claim your 48h preview
                 </a>
                 <div class="cta-microcopy text-center mt-6 space-y-1">
                     <p class="text-sm text-slate-300 font-medium">No call. Just the brief.</p>
@@ -1734,7 +1740,7 @@
                                         Want to see your custom homepage?
                                     </h3>
                                     <a href="/web-project-form.html" class="inline-flex items-center justify-center px-10 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-lg hover:bg-blue-700 shadow-2xl transition-all transform hover:scale-105 active:scale-95">
-                                        Generate my preview (free)
+                                        Generate my preview
                                     </a>
                                 </div>
                             </div>
@@ -1814,7 +1820,7 @@
                                     Want to see your custom homepage?
                                 </h3>
                                 <a href="/web-project-form.html" class="inline-flex items-center justify-center px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black text-base hover:bg-blue-700 shadow-2xl transition-all transform hover:scale-105 active:scale-95">
-                                    Generate my preview (free)
+                                    Generate my preview
                                 </a>
                             </div>
                         </div>
