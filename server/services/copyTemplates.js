@@ -299,7 +299,7 @@ function generateOutreachEmail(job, llmContext, topIssues) {
 <p>Hi ${companyName},</p>
 <p>Jacob here from Max &amp; Jacob.</p>
 <p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
-<p><a href="${auditUrl.replace(/&/g, '&amp;')}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
+<p><a href="${auditUrl.replace(/&/g, '&amp;')}" target="_blank" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
 <p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
 </div>`;

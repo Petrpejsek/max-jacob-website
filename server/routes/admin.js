@@ -187,7 +187,7 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel 
   const block =
     `<p style="margin: 20px 0;">` +
     `<strong style="font-size: 16px;">${escapeHtml(label)}</strong><br>` +
-    `<a href="${escapeHtml(auditUrl)}" style="color: #4F46E5; text-decoration: none;">${escapeHtml(auditUrl)}</a>` +
+    `<a href="${escapeHtml(auditUrl)}" target="_blank" style="color: #4F46E5; text-decoration: none;">${escapeHtml(auditUrl)}</a>` +
     `</p>`;
 
   let html = String(emailHtmlRaw);

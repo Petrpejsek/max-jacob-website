@@ -936,7 +936,7 @@
 <p>Hi ${mjBusinessName},</p>
 <p>Jacob here from Max &amp; Jacob.</p>
 <p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
-<p><a href="${mjAuditLink}" style="color:#2563eb;font-weight:bold;">Audit - ${mjBusinessName}</a></p>
+<p><a href="${mjAuditLink}" target="_blank" style="color:#2563eb;font-weight:bold;">Audit - ${mjBusinessName}</a></p>
 <p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
 </div>`;
@@ -1038,7 +1038,7 @@
                                 id="outreachEmailHtmlIframe"
                                 title="HTML Email Preview"
                                 style="width: 100%; height: 560px; border: 0; display: block; background: #fff;"
-                                sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
                                 referrerpolicy="no-referrer"
                             ></iframe>
                         </div>
@@ -3938,6 +3938,17 @@ STYLE:
                 const html = String(htmlTa.value || '').trim();
                 // srcdoc isolates full HTML documents (<!doctype><html>...) without affecting the admin DOM.
                 iframe.srcdoc = html || '<div style="padding:16px;font-family:Arial,sans-serif;color:#333;">(No HTML email)</div>';
+                // Force all links inside preview to open in new tab
+                iframe.addEventListener('load', function onceLoaded() {
+                    iframe.removeEventListener('load', onceLoaded);
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.querySelectorAll('a[href]').forEach(a => {
+                            a.setAttribute('target', '_blank');
+                            a.setAttribute('rel', 'noopener noreferrer');
+                        });
+                    } catch (_) {}
+                });
             }
 
             function show() {

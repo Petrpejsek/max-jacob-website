@@ -2727,7 +2727,7 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, c
   // We intentionally use a simple <a> (not the old verbose block with raw URL) so the
   // email looks like a real personal note rather than a marketing template.
   const cleanLink =
-    `<a href="${escapeHtml(auditUrl)}" style="color:#2563eb;font-weight:bold;">${escapeHtml(label)}</a>`;
+    `<a href="${escapeHtml(auditUrl)}" target="_blank" style="color:#2563eb;font-weight:bold;">${escapeHtml(label)}</a>`;
   const cleanBlock = `<p>${cleanLink}</p>`;
 
   let html = String(emailHtmlRaw);
@@ -2939,7 +2939,7 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
 <p>Hi ${companyName},</p>
 <p>Jacob here from Max &amp; Jacob.</p>
 <p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
-<p><a href="${auditUrl.replace(/&/g, '&amp;')}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
+<p><a href="${auditUrl.replace(/&/g, '&amp;')}" target="_blank" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
 <p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
 </div>`;
