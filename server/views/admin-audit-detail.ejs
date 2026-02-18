@@ -1038,7 +1038,7 @@
                                 id="outreachEmailHtmlIframe"
                                 title="HTML Email Preview"
                                 style="width: 100%; height: 560px; border: 0; display: block; background: #fff;"
-                                sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                                sandbox="allow-popups allow-popups-to-escape-sandbox"
                                 referrerpolicy="no-referrer"
                             ></iframe>
                         </div>
@@ -3936,19 +3936,11 @@ STYLE:
                 const iframe = $('outreachEmailHtmlIframe');
                 if (!htmlTa || !iframe) return;
                 const html = String(htmlTa.value || '').trim();
-                // srcdoc isolates full HTML documents (<!doctype><html>...) without affecting the admin DOM.
-                iframe.srcdoc = html || '<div style="padding:16px;font-family:Arial,sans-serif;color:#333;">(No HTML email)</div>';
-                // Force all links inside preview to open in new tab
-                iframe.addEventListener('load', function onceLoaded() {
-                    iframe.removeEventListener('load', onceLoaded);
-                    try {
-                        const doc = iframe.contentDocument || iframe.contentWindow.document;
-                        doc.querySelectorAll('a[href]').forEach(a => {
-                            a.setAttribute('target', '_blank');
-                            a.setAttribute('rel', 'noopener noreferrer');
-                        });
-                    } catch (_) {}
-                });
+                // <base target="_blank"> forces ALL links to open in a new tab.
+                // We inject it into srcdoc because the sandboxed iframe (no allow-same-origin)
+                // prevents parent JS from accessing contentDocument to patch links after load.
+                const baseTag = '<base target="_blank">';
+                iframe.srcdoc = baseTag + (html || '<div style="padding:16px;font-family:Arial,sans-serif;color:#333;">(No HTML email)</div>');
             }
 
             function show() {
