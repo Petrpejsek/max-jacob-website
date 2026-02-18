@@ -15,7 +15,7 @@
         })(window, document, "clarity", "script", "vaor3tcykv");
     </script>
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/audit-public-v2.tailwind.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1148,9 +1148,13 @@
                     const dashItemTitle = (it) => {
                         const raw = it && it.title;
                         if (!raw) return '';
-                        if (typeof raw === 'string') return raw.trim();
-                        if (typeof raw === 'object') return (raw.text || raw.title || raw.value || JSON.stringify(raw)).trim();
-                        return String(raw).trim();
+                        const clean = (s) => {
+                            const out = String(s || '').replace(/\s*:\s*\[object Object\]\s*/g, '').replace(/\[object Object\]/g, '').replace(/\s{2,}/g, ' ').trim();
+                            return out;
+                        };
+                        if (typeof raw === 'string') return clean(raw);
+                        if (typeof raw === 'object') return clean(raw.text || raw.title || raw.value || JSON.stringify(raw));
+                        return clean(raw);
                     };
 
                     const dashCriticalTop3 = dashIssuesCritical.slice(0, 3);

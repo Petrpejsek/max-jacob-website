@@ -13,12 +13,25 @@ const { buildDashboardMetrics } = require('./dashboardMetrics');
 
 function safeStr(val) {
   if (val == null) return '';
-  if (typeof val === 'string') return val;
-  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'string') return cleanObjectObject(val);
+  if (typeof val === 'number' || typeof val === 'boolean') return cleanObjectObject(String(val));
   if (typeof val === 'object') {
-    return val.text || val.title || val.value || val.description || val.message || JSON.stringify(val);
+    const picked = val.text || val.title || val.value || val.description || val.message || JSON.stringify(val);
+    return cleanObjectObject(String(picked || ''));
   }
-  return String(val);
+  return cleanObjectObject(String(val));
+}
+
+function cleanObjectObject(s) {
+  let out = String(s || '');
+  if (!out) return '';
+  if (!out.includes('[object Object]')) return out;
+
+  // Remove common "Label: [object Object]" artifacts caused by accidental string concatenation.
+  out = out.replace(/\s*:\s*\[object Object\]\s*/g, '');
+  out = out.replace(/\[object Object\]/g, '');
+  out = out.replace(/\s{2,}/g, ' ').trim();
+  return out;
 }
 const {
   normalizeCompanyNameCandidate,
