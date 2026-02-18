@@ -3076,7 +3076,11 @@ async function processAuditJob(jobId, options = {}) {
       // Use homepage data for v2 compatibility
       const homepage = crawledPages.find(p => p.page_type === 'home') || crawledPages[0];
       if (!homepage) {
-        throw new Error('No homepage found in crawled pages');
+        throw new Error(
+          crawledPages.length === 0
+            ? 'Could not load the website — it may be down, blocking bots, or behind Cloudflare protection. Try again or check if the URL opens in your browser.'
+            : 'No homepage found in crawled pages'
+        );
       }
       
       // City MUST come from scraped data (truth) - ignore any prefilled city
