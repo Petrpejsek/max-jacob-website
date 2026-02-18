@@ -120,6 +120,10 @@ async function sendDealNotificationToAdmin({ deal, messageBody, attachments = []
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
 async function sendDealNotificationToClient({ deal, messageBody, attachments = [], baseUrl }) {
+  if (!deal || !deal.client_email || !deal.magic_token) {
+    console.warn('[EMAIL] sendDealNotificationToClient skipped: missing deal, client_email or magic_token', deal ? { id: deal.id, hasEmail: !!deal.client_email, hasToken: !!deal.magic_token } : 'no deal');
+    return { success: false, error: 'Missing deal data' };
+  }
   const threadLink = `${baseUrl}/deal/${deal.magic_token}`;
   const preview = messageBody ? messageBody.substring(0, 400) : '(no text — see attachments)';
   const attachmentHtml = attachments.length

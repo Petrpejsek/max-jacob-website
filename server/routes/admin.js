@@ -59,7 +59,9 @@ const {
   updateDealStatus,
   getDealMessages,
   createDealMessage,
-  createDealAttachment
+  createDealAttachment,
+  // Unsubscribe
+  isUnsubscribed
 } = require('../db');
 const auditPipeline = require('../services/auditPipeline');
 const preauditPipeline = require('../services/preauditPipeline');
@@ -70,6 +72,7 @@ const { getMemorySnapshot, logMemoryDelta } = require('../services/memoryMonitor
 const { sendEmail, sendDealNotificationToClient } = require('../services/emailService');
 const { checkEmailHealth } = require('../services/emailHealthCheck');
 const { getTestEmail, getTestResults } = require('../services/mailTesterService');
+const { verifyEmail } = require('../services/emailVerifier');
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -161,12 +164,17 @@ function addUnsubscribeFooterToHtml(html, recipientEmail) {
       <a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a> · Max &amp; Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a>
     </p>`;
   
-  // Try to insert before </body> or </html>, or just append
+  // Insert before closing wrapper tags, or append inside outermost div
   if (html.includes('</body>')) {
     return html.replace('</body>', `${footer}</body>`);
   } else if (html.includes('</html>')) {
     return html.replace('</html>', `${footer}</html>`);
   } else {
+    // Insert before the last </div> to keep footer inside the wrapper
+    const lastDiv = html.lastIndexOf('</div>');
+    if (lastDiv !== -1) {
+      return html.slice(0, lastDiv) + footer + html.slice(lastDiv);
+    }
     return html + footer;
   }
 }
@@ -188,8 +196,11 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel 
     html = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(html)}</div>`;
   }
 
-  // If the email already contains our label, don't duplicate it.
-  if (html.includes('Audit - ') && html.includes(auditUrl)) return html;
+  // If the email already contains an audit link label, don't duplicate it.
+  // We intentionally check ONLY for the label (not the exact URL) so localhost
+  // and production share the same logic — the stored email may use a different
+  // base URL than the current request origin.
+  if (html.includes('Audit - ')) return html;
 
   // If a plain URL is present, replace first occurrence; otherwise append.
   const idx = html.indexOf(auditUrl);
@@ -376,6 +387,29 @@ router.get('/api/diagnostics', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/api/verify-email - Verify email deliverability (MX + syntax)
+router.post('/api/verify-email', requireAdmin, async (req, res) => {
+  const { email, emails } = req.body;
+
+  try {
+    if (emails && Array.isArray(emails)) {
+      const { verifyEmails } = require('../services/emailVerifier');
+      const results = await verifyEmails(emails, { skipSmtp: true });
+      return res.json({ success: true, results });
+    }
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'email is required' });
+    }
+
+    const result = await verifyEmail(email, { skipSmtp: true });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[VERIFY-EMAIL] Error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // POST /admin/api/test-deliverability/:auditId/start - Start mail-tester.com test
 router.post('/api/test-deliverability/:auditId/start', requireAdmin, auditJobLimiter, async (req, res) => {
   const auditId = req.params.auditId;
@@ -405,8 +439,8 @@ router.post('/api/test-deliverability/:auditId/start', requireAdmin, auditJobLim
     }
     
     // Prepare email content
-    const htmlBody = audit.email_html || '<p>Test email from Max & Jacob</p>';
-    const subject = `${audit.company_name || audit.niche || 'Test'} x Max & Jacob`;
+    const htmlBody = audit.email_html || '<p>Test email from Max &amp; Jacob</p>';
+    const subject = `${audit.company_name || audit.niche || 'Test'} — quick site review`;
     
     // Add unsubscribe footer (using existing function)
     const htmlWithFooter = addUnsubscribeFooterToHtml(htmlBody, testEmail);
@@ -943,6 +977,33 @@ router.post('/audits/:id/send-email', requireAdmin, auditJobLimiter, async (req,
         success: false, 
         error: 'Invalid email address format' 
       });
+    }
+
+    // Block sending to unsubscribed recipients (CAN-SPAM compliance)
+    const unsubscribed = await new Promise((resolve, reject) => {
+      isUnsubscribed(recipient, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
+    });
+    if (unsubscribed) {
+      return res.status(403).json({
+        success: false,
+        error: `Cannot send to ${recipient} — this address has unsubscribed.`
+      });
+    }
+
+    // Verify email deliverability (MX check) before sending
+    const verification = await verifyEmail(recipient, { skipSmtp: true });
+    if (!verification.valid) {
+      return res.status(400).json({
+        success: false,
+        error: `Email verification failed for ${recipient}: ${verification.reason}`,
+        verification
+      });
+    }
+    if (verification.risk === 'medium') {
+      console.warn(`[SEND-EMAIL] Warning: sending to role-based address ${recipient}`);
     }
 
     // Validate format
@@ -3388,14 +3449,18 @@ router.post('/deals/:id/messages', requireAdmin, (req, res) => {
 
         Promise.all(attachmentPromises)
           .then(savedAttachments => {
-            // Send email notification to client (non-blocking)
-            sendDealNotificationToClient({
-              deal,
-              messageBody: body,
-              attachments: savedAttachments,
-              baseUrl: getAdminBaseUrl(req)
-            }).catch(emailErr => console.error('[DEALS] Failed to send client notification:', emailErr));
-
+            // Send email notification to client (non-blocking); ensure deal has required fields (e.g. old rows)
+            const baseUrl = getAdminBaseUrl(req);
+            if (deal.client_email && deal.magic_token) {
+              sendDealNotificationToClient({
+                deal,
+                messageBody: body,
+                attachments: savedAttachments,
+                baseUrl
+              }).catch(emailErr => console.error('[DEALS] Failed to send client notification:', emailErr));
+            } else {
+              console.warn('[DEALS] Skipping client email: deal missing client_email or magic_token', { dealId: deal.id });
+            }
             res.redirect(`/admin/deals/${id}?success=1`);
           })
           .catch(aErr => {

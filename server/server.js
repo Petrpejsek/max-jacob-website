@@ -164,31 +164,63 @@ app.use('/api', (req, res, next) => {
 
 // Resend webhook endpoint (must be BEFORE admin routes - public endpoint)
 app.post('/api/webhooks/resend', express.json(), (req, res) => {
-  console.log('[RESEND WEBHOOK] Received event:', req.body.type);
-  
   const { type, data } = req.body;
-  const { updateEmailTracking } = require('./db');
+  console.log('[RESEND WEBHOOK] Received event:', type);
   
-  // Process email events (opened, clicked)
-  if (type === 'email.opened' && data && data.email_id) {
-    updateEmailTracking(data.email_id, 'opened', (err) => {
-      if (err) {
-        console.error('[RESEND WEBHOOK] Error updating opened tracking:', err);
-      } else {
-        console.log('[RESEND WEBHOOK] Email opened tracked:', data.email_id);
-      }
+  const { updateEmailTracking, addUnsubscribe } = require('./db');
+  
+  if (!data) {
+    return res.status(200).json({ received: true });
+  }
+
+  const resendId = data.email_id;
+
+  if (type === 'email.opened' && resendId) {
+    updateEmailTracking(resendId, 'opened', (err) => {
+      if (err) console.error('[RESEND WEBHOOK] Error tracking open:', err);
+      else console.log('[RESEND WEBHOOK] Open tracked:', resendId);
     });
-  } else if (type === 'email.clicked' && data && data.email_id) {
-    updateEmailTracking(data.email_id, 'clicked', (err) => {
-      if (err) {
-        console.error('[RESEND WEBHOOK] Error updating clicked tracking:', err);
-      } else {
-        console.log('[RESEND WEBHOOK] Email clicked tracked:', data.email_id);
-      }
+
+  } else if (type === 'email.clicked' && resendId) {
+    updateEmailTracking(resendId, 'clicked', (err) => {
+      if (err) console.error('[RESEND WEBHOOK] Error tracking click:', err);
+      else console.log('[RESEND WEBHOOK] Click tracked:', resendId);
     });
+
+  } else if (type === 'email.bounced' && resendId) {
+    const bounceType = (data.bounce && data.bounce.type) || 'unknown';
+    const recipientEmail = Array.isArray(data.to) ? data.to[0] : (typeof data.to === 'string' ? data.to : null);
+    console.warn(`[RESEND WEBHOOK] BOUNCE (${bounceType}):`, resendId, recipientEmail || '');
+
+    updateEmailTracking(resendId, 'bounced', (err) => {
+      if (err) console.error('[RESEND WEBHOOK] Error tracking bounce:', err);
+    }, { bounceType });
+
+    // Auto-unsubscribe on hard bounce to prevent re-sending
+    if (recipientEmail) {
+      addUnsubscribe(recipientEmail, 'hard_bounce', (err) => {
+        if (err) console.error('[RESEND WEBHOOK] Error auto-unsubscribing bounced email:', err);
+        else console.log(`[RESEND WEBHOOK] Auto-unsubscribed bounced email: ${recipientEmail}`);
+      });
+    }
+
+  } else if (type === 'email.complained' && resendId) {
+    const recipientEmail = Array.isArray(data.to) ? data.to[0] : (typeof data.to === 'string' ? data.to : null);
+    console.warn('[RESEND WEBHOOK] SPAM COMPLAINT:', resendId, recipientEmail || '');
+
+    updateEmailTracking(resendId, 'complained', (err) => {
+      if (err) console.error('[RESEND WEBHOOK] Error tracking complaint:', err);
+    });
+
+    // Auto-unsubscribe on spam complaint
+    if (recipientEmail) {
+      addUnsubscribe(recipientEmail, 'spam_complaint', (err) => {
+        if (err) console.error('[RESEND WEBHOOK] Error auto-unsubscribing complained email:', err);
+        else console.log(`[RESEND WEBHOOK] Auto-unsubscribed complained email: ${recipientEmail}`);
+      });
+    }
   }
   
-  // Always respond 200 OK to webhook
   res.status(200).json({ received: true });
 });
 
@@ -312,7 +344,7 @@ app.get('/unsubscribe', (req, res) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Error - Max & Jacob</title>
+        <title>Error - Max &amp; Jacob</title>
         <style>
           body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
           .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
@@ -323,49 +355,87 @@ app.get('/unsubscribe', (req, res) => {
       </head>
       <body>
         <div class="container">
-          <h1>⚠️ Error</h1>
+          <h1>Error</h1>
           <p>Email address was not specified. Please use the link from the email.</p>
-          <p><a href="https://maxandjacob.com">← Back to homepage</a></p>
+          <p><a href="https://maxandjacob.com">Back to homepage</a></p>
         </div>
       </body>
       </html>
     `);
   }
   
-  // TODO: Add email to unsubscribe list in database (future implementation)
-  // For now, just show confirmation page
+  // Strict email format validation to prevent junk/XSS data in DB
+  const emailPattern = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+  if (!emailPattern.test(email)) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Error - Max &amp; Jacob</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+          .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
+          h1 { color: #dc2626; margin: 0 0 16px 0; }
+          p { color: #4b5563; line-height: 1.6; }
+          a { color: #4F46E5; text-decoration: none; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Error</h1>
+          <p>Invalid email address. Please use the link from the email.</p>
+          <p><a href="https://maxandjacob.com">Back to homepage</a></p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
+  const { addUnsubscribe } = require('./db');
   
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Unsubscribe Successful - Max & Jacob</title>
-      <style>
-        body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
-        h1 { color: #16a34a; margin: 0 0 16px 0; }
-        p { color: #4b5563; line-height: 1.6; margin: 12px 0; }
-        .email { font-weight: 600; color: #1f2937; background: #f3f4f6; padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 8px 0; }
-        a { color: #4F46E5; text-decoration: none; font-weight: 600; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>✅ Unsubscribe Successful</h1>
-        <p>Email <span class="email">${email}</span> has been unsubscribed from our mailing list.</p>
-        <p>You will no longer receive messages from Max & Jacob.</p>
-        <p style="margin-top: 32px; font-size: 14px; color: #6b7280;">
-          If you unsubscribed by mistake, you can contact us at <a href="mailto:jacob@maxandjacob.com">jacob@maxandjacob.com</a>
-        </p>
-        <p style="margin-top: 24px;">
-          <a href="https://maxandjacob.com">← Back to homepage</a>
-        </p>
-      </div>
-    </body>
-    </html>
-  `);
+  addUnsubscribe(email, 'link', (err) => {
+    if (err) {
+      console.error('[UNSUBSCRIBE] DB error:', err);
+    } else {
+      console.log(`[UNSUBSCRIBE] Email unsubscribed: ${email}`);
+    }
+
+    const safeEmail = String(email).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Unsubscribed - Max &amp; Jacob</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+          .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; text-align: center; }
+          h1 { color: #16a34a; margin: 0 0 16px 0; }
+          p { color: #4b5563; line-height: 1.6; margin: 12px 0; }
+          .email { font-weight: 600; color: #1f2937; background: #f3f4f6; padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 8px 0; }
+          a { color: #4F46E5; text-decoration: none; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Unsubscribed</h1>
+          <p>Email <span class="email">${safeEmail}</span> has been removed from our mailing list.</p>
+          <p>You will no longer receive messages from us.</p>
+          <p style="margin-top: 32px; font-size: 14px; color: #6b7280;">
+            If you unsubscribed by mistake, contact us at <a href="mailto:jacob@maxandjacob.com">jacob@maxandjacob.com</a>
+          </p>
+          <p style="margin-top: 24px;">
+            <a href="https://maxandjacob.com">Back to homepage</a>
+          </p>
+        </div>
+      </body>
+      </html>
+    `);
+  });
 });
 
 // Register API and Admin routes

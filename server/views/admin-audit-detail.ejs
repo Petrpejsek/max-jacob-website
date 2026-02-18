@@ -923,19 +923,26 @@
                     } catch (_) {}
                     
                     // Email subject
-                    const mjEmailSubject = `${mjBusinessName} x Max & Jacob`;
+                    const mjEmailSubject = `${mjBusinessName} — quick site review`;
                     
                     // Fallback plaintext (only used when pipeline email_html is missing)
-                    const mjFallbackPlain = `Hi ${mjBusinessName},\n\nJacob here from Max & Jacob.\n\nI put together a quick free audit of your website — no login needed, totally safe to open:\n${mjAuditLink}\n\nIf you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.\n\nBest,\nJacob Liesner\nMax & Jacob\njacob@maxandjacob.com`;
+                    const mjFallbackPlain = `Hi ${mjBusinessName},\n\nJacob here from Max & Jacob.\n\nI put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):\n${mjAuditLink}\n\nIf you find it useful, we can also design a new homepage concept for you within 48 hours — completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.\n\nBest,\nJacob Liesner\nMax & Jacob\njacob@maxandjacob.com`;
                     
                     // Fallback HTML (only used when pipeline email_html is missing)
                     // NOTE: No <!DOCTYPE>/<html>/<head>/<body> wrappers - those fingerprint as mass template
                     const mjFallbackHtml = `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
 <p>Hi ${mjBusinessName},</p>
 <p>Jacob here from Max & Jacob.</p>
-<p>I put together a quick free audit of your website — no login needed, totally safe to open:</p>
+<p>I recorded a quick free website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
 <p><a href="${mjAuditLink}" style="color:#2563eb;font-weight:bold;">Audit - ${mjBusinessName}</a></p>
-<p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>If you'd like, we can also build you a free 48-hour homepage preview — a modern "before/after" concept focused on:</p>
+<ul style="margin:8px 0 8px 20px;padding:0;">
+<li>more calls &amp; quote requests (clearer layout + stronger CTA)</li>
+<li>faster, mobile-first performance</li>
+<li>better Google visibility (clean structure, local SEO basics)</li>
+</ul>
+<p>No contract, no pressure, no sales call.<br>If the preview helps, great. If not, you still keep the audit.</p>
+<p>To get the preview, just fill out the short brief at the end of the audit (2 minutes).</p>
 <p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
 <p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="https://maxandjacob.com/unsubscribe" style="color:#999;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
 </div>`;
@@ -1506,6 +1513,134 @@
         <% if (crawledPages && crawledPages.length > 0) { %>
         <div class="section">
             <div class="section-title">B2) Pages Crawl (Scraper v3) <span class="badge"><%= crawledPages.length %> pages</span></div>
+            
+            <!-- Full Scraping (Stage 2) Controls -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="font-size: 1.3rem; margin-bottom: 8px; color: #fff;">🚀 Full Scraping - Kompletní Data</h3>
+                        <p style="font-size: 0.9rem; color: rgba(255,255,255,0.85); margin: 0;">
+                            Automaticky stáhne VŠECHNA data (stránky + obrázky) pro vytvoření webu
+                        </p>
+                    </div>
+                    <div>
+                        <% if (!auditJob.full_scraping_status || auditJob.full_scraping_status === 'not_started') { %>
+                            <button class="btn btn-primary" id="runFullScrapingBtn" style="font-size: 1rem; padding: 14px 28px; background: #fff; color: #667eea; border: none; font-weight: 600;">
+                                ⬇️ Stáhnout Vše
+                            </button>
+                        <% } else if (auditJob.full_scraping_status === 'running') { %>
+                            <div style="padding: 14px 28px; background: rgba(255,255,255,0.2); border-radius: 8px; color: #fff; font-weight: 600;">
+                                ⏳ Running...
+                            </div>
+                        <% } else if (auditJob.full_scraping_status === 'completed') { %>
+                            <div style="display: flex; gap: 12px;">
+                                <a href="/admin/audits/<%= auditJob.id %>/export-full-scraping" class="btn" style="padding: 14px 28px; background: #10b981; color: #fff; border: none; font-weight: 600; text-decoration: none;">
+                                    📦 Export ZIP
+                                </a>
+                                <button class="btn" id="runFullScrapingBtn" style="padding: 14px 28px; background: rgba(255,255,255,0.2); color: #fff; border: none; font-weight: 500;">
+                                    🔄 Re-run
+                                </button>
+                            </div>
+                        <% } else if (auditJob.full_scraping_status === 'failed') { %>
+                            <button class="btn btn-primary" id="runFullScrapingBtn" style="font-size: 1rem; padding: 14px 28px; background: #ef4444; color: #fff; border: none; font-weight: 600;">
+                                ⚠️ Retry
+                            </button>
+                        <% } %>
+                    </div>
+                </div>
+                
+                <!-- Full Scraping Stats -->
+                <% if (auditJob.full_scraping_json && auditJob.full_scraping_json.stats) { %>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; background: rgba(255,255,255,0.15); border-radius: 8px; padding: 16px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; color: #fff; font-weight: bold;"><%= auditJob.full_scraping_json.stats.images_downloaded %></div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.85);">Images Downloaded</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; color: #fff; font-weight: bold;"><%= auditJob.full_scraping_json.stats.storage_mb %> MB</div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.85);">Storage Used</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; color: #fff; font-weight: bold;"><%= auditJob.full_scraping_json.stats.pages_processed %></div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.85);">Pages Processed</div>
+                        </div>
+                        <% if (auditJob.full_scraping_json.stats.images_failed > 0) { %>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.8rem; color: #fbbf24; font-weight: bold;"><%= auditJob.full_scraping_json.stats.images_failed %></div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.85);">Failed</div>
+                        </div>
+                        <% } %>
+                    </div>
+                <% } %>
+                
+                <% if (auditJob.full_scraping_error) { %>
+                    <div style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; margin-top: 12px;">
+                        <div style="color: #fca5a5; font-weight: 600; margin-bottom: 4px;">❌ Error:</div>
+                        <div style="color: #fecaca; font-size: 0.9rem;"><%= auditJob.full_scraping_error %></div>
+                    </div>
+                <% } %>
+            </div>
+            
+            <script>
+                // Auto-poll for full scraping status
+                function startFullScrapingPoll() {
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const resp = await fetch(`/admin/audits/<%= auditJob.id %>/full-scraping-status`);
+                            const data = await resp.json();
+                            
+                            if (data.status === 'completed' || data.status === 'failed') {
+                                clearInterval(pollInterval);
+                                window.location.reload();
+                            }
+                        } catch (e) {
+                            console.error('Poll error:', e);
+                        }
+                    }, 5000); // Check every 5 seconds
+                }
+                
+                // Auto-start polling if status is "running"
+                <% if (auditJob.full_scraping_status === 'running') { %>
+                    startFullScrapingPoll();
+                <% } %>
+
+                // Full Scraping Button Handler
+                document.getElementById('runFullScrapingBtn')?.addEventListener('click', async function() {
+                    const btn = this;
+                    const originalText = btn.innerHTML;
+                    
+                    if (!confirm('Spustit kompletní scraping? Stáhne VŠECHNA data (stránky + obrázky). Trvá 5-15 minut.')) {
+                        return;
+                    }
+                    
+                    btn.disabled = true;
+                    btn.innerHTML = '⏳ Starting...';
+                    
+                    try {
+                        const response = await fetch(`/admin/audits/<%= auditJob.id %>/run-full-scraping`, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            btn.innerHTML = '⏳ Running... (auto-refresh)';
+                            // Start polling for completion
+                            startFullScrapingPoll();
+                        } else {
+                            throw new Error(data.error || 'Unknown error');
+                        }
+                    } catch (error) {
+                        console.error('Full scraping error:', error);
+                        alert('Failed to start full scraping: ' + error.message);
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    }
+                });
+            </script>
             
             <!-- Summary Stats -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">

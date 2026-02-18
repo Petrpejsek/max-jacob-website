@@ -286,27 +286,22 @@ function generateSevenDayPlan(job, llmContext, topIssues) {
  * @returns {String} HTML email content
  */
 function generateOutreachEmail(job, llmContext, topIssues) {
-  // NOTE: This email is intentionally written as a short, human outreach note.
-  // Do NOT include audit issue lists in the email body (hurts deliverability and UX).
-  // Also keep the audit link as a simple blue "Audit - {Company}" anchor.
   const companyName = llmContext.company_profile?.name || job.company_name || 'your business';
   const publicSlug = job.public_page_slug || '';
   const auditUrl = publicSlug ? `https://maxandjacob.com/${publicSlug}?v=2` : (job.input_url || 'https://maxandjacob.com');
 
   const auditLinkLabel = `Audit - ${companyName}`;
-  const addressLine = '1221 Brickell Ave, Suite 900, Miami, FL 33131';
 
-  // NOTE: Intentionally NO <!DOCTYPE>, <html>, <head>, <body> wrappers.
-  // Gmail/Outlook fingerprint those as "mass template" vs personal email.
-  // Simple inline-styled divs look like a real email client output.
+  // No <!DOCTYPE>/<html>/<head>/<body> wrappers — Gmail fingerprints those as mass template.
+  // No unsubscribe footer here — addUnsubscribeFooterToHtml() adds it at send time
+  // with the correct recipient email parameter.
   return `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
 <p>Hi ${companyName},</p>
-<p>Jacob here from Max & Jacob.</p>
-<p>I put together a quick free audit of your website — no login needed, totally safe to open:</p>
+<p>Jacob here from Max &amp; Jacob.</p>
+<p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
 <p><a href="${auditUrl}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
-<p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
-<p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
-<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="https://maxandjacob.com/unsubscribe" style="color:#999;">Unsubscribe</a> · Max & Jacob · ${addressLine} · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+<p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
 </div>`;
 }
 

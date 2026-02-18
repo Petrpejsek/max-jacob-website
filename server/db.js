@@ -409,11 +409,15 @@ function initDatabase() {
     } else {
       console.log('Table email_logs ready');
       
-      // Migration: Add tracking columns if they don't exist
+      // Migrations: add columns if they don't exist (safe to run repeatedly)
       db.run(`ALTER TABLE email_logs ADD COLUMN opened INTEGER DEFAULT 0`, [], () => {});
       db.run(`ALTER TABLE email_logs ADD COLUMN clicked INTEGER DEFAULT 0`, [], () => {});
       db.run(`ALTER TABLE email_logs ADD COLUMN last_opened_at DATETIME`, [], () => {});
       db.run(`ALTER TABLE email_logs ADD COLUMN last_clicked_at DATETIME`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN bounced INTEGER DEFAULT 0`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN bounce_type TEXT`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN bounced_at DATETIME`, [], () => {});
+      db.run(`ALTER TABLE email_logs ADD COLUMN complained INTEGER DEFAULT 0`, [], () => {});
     }
   });
 
@@ -976,12 +980,30 @@ function initDatabase() {
     }
   });
 
+  // ==================== UNSUBSCRIBE TABLE ====================
+  const createUnsubscribesTableSQL = `
+    CREATE TABLE IF NOT EXISTS email_unsubscribes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      unsubscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      source TEXT DEFAULT 'link'
+    )
+  `;
+  db.run(createUnsubscribesTableSQL, (err) => {
+    if (err) {
+      console.error('Error creating email_unsubscribes table:', err);
+    } else {
+      console.log('Table email_unsubscribes ready');
+    }
+  });
+
   // Indexes for performance (safe IF NOT EXISTS)
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_search_id ON preaudit_results(search_id)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_results_status ON preaudit_results(status)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_blacklist_url ON preaudit_blacklist(url)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_deal_messages_deal_id ON deal_messages(deal_id)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)', () => {});
+  db.run('CREATE INDEX IF NOT EXISTS idx_email_unsubscribes_email ON email_unsubscribes(email)', () => {});
 
   // Test zápisu do databáze
   db.run('SELECT 1', (err) => {
@@ -2297,7 +2319,7 @@ function getAllEmailLogsStatus(callback) {
   });
 }
 
-function updateEmailTracking(resendId, eventType, callback) {
+function updateEmailTracking(resendId, eventType, callback, extra = {}) {
   if (eventType === 'opened') {
     const sql = `
       UPDATE email_logs
@@ -2311,6 +2333,24 @@ function updateEmailTracking(resendId, eventType, callback) {
       UPDATE email_logs
       SET clicked = clicked + 1,
           last_clicked_at = CURRENT_TIMESTAMP
+      WHERE resend_id = ?
+    `;
+    db.run(sql, [resendId], callback);
+  } else if (eventType === 'bounced') {
+    const sql = `
+      UPDATE email_logs
+      SET bounced = 1,
+          bounce_type = ?,
+          bounced_at = CURRENT_TIMESTAMP,
+          status = 'bounced'
+      WHERE resend_id = ?
+    `;
+    db.run(sql, [extra.bounceType || 'unknown', resendId], callback);
+  } else if (eventType === 'complained') {
+    const sql = `
+      UPDATE email_logs
+      SET complained = 1,
+          status = 'complained'
       WHERE resend_id = ?
     `;
     db.run(sql, [resendId], callback);
@@ -3012,7 +3052,12 @@ module.exports = {
   updateDealStatus,
   getDealMessages,
   createDealMessage,
-  createDealAttachment
+  createDealAttachment,
+  // Unsubscribe
+  addUnsubscribe,
+  isUnsubscribed,
+  getAllUnsubscribes,
+  removeUnsubscribe
 };
 
 // Site Settings functions
@@ -3049,6 +3094,56 @@ function setSiteSetting(key, value, callback) {
       callback(err);
     } else {
       callback(null);
+    }
+  });
+}
+
+// ==================== UNSUBSCRIBE FUNCTIONS ====================
+
+function addUnsubscribe(email, source, callback) {
+  const normalized = String(email).toLowerCase().trim();
+  const sql = `
+    INSERT INTO email_unsubscribes (email, source)
+    VALUES (?, ?)
+    ON CONFLICT(email) DO UPDATE SET unsubscribed_at = CURRENT_TIMESTAMP, source = ?
+  `;
+  db.run(sql, [normalized, source || 'link', source || 'link'], function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { id: this.lastID });
+    }
+  });
+}
+
+function isUnsubscribed(email, callback) {
+  const normalized = String(email).toLowerCase().trim();
+  db.get('SELECT id FROM email_unsubscribes WHERE email = ?', [normalized], (err, row) => {
+    if (err) {
+      callback(err, false);
+    } else {
+      callback(null, !!row);
+    }
+  });
+}
+
+function getAllUnsubscribes(callback) {
+  db.all('SELECT * FROM email_unsubscribes ORDER BY unsubscribed_at DESC', [], (err, rows) => {
+    if (err) {
+      callback(err, []);
+    } else {
+      callback(null, rows || []);
+    }
+  });
+}
+
+function removeUnsubscribe(email, callback) {
+  const normalized = String(email).toLowerCase().trim();
+  db.run('DELETE FROM email_unsubscribes WHERE email = ?', [normalized], function(err) {
+    if (err) {
+      callback(err);
+    } else {
+      callback(null, { changes: this.changes });
     }
   });
 }

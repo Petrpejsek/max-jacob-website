@@ -2722,11 +2722,13 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, c
   if (!auditUrl) return emailHtmlRaw;
 
   const label = companyLabel ? `Audit - ${companyLabel}` : 'Audit';
-  const block =
-    `<p style="margin: 20px 0;">` +
-    `<strong style="font-size: 16px;">${escapeHtml(label)}</strong><br>` +
-    `<a href="${escapeHtml(auditUrl)}" style="color: #4F46E5; text-decoration: none;">${escapeHtml(auditUrl)}</a>` +
-    `</p>`;
+
+  // Clean link format — matches copyTemplates.generateOutreachEmail output.
+  // We intentionally use a simple <a> (not the old verbose block with raw URL) so the
+  // email looks like a real personal note rather than a marketing template.
+  const cleanLink =
+    `<a href="${escapeHtml(auditUrl)}" style="color:#2563eb;font-weight:bold;">${escapeHtml(label)}</a>`;
+  const cleanBlock = `<p>${cleanLink}</p>`;
 
   let html = String(emailHtmlRaw);
 
@@ -2736,28 +2738,38 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, c
     html = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(html)}</div>`;
   }
 
-  // Replace the first occurrence of the audit URL (or relative slug) with our clean block.
+  // Build candidate URLs to search for (most specific first).
   const candidates = [];
   if (publicSlug) {
-    const rel = `/${publicSlug}`;
     candidates.push(getAuditLandingUrlFromSlug(publicSlug));
     candidates.push(`https://maxandjacob.com/${publicSlug}`);
-    candidates.push(`${rel}?v=2`);
-    candidates.push(rel);
+    candidates.push(`/${publicSlug}?v=2`);
+    candidates.push(`/${publicSlug}`);
   }
   candidates.push(auditUrl);
 
   for (const c of candidates) {
     if (!c) continue;
     const idx = html.indexOf(c);
-    if (idx !== -1) {
-      html = html.replace(c, block);
+    if (idx === -1) continue;
+
+    // SAFETY CHECK: if the URL already appears as the value of an href attribute,
+    // the email already has a valid clickable link — don't corrupt it by replacing
+    // just the URL string (which would inject HTML inside the href value).
+    // Detect pattern:  href="URL"  or  href='URL'
+    const hrefPattern = new RegExp(`href\\s*=\\s*["']` + c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + `["']`, 'i');
+    if (hrefPattern.test(html)) {
+      // Email already has a clean hyperlink — nothing to do.
       return html;
     }
+
+    // URL appears as bare text — replace it with our clean link block.
+    html = html.replace(c, cleanBlock);
+    return html;
   }
 
-  // Fallback: append at the end.
-  return `${html}\n${block}`;
+  // Fallback: append clean block at the end.
+  return `${html}\n${cleanBlock}`;
 }
 
 /**
@@ -2915,20 +2927,20 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
     case 2:
     case 3:
     case 4:
-    case 5:
-      // PERSONAL EMAIL TEMPLATE - looks like a real human-written email
-      // NO <!DOCTYPE>, <html>, <head>, <body> wrappers (Gmail fingerprints those as mass template)
-      const auditLinkLabel = companyName ? `Audit - ${companyName}` : 'Your free audit';
+    case 5: {
+      const auditLinkLabel = companyName ? `Audit - ${companyName}` : 'Your audit';
+      // No unsubscribe footer here — addUnsubscribeFooterToHtml() adds it at send time
+      // with the correct recipient email parameter.
       htmlTemplate = `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
 <p>Hi ${companyName},</p>
-<p>Jacob here from Max & Jacob.</p>
-<p>I put together a quick free audit of your website — no login needed, totally safe to open:</p>
+<p>Jacob here from Max &amp; Jacob.</p>
+<p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
 <p><a href="${auditUrl}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
-<p>If you find it useful, we can also design a new homepage concept for you within 48 hours — completely free, no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
-<p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
-<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="${unsubscribeUrl}" style="color:#999;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+<p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
 </div>`;
       break;
+    }
       
     default:
       // Fallback to variant 1
