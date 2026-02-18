@@ -930,21 +930,15 @@
                     
                     // Fallback HTML (only used when pipeline email_html is missing)
                     // NOTE: No <!DOCTYPE>/<html>/<head>/<body> wrappers - those fingerprint as mass template
+                    // NOTE: No unsubscribe footer here — addUnsubscribeFooterToHtml() adds it at send time
+                    //       with the correct recipient email parameter.
                     const mjFallbackHtml = `<div style="max-width:600px;font-family:Arial,sans-serif;color:#111;">
 <p>Hi ${mjBusinessName},</p>
-<p>Jacob here from Max & Jacob.</p>
-<p>I recorded a quick free website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
+<p>Jacob here from Max &amp; Jacob.</p>
+<p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
 <p><a href="${mjAuditLink}" style="color:#2563eb;font-weight:bold;">Audit - ${mjBusinessName}</a></p>
-<p>If you'd like, we can also build you a free 48-hour homepage preview — a modern "before/after" concept focused on:</p>
-<ul style="margin:8px 0 8px 20px;padding:0;">
-<li>more calls &amp; quote requests (clearer layout + stronger CTA)</li>
-<li>faster, mobile-first performance</li>
-<li>better Google visibility (clean structure, local SEO basics)</li>
-</ul>
-<p>No contract, no pressure, no sales call.<br>If the preview helps, great. If not, you still keep the audit.</p>
-<p>To get the preview, just fill out the short brief at the end of the audit (2 minutes).</p>
-<p>Best,<br>Jacob Liesner<br>Max & Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
-<p style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#999;"><a href="https://maxandjacob.com/unsubscribe" style="color:#999;">Unsubscribe</a> · Max & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · <a href="https://maxandjacob.com" style="color:#999;">maxandjacob.com</a></p>
+<p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:jacob@maxandjacob.com" style="color:#2563eb;">jacob@maxandjacob.com</a></p>
 </div>`;
 
                     // Prefer pipeline email ONLY if it matches our intended "human" 48h preview template.
