@@ -136,8 +136,8 @@ function generatePlainTextFromHtml(html, recipientEmail) {
   text = text.replace(/  +/g, ' '); // Multiple spaces to single
   text = text.trim();
   
-  // Add unsubscribe footer (NO "You received this email because..." — that's a top spam trigger)
-  if (recipientEmail) {
+  // Add unsubscribe footer only if not already present (NO "You received this email because..." — spam trigger)
+  if (recipientEmail && !text.toLowerCase().includes('unsubscribe')) {
     const baseUrl = process.env.BASE_URL || 'https://maxandjacob.com';
     const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
     text += `\n\n—\nUnsubscribe: ${unsubscribeUrl}\nMax & Jacob · 1221 Brickell Ave, Suite 900, Miami, FL 33131 · maxandjacob.com`;

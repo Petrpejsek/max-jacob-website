@@ -946,7 +946,13 @@
                     // - should NOT be used for outreach
                     // - can also break the admin page when rendered inline
                     const mjCandidateEmailHtml = (auditJob.email_html && auditJob.email_html.trim()) ? auditJob.email_html : '';
-                    const mjLooksLikeHuman48hTemplate = /48\s*(hours|h)\b/i.test(mjCandidateEmailHtml) || /homepage preview/i.test(mjCandidateEmailHtml);
+                    // Accept stored pipeline email only if it looks like the current clean template:
+                    // - mentions "48 hours" (our value prop)
+                    // - does NOT contain the word "free" (spam trigger we removed)
+                    const mjLooksLikeHuman48hTemplate = (
+                      (/48\s*(hours|h)\b/i.test(mjCandidateEmailHtml) || /homepage preview/i.test(mjCandidateEmailHtml)) &&
+                      !/\bfree\b/i.test(mjCandidateEmailHtml)
+                    );
                     const mjDefaultOutreachEmailHtml = (mjCandidateEmailHtml && mjLooksLikeHuman48hTemplate) ? mjCandidateEmailHtml : mjFallbackHtml;
                     const mjDefaultOutreachEmailPlain = mjFallbackPlain;
                 %>
