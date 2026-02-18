@@ -188,7 +188,10 @@ function validateEvidenceInIssues(uxJson) {
 }
 
 async function callOpenRouter({ model, temperature, messages }) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = String(process.env.OPENROUTER_API_KEY || '')
+    .trim()
+    .replace(/^"(.*)"$/, '$1')
+    .replace(/^'(.*)'$/, '$1');
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not set');
   }
@@ -197,7 +200,10 @@ async function callOpenRouter({ model, temperature, messages }) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Authorization': `Bearer ${apiKey}`,
+      // Recommended by OpenRouter for attribution/rate-limits; also helps avoid edge auth issues.
+      'HTTP-Referer': process.env.APP_URL || process.env.BASE_URL || 'https://maxandjacob.com',
+      'X-Title': 'Max&Jacob Audit Pipeline'
     },
     body: JSON.stringify({
       model,
@@ -208,6 +214,10 @@ async function callOpenRouter({ model, temperature, messages }) {
 
   if (!response.ok) {
     const errorBody = await response.text();
+    // Make auth failures actionable (common cause: wrong/quoted key in production env).
+    if (response.status === 401 && /User not found/i.test(errorBody)) {
+      throw new Error('OpenRouter auth failed (401 User not found). Check OPENROUTER_API_KEY on the server (wrong key, quotes, or whitespace).');
+    }
     throw new Error(`OpenRouter error: ${response.status} ${errorBody}`);
   }
 

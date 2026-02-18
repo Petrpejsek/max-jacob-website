@@ -26,7 +26,10 @@ async function sendOpenRouterRequest({
   user_content,
   metadata = {}
 }) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = String(process.env.OPENROUTER_API_KEY || '')
+    .trim()
+    .replace(/^"(.*)"$/, '$1')
+    .replace(/^'(.*)'$/, '$1');
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY environment variable is not set');
   }
