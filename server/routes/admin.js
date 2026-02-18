@@ -197,14 +197,18 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { auditUrl, companyLabel 
   }
 
   // If the email already contains an audit link label, don't duplicate it.
-  // We intentionally check ONLY for the label (not the exact URL) so localhost
-  // and production share the same logic — the stored email may use a different
-  // base URL than the current request origin.
   if (html.includes('Audit - ')) return html;
 
   // If a plain URL is present, replace first occurrence; otherwise append.
+  // SAFETY: never replace a URL that already sits inside an href attribute —
+  // that would inject raw HTML into the attribute value and corrupt the email.
   const idx = html.indexOf(auditUrl);
-  if (idx !== -1) return html.replace(auditUrl, block);
+  if (idx !== -1) {
+    const escapedUrl = auditUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hrefContainsPattern = new RegExp(`href\\s*=\\s*["'][^"']*` + escapedUrl, 'i');
+    if (hrefContainsPattern.test(html)) return html;
+    return html.replace(auditUrl, block);
+  }
   return `${html}\n${block}`;
 }
 

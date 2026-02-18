@@ -2738,6 +2738,10 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, c
     html = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(html)}</div>`;
   }
 
+  // If the label ("Audit - Company") is already in the HTML, the email already has
+  // a valid clickable link — don't touch it.
+  if (html.includes(label)) return html;
+
   // Build candidate URLs to search for (most specific first).
   const candidates = [];
   if (publicSlug) {
@@ -2753,13 +2757,13 @@ function ensureAuditLinkBlockInEmailHtml(emailHtmlRaw, { publicSlug, auditUrl, c
     const idx = html.indexOf(c);
     if (idx === -1) continue;
 
-    // SAFETY CHECK: if the URL already appears as the value of an href attribute,
-    // the email already has a valid clickable link — don't corrupt it by replacing
-    // just the URL string (which would inject HTML inside the href value).
-    // Detect pattern:  href="URL"  or  href='URL'
-    const hrefPattern = new RegExp(`href\\s*=\\s*["']` + c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + `["']`, 'i');
-    if (hrefPattern.test(html)) {
-      // Email already has a clean hyperlink — nothing to do.
+    // SAFETY CHECK: if the candidate URL appears as part of an href attribute value
+    // (including when the href has additional query params after the candidate),
+    // the email already has a valid clickable link — don't corrupt it by injecting
+    // HTML inside the href value.
+    const escapedC = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hrefContainsPattern = new RegExp(`href\\s*=\\s*["'][^"']*` + escapedC, 'i');
+    if (hrefContainsPattern.test(html)) {
       return html;
     }
 
@@ -2935,7 +2939,7 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
 <p>Hi ${companyName},</p>
 <p>Jacob here from Max &amp; Jacob.</p>
 <p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
-<p><a href="${auditUrl}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
+<p><a href="${auditUrl.replace(/&/g, '&amp;')}" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
 <p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
 </div>`;
