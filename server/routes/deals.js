@@ -10,7 +10,8 @@ const {
   getDealByToken,
   getDealMessages,
   createDealMessage,
-  createDealAttachment
+  createDealAttachment,
+  markAdminMessagesRead
 } = require('../db');
 const { sendDealNotificationToAdmin } = require('../services/emailService');
 
@@ -105,6 +106,21 @@ const upload = multer({
 function getBaseUrl(req) {
   return process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
 }
+
+// ---------------------------------------------------------------------------
+// POST /deal/:token/read — Client marks admin messages as read
+// ---------------------------------------------------------------------------
+router.post('/:token/read', (req, res) => {
+  const { token } = req.params;
+  if (!token || token.length < 32) return res.status(404).json({ error: 'Not found' });
+  getDealByToken(token, (err, deal) => {
+    if (err || !deal) return res.status(404).json({ error: 'Deal not found' });
+    markAdminMessagesRead(deal.id, (markErr) => {
+      if (markErr) return res.status(500).json({ error: 'Failed to mark as read' });
+      res.json({ ok: true });
+    });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // GET /deal/:token/messages — JSON list of messages (for polling / live updates)

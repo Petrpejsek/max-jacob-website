@@ -1004,6 +1004,11 @@
   // Re-check after polling updates DOM
   var _origSetInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
   setInterval(checkVideos, 3000);
+
+  // ── Read receipts: mark admin messages as read on page load ──
+  (function markRead() {
+    fetch('/deal/<%= token %>/read', { method: 'POST', credentials: 'same-origin' }).catch(function() {});
+  })();
 </script>
 </body>
 </html>

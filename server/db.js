@@ -1051,6 +1051,15 @@ function initDatabase() {
   db.run('CREATE INDEX IF NOT EXISTS idx_preaudit_blacklist_url ON preaudit_blacklist(url)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_deal_messages_deal_id ON deal_messages(deal_id)', () => {});
   db.run('CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)', () => {});
+
+  // Migration: add read_at column to deal_messages (safe – ignored if already exists)
+  db.run("ALTER TABLE deal_messages ADD COLUMN read_at DATETIME DEFAULT NULL", (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.warn('[DB] Migration deal_messages.read_at:', err.message);
+    } else if (!err) {
+      console.log('[DB] Migration: deal_messages.read_at column added');
+    }
+  });
   db.run('CREATE INDEX IF NOT EXISTS idx_email_unsubscribes_email ON email_unsubscribes(email)', () => {});
 
   // Test zápisu do databáze
@@ -2932,11 +2941,14 @@ function ensureDealTables(callback) {
       FOREIGN KEY (message_id) REFERENCES deal_messages(id)
     )`,
     'CREATE INDEX IF NOT EXISTS idx_deal_messages_deal_id ON deal_messages(deal_id)',
-    'CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)'
+    'CREATE INDEX IF NOT EXISTS idx_deal_attachments_message_id ON deal_attachments(message_id)',
+    // Migration: add read_at if not present (safe on existing DBs)
+    "ALTER TABLE deal_messages ADD COLUMN read_at DATETIME DEFAULT NULL"
   ];
   let i = 0;
   function next(err) {
-    if (err) return callback(err);
+    // Ignore "duplicate column" errors from idempotent ALTER TABLE migrations
+    if (err && !err.message.includes('duplicate column')) return callback(err);
     if (i >= sqls.length) return callback(null);
     db.run(sqls[i++], next);
   }
@@ -3018,6 +3030,19 @@ function createDealMessage(data, callback) {
   db.run(sql, [data.deal_id, data.sender, data.body || null], function(err) {
     if (err) callback(err, null);
     else callback(null, { id: this.lastID });
+  });
+}
+
+// Mark all admin-sent messages in a deal as read (called when client opens the thread)
+function markAdminMessagesRead(dealId, callback) {
+  const sql = `
+    UPDATE deal_messages
+    SET read_at = CURRENT_TIMESTAMP
+    WHERE deal_id = ? AND sender = 'admin' AND read_at IS NULL
+  `;
+  db.run(sql, [dealId], function(err) {
+    if (err) callback(err);
+    else callback(null, { updated: this.changes });
   });
 }
 
@@ -3119,6 +3144,7 @@ module.exports = {
   getDealMessages,
   createDealMessage,
   createDealAttachment,
+  markAdminMessagesRead,
   // Unsubscribe
   addUnsubscribe,
   isUnsubscribed,

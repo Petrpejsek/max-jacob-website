@@ -189,6 +189,17 @@
 
     .msg-time { font-size: 10px; color: #d1d5db; padding: 0 4px; }
 
+    .read-receipt {
+      font-size: 10px;
+      color: #6366f1;
+      padding: 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-weight: 500;
+    }
+    .read-receipt svg { flex-shrink: 0; }
+
     /* Attachments */
     .attachments { display: flex; flex-direction: column; gap: 5px; }
     .mine .attachments { align-items: flex-end; }
@@ -642,6 +653,12 @@
               </div>
             <% } %>
             <div class="msg-time"><%= new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) %></div>
+            <% if (isAdmin && msg.read_at) { %>
+              <div class="read-receipt">
+                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                Read <%= new Date(msg.read_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %>
+              </div>
+            <% } %>
           </div>
         </div>
       <% }); %>
@@ -810,6 +827,10 @@
         html += '</div>';
       }
       html += '<div class="msg-time">' + new Date(msg.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</div>';
+      if (isAdmin && msg.read_at) {
+        var readTime = new Date(msg.read_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        html += '<div class="read-receipt"><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>Read ' + readTime + '</div>';
+      }
       html += '</div></div>';
     }
     html += '</div>';
