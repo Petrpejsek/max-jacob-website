@@ -1091,6 +1091,27 @@
                     <div class="field-label">Website URL *</div>
                     <input type="text" name="input_url" value="<%= auditJob.input_url && auditJob.input_url.trim() !== '' ? auditJob.input_url : '' %>" placeholder="https://example.com" required>
                 </div>
+
+                <!-- Contact Person (pre-fills the audit conversion modal) -->
+                <div style="margin-bottom: 16px; padding: 16px; background: #181828; border: 1px solid #2d2d44; border-radius: 12px;">
+                    <div class="field-label" style="margin-bottom: 4px;">Contact Person</div>
+                    <div class="small" style="margin-bottom: 12px; color: #7a7aa0;">These details are pre-filled in the form the customer sees on the audit page.</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div class="small" style="margin-bottom: 6px; color: #b6b6d6;">Name</div>
+                            <input type="text" name="contact_name" value="<%= auditJob.contact_name || '' %>" placeholder="John Smith" style="width: 100%; padding: 10px 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <div class="small" style="margin-bottom: 6px; color: #b6b6d6;">Email</div>
+                            <input type="email" name="contact_email" value="<%= auditJob.contact_email || '' %>" placeholder="john@company.com" style="width: 100%; padding: 10px 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <div class="small" style="margin-bottom: 6px; color: #b6b6d6;">Phone</div>
+                            <input type="tel" name="contact_phone" value="<%= auditJob.contact_phone || '' %>" placeholder="+1 (555) 000-0000" style="width: 100%; padding: 10px 12px; background: #0d0d1a; border: 1px solid #2d2d44; border-radius: 8px; color: #e5e5e5; font-size: 14px; box-sizing: border-box;">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="field-group" style="margin-bottom: 16px;">
                     <div class="field-label">Niche Preset *</div>
                     <select name="preset_id" id="presetDropdown" required>

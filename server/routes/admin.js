@@ -756,7 +756,10 @@ router.post('/audits/:id/process', requireAdmin, auditJobLimiter, async (req, re
   const inputUpdate = {
     input_url: req.body.input_url,
     brand_logo_url: req.body.brand_logo_url || null,
-    preset_id: req.body.preset_id ? parseInt(req.body.preset_id) : null
+    preset_id: req.body.preset_id ? parseInt(req.body.preset_id) : null,
+    contact_name: req.body.contact_name || null,
+    contact_email: req.body.contact_email || null,
+    contact_phone: req.body.contact_phone || null
   };
   
   // Note: niche and city are NOT updated here

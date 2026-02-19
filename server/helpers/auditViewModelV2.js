@@ -1967,7 +1967,10 @@ function buildFormConfig(job, public_page) {
     prefill: {
       website: job.input_url,
       niche: job.niche,
-      city: job.city
+      city: job.city,
+      contact_name: job.contact_name || '',
+      contact_email: job.contact_email || '',
+      contact_phone: job.contact_phone || ''
     },
     cta_button_text: 'Get your site preview in 48h',
     disclaimer: 'No payment now. This form only reserves your request.<br>No strings attached.',

@@ -89,7 +89,13 @@ function initDatabase() {
       message TEXT NOT NULL,
       has_attachment INTEGER DEFAULT 0,
       ip_address TEXT,
-      selected_package TEXT
+      selected_package TEXT,
+      phone TEXT,
+      selected_week TEXT,
+      preferred_start_date TEXT,
+      role TEXT,
+      liked_sites TEXT,
+      change_request TEXT
     )
   `;
 
@@ -115,6 +121,25 @@ function initDatabase() {
       db.run('ALTER TABLE contact_submissions ADD COLUMN preferred_start_date TEXT', (alterErr) => {
         if (alterErr && !alterErr.message.includes('duplicate column')) {
           console.error('Error adding preferred_start_date column:', alterErr);
+        }
+      });
+
+      // Audit conversion modal fields (stored separately for admin visibility)
+      db.run('ALTER TABLE contact_submissions ADD COLUMN role TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding role column:', alterErr);
+        }
+      });
+
+      db.run('ALTER TABLE contact_submissions ADD COLUMN liked_sites TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding liked_sites column:', alterErr);
+        }
+      });
+
+      db.run('ALTER TABLE contact_submissions ADD COLUMN change_request TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.error('Error adding change_request column:', alterErr);
         }
       });
     }
@@ -358,6 +383,29 @@ function initDatabase() {
           console.log('Column error_message already exists or error:', alterErr.message);
         } else if (!alterErr) {
           console.log('Column error_message added to audit_jobs');
+        }
+      });
+
+      // Contact person fields for pre-filling the audit conversion modal
+      db.run('ALTER TABLE audit_jobs ADD COLUMN contact_name TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column contact_name already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column contact_name added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN contact_email TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column contact_email already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column contact_email added to audit_jobs');
+        }
+      });
+      db.run('ALTER TABLE audit_jobs ADD COLUMN contact_phone TEXT', (alterErr) => {
+        if (alterErr && !alterErr.message.includes('duplicate column')) {
+          console.log('Column contact_phone already exists or error:', alterErr.message);
+        } else if (!alterErr) {
+          console.log('Column contact_phone added to audit_jobs');
         }
       });
     }
@@ -1021,8 +1069,9 @@ function insertSubmission(data, callback) {
     INSERT INTO contact_submissions (
       email, name, phone, website, 
       industry, timeline, message, 
-      ip_address, selected_package, selected_week, preferred_start_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ip_address, selected_package, selected_week, preferred_start_date,
+      role, liked_sites, change_request
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -1036,7 +1085,10 @@ function insertSubmission(data, callback) {
     data.ip_address || null,
     data.selected_package || null,
     data.selected_week || null,
-    data.preferred_start_date || null
+    data.preferred_start_date || null,
+    data.role || null,
+    data.liked_sites || null,
+    data.change_request || null
   ];
 
   db.run(sql, params, function(err) {
@@ -1347,7 +1399,11 @@ const AUDIT_JOB_UPDATE_FIELDS = new Set([
   'full_scraping_started_at',
   'full_scraping_completed_at',
   'full_scraping_json',
-  'full_scraping_error'
+  'full_scraping_error',
+  // Contact person for audit conversion modal pre-fill
+  'contact_name',
+  'contact_email',
+  'contact_phone'
 ]);
 
 function updateAuditJob(id, updates, callback) {

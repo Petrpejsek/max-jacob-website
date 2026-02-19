@@ -217,6 +217,17 @@
                 </div>
 
                 <div class="field-group">
+                    <div class="field-label">Phone</div>
+                    <div class="field-value">
+                        <% if (submission.phone) { %>
+                            <a href="tel:<%= submission.phone %>"><%= submission.phone %></a>
+                        <% } else { %>
+                            -
+                        <% } %>
+                    </div>
+                </div>
+
+                <div class="field-group">
                     <div class="field-label">Company</div>
                     <div class="field-value"><%= submission.company || '-' %></div>
                 </div>
@@ -285,6 +296,21 @@
                         <% } %>
                     </div>
                 </div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Role in Company</div>
+                <div class="field-value"><%= submission.role || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">Sites They Like</div>
+                <div class="field-value field-value-large"><%= submission.liked_sites || '-' %></div>
+            </div>
+
+            <div class="field-group">
+                <div class="field-label">What They Want to Change</div>
+                <div class="field-value field-value-large"><%= submission.change_request || '-' %></div>
             </div>
 
             <div class="field-group">

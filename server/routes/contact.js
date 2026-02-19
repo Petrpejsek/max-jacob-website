@@ -13,7 +13,7 @@ router.get('/test', (req, res) => {
 
 // POST /api/contact-submissions
 router.post('/contact-submissions', (req, res) => {
-  const { email, name, phone, website, industry, timeline, message, selected_package, selected_week, preferred_start_date } = req.body;
+  const { email, name, phone, website, industry, timeline, message, selected_package, selected_week, preferred_start_date, role, liked_sites, change_request } = req.body;
 
   // Validace required polí
   if (!name || !email || !message) {
@@ -44,7 +44,10 @@ router.post('/contact-submissions', (req, res) => {
     ip_address: req.ip,
     selected_package,
     selected_week,
-    preferred_start_date
+    preferred_start_date,
+    role: role || null,
+    liked_sites: liked_sites || null,
+    change_request: change_request || null
   };
 
   // Uložení do databáze
