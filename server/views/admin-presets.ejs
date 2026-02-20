@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niche Presets — Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #181828;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .admin-container { max-width: 1000px; margin: 0 auto; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #ff7ee7, #6a82fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+        .nav-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #181828;
+            border: 1.5px solid #2d2d44;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        .nav-btn:hover { background: #2d2d44; }
+        .nav-btn.active {
+            background: linear-gradient(135deg, #ff7ee7, #6a82fb);
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            background: #2d2d44;
+            border: 1px solid #3d3d58;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #3d3d58; }
+        .btn-primary {
+            background: linear-gradient(135deg, #6a82fb, #ff7ee7);
+            border: none;
+            font-weight: 600;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-danger { background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.35); color: #ff9999; }
+        .btn-danger:hover { background: rgba(239,68,68,.3); }
+
+        .card {
+            background: #1e1e32;
+            border: 1px solid #2d2d44;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #b6b6d6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .preset-card {
+            background: #181828;
+            border: 1px solid #2d2d44;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .preset-card:hover { border-color: #4d4d68; }
+
+        .preset-thumbnail {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid #2d2d44;
+            flex-shrink: 0;
+        }
+
+        .preset-info { flex: 1; }
+        .preset-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+        .small { font-size: 0.82rem; color: #b6b6d6; }
+
+        .field-group { margin-bottom: 16px; }
+        .field-label { font-size: 0.85rem; color: #b6b6d6; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            background: #181828;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+            color: #fff;
+            padding: 10px 14px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        input[type="text"]:focus { border-color: #6a82fb; }
+        input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .upload-area {
+            border: 2px dashed #2d2d44;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            color: #b6b6d6;
+        }
+        .upload-area:hover { border-color: #6a82fb; }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 1px solid #2d2d44;
+            margin-top: 8px;
+        }
+
+        .actions-row { display: flex; gap: 10px; }
+
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+        .tab-btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            background: #181828;
+            border: 1px solid #2d2d44;
+            color: #b6b6d6;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab-btn.active { background: #2d2d44; color: #fff; border-color: #4d4d68; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .empty-state { color: #b6b6d6; text-align: center; padding: 40px 20px; }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+            display: none;
+        }
+        .alert-success { background: rgba(74,222,128,.15); border: 1px solid rgba(74,222,128,.3); color: #4ade80; }
+        .alert-error { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: #ff9999; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Niche Presets</h1>
+            <div class="header-actions">
+                <a href="/admin" class="nav-btn">Submissions</a>
+                <a href="/admin/audits" class="nav-btn">Audits</a>
+                <a href="/admin/preaudits" class="nav-btn">Preaudits</a>
+                <a href="/admin/deals" class="nav-btn" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none;">💬 Deal Threads</a>
+                <a href="/admin/email-health" class="nav-btn" style="background: linear-gradient(90deg, #10b981, #3b82f6); border: none;">📧 Email Health</a>
+                <a href="/admin/storage" class="nav-btn" style="background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.35);">💾 Storage</a>
+                <a href="/admin/team-photos" class="nav-btn" style="background: linear-gradient(90deg, #6a82fb, #ff7ee7); border: none;">👥 Team Photos</a>
+                <a href="/admin/logout" class="nav-btn">Logout</a>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="alert alert-success" id="alertSuccess"></div>
+        <div class="alert alert-error" id="alertError"></div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" id="tabBtnList" onclick="switchTab('list')">Presets List</button>
+            <button class="tab-btn" id="tabBtnForm" onclick="switchTab('form')">Create / Edit Preset</button>
+        </div>
+
+        <!-- Tab: List -->
+        <div class="tab-content active" id="tabList">
+            <div class="card">
+                <div class="section-title">All Niche Presets</div>
+                <div id="presetsList">
+                    <div class="empty-state">Loading presets...</div>
+                </div>
+                <div style="margin-top: 16px;">
+                    <button class="btn btn-primary" onclick="createNew()">+ Create New Preset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Form -->
+        <div class="tab-content" id="tabForm">
+            <div class="card">
+                <div class="section-title" id="formTitle">Create New Preset</div>
+                <form id="presetForm" onsubmit="return false;">
+                    <input type="hidden" id="presetId" value="">
+
+                    <div class="field-group">
+                        <div class="field-label">Display Name *</div>
+                        <input type="text" id="presetDisplayName" placeholder="e.g. Roofing" required>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Slug * (unique identifier)</div>
+                        <input type="text" id="presetSlug" placeholder="e.g. roofing" required>
+                        <div class="small" style="margin-top: 4px;">Auto-generated from name, but editable</div>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Concept Image</div>
+                        <div class="upload-area" id="uploadArea" onclick="document.getElementById('conceptImageInput').click()">
+                            <div>📤 Click or drag & drop to upload</div>
+                            <div class="small" style="margin-top: 6px;">PNG, JPG, WEBP (max 5MB)</div>
+                        </div>
+                        <input type="file" id="conceptImageInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;" onchange="handleImageSelect(event)">
+                        <div id="imagePreview"></div>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Default Headline</div>
+                        <input type="text" id="presetHeadline" placeholder="e.g. More calls from your {city} {niche} website">
+                        <div class="small" style="margin-top: 4px;">Use <code>{city}</code> and <code>{niche}</code> as placeholders</div>
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Primary CTA</div>
+                        <input type="text" id="presetPrimaryCta" placeholder="e.g. Get a Quote">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Secondary CTA</div>
+                        <input type="text" id="presetSecondaryCta" placeholder="e.g. Call Now">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="field-label">Benefits Bullets (max 3)</div>
+                        <input type="text" id="presetBullet1" placeholder="Bullet 1" style="margin-bottom: 8px;">
+                        <input type="text" id="presetBullet2" placeholder="Bullet 2" style="margin-bottom: 8px;">
+                        <input type="text" id="presetBullet3" placeholder="Bullet 3">
+                    </div>
+
+                    <div class="actions-row" style="margin-top: 20px;">
+                        <button class="btn btn-primary" type="button" onclick="savePreset()">Save Preset</button>
+                        <button class="btn" type="button" onclick="cancelEdit()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            presets: [],
+            editingId: null
+        };
+
+        function $(id) { return document.getElementById(id); }
+
+        function showAlert(type, msg) {
+            const el = $(type === 'success' ? 'alertSuccess' : 'alertError');
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 4000);
+        }
+
+        function switchTab(tab) {
+            $('tabBtnList').classList.toggle('active', tab === 'list');
+            $('tabBtnForm').classList.toggle('active', tab === 'form');
+            $('tabList').classList.toggle('active', tab === 'list');
+            $('tabForm').classList.toggle('active', tab === 'form');
+        }
+
+        function buildSlug(name) {
+            return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        }
+
+        async function loadPresets() {
+            try {
+                const res = await fetch('/api/presets', { credentials: 'include' });
+                const data = await res.json();
+                state.presets = data.presets || [];
+                renderList();
+            } catch (e) {
+                $('presetsList').innerHTML = '<div class="empty-state" style="color:#ff9999;">Error loading presets</div>';
+            }
+        }
+
+        function renderList() {
+            const container = $('presetsList');
+            if (!state.presets.length) {
+                container.innerHTML = '<div class="empty-state">No presets yet. Create your first one!</div>';
+                return;
+            }
+            let html = '';
+            for (const p of state.presets) {
+                const imgSrc = p.concept_image_url ? '/' + p.concept_image_url : null;
+                const nameAttr = (p.display_name || '').replace(/"/g, '&quot;');
+                const nameEsc = (p.display_name || '').replace(/'/g, "\\'");
+                html += '<div class="preset-card">';
+                if (imgSrc) {
+                    html += '<img src="' + imgSrc + '" class="preset-thumbnail" alt="' + nameAttr + '">';
+                } else {
+                    html += '<div class="preset-thumbnail" style="background:#2d2d44; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No image</div>';
+                }
+                html += '<div class="preset-info">';
+                html += '<div style="font-weight:600; margin-bottom:4px;">' + (p.display_name || '') + '</div>';
+                html += '<div class="small">Slug: <code>' + (p.slug || '') + '</code></div>';
+                if (p.default_headline) html += '<div class="small" style="margin-top:4px; color:#8888bb;">' + p.default_headline + '</div>';
+                const bullets = p.default_bullets_json || [];
+                if (bullets.length) html += '<div class="small" style="margin-top:4px;">Bullets: ' + bullets.join(' · ') + '</div>';
+                html += '</div>';
+                html += '<div class="preset-actions">';
+                html += '<button class="btn" onclick="editPreset(' + p.id + ')">Edit</button>';
+                html += '<button class="btn btn-danger" onclick="deletePreset(' + p.id + ', \'' + nameEsc + '\')">Delete</button>';
+                html += '</div></div>';
+            }
+            container.innerHTML = html;
+        }
+
+        function createNew() {
+            state.editingId = null;
+            $('formTitle').textContent = 'Create New Preset';
+            $('presetForm').reset();
+            $('presetId').value = '';
+            $('imagePreview').innerHTML = '';
+            $('conceptImageInput').value = '';
+            switchTab('form');
+
+            // Auto-slug from name
+            $('presetDisplayName').oninput = function() {
+                if (!state.editingId) {
+                    $('presetSlug').value = buildSlug(this.value);
+                }
+            };
+        }
+
+        function editPreset(id) {
+            const p = state.presets.find((x) => x.id === id);
+            if (!p) { alert('Preset not found'); return; }
+            state.editingId = id;
+            $('formTitle').textContent = 'Edit Preset: ' + (p.display_name || '');
+            $('presetId').value = String(id);
+            $('presetDisplayName').value = p.display_name || '';
+            $('presetSlug').value = p.slug || '';
+            $('presetHeadline').value = p.default_headline || '';
+            $('presetPrimaryCta').value = p.default_primary_cta || '';
+            $('presetSecondaryCta').value = p.default_secondary_cta || '';
+
+            const bullets = Array.isArray(p.default_bullets_json) ? p.default_bullets_json : [];
+            $('presetBullet1').value = bullets[0] || '';
+            $('presetBullet2').value = bullets[1] || '';
+            $('presetBullet3').value = bullets[2] || '';
+
+            const preview = $('imagePreview');
+            if (p.concept_image_url) {
+                preview.innerHTML = '<img src="/' + p.concept_image_url + '" class="preview-image" alt="Current image">';
+            } else {
+                preview.innerHTML = '';
+            }
+            $('conceptImageInput').value = '';
+
+            $('presetDisplayName').oninput = null;
+            switchTab('form');
+        }
+
+        function cancelEdit() {
+            state.editingId = null;
+            $('presetForm').reset();
+            $('imagePreview').innerHTML = '';
+            switchTab('list');
+        }
+
+        function handleImageSelect(event) {
+            const file = event && event.target && event.target.files && event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                $('imagePreview').innerHTML = '<img src="' + e.target.result + '" class="preview-image" alt="Preview">';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function savePreset() {
+            const displayName = ($('presetDisplayName').value || '').trim();
+            const slug = ($('presetSlug').value || '').trim();
+            if (!displayName || !slug) { alert('Display name and slug are required'); return; }
+
+            const formData = new FormData();
+            formData.append('display_name', displayName);
+            formData.append('slug', slug);
+            formData.append('default_headline', ($('presetHeadline').value || '').trim());
+            formData.append('default_primary_cta', ($('presetPrimaryCta').value || '').trim());
+            formData.append('default_secondary_cta', ($('presetSecondaryCta').value || '').trim());
+            formData.append('default_city', '');
+
+            const bullets = [
+                ($('presetBullet1').value || '').trim(),
+                ($('presetBullet2').value || '').trim(),
+                ($('presetBullet3').value || '').trim()
+            ].filter(Boolean);
+            formData.append('default_bullets_json', JSON.stringify(bullets));
+
+            const imgInput = $('conceptImageInput');
+            if (imgInput && imgInput.files && imgInput.files.length > 0) {
+                formData.append('concept_image', imgInput.files[0]);
+            }
+
+            const url = state.editingId ? '/api/presets/' + state.editingId : '/api/presets';
+            const method = state.editingId ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, { method, body: formData, credentials: 'include' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && data.error) ? data.error : 'HTTP ' + res.status);
+                showAlert('success', state.editingId ? 'Preset updated!' : 'Preset created!');
+                state.editingId = null;
+                $('presetForm').reset();
+                $('imagePreview').innerHTML = '';
+                await loadPresets();
+                switchTab('list');
+            } catch (err) {
+                showAlert('error', 'Error: ' + err.message);
+            }
+        }
+
+        async function deletePreset(id, name) {
+            if (!confirm('Delete "' + (name || 'preset') + '"? This cannot be undone.')) return;
+            try {
+                const res = await fetch('/api/presets/' + id, { method: 'DELETE', credentials: 'include' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && data.error) ? data.error : 'HTTP ' + res.status);
+                showAlert('success', 'Preset deleted.');
+                await loadPresets();
+            } catch (err) {
+                showAlert('error', 'Error: ' + err.message);
+            }
+        }
+
+        // Init
+        loadPresets();
+    </script>
+</body>
+</html>

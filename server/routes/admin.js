@@ -2381,6 +2381,11 @@ router.post('/api/backup', requireAdmin, (req, res) => {
 
 // ==================== STORAGE MANAGEMENT ROUTES ====================
 
+// GET /admin/presets - Niche presets management page
+router.get('/presets', requireAdmin, (req, res) => {
+  res.render('admin-presets');
+});
+
 // GET /admin/storage - Storage overview page
 router.get('/storage', requireAdmin, (req, res) => {
   res.render('admin-storage');
