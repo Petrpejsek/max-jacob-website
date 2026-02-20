@@ -2950,7 +2950,7 @@ function generateEmailHtml(job, miniAudit, screenshots, emailPolish, preset = nu
 <p>Jacob here from Max &amp; Jacob.</p>
 <p>I put together a quick website audit for you (safe link, no login, takes ~2 minutes to skim):</p>
 <p><a href="${auditUrl.replace(/&/g, '&amp;')}" target="_blank" style="color:#2563eb;font-weight:bold;">${auditLinkLabel}</a></p>
-<p>If you find it useful, we can also design a new homepage concept for you within 48 hours &mdash; completely no strings attached. Just fill out a short brief at the end of the audit. No commitment, no sales calls.</p>
+<p>If you find it useful, we can also design a new homepage preview for you within 48 hours &mdash; completely free, no strings attached. Just answer a few quick questions at the end of the audit. Takes about a minute. No commitment, no sales calls.</p>
 <p>Best,<br>Jacob Liesner<br>Max &amp; Jacob<br><a href="mailto:${senderEmail}" style="color:#2563eb;">${senderEmail}</a></p>
 </div>`;
       break;
