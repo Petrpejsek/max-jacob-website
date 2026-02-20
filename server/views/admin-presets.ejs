@@ -353,14 +353,13 @@
 
         function createNew() {
             state.editingId = null;
+            switchTab('form');
             $('formTitle').textContent = 'Create New Preset';
             $('presetForm').reset();
             $('presetId').value = '';
             $('imagePreview').innerHTML = '';
-            $('conceptImageInput').value = '';
-            switchTab('form');
+            try { $('conceptImageInput').value = ''; } catch(e) {}
 
-            // Auto-slug from name
             $('presetDisplayName').oninput = function() {
                 if (!state.editingId) {
                     $('presetSlug').value = buildSlug(this.value);
