@@ -49,11 +49,6 @@
             cursor: pointer;
         }
         .nav-btn:hover { background: #2d2d44; }
-        .nav-btn.active {
-            background: linear-gradient(135deg, #ff7ee7, #6a82fb);
-            border: none;
-            font-weight: 600;
-        }
 
         .btn {
             padding: 8px 18px;
@@ -121,7 +116,7 @@
         .field-group { margin-bottom: 16px; }
         .field-label { font-size: 0.85rem; color: #b6b6d6; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
 
-        input[type="text"], input[type="file"] {
+        input[type="text"] {
             width: 100%;
             background: #181828;
             border: 1px solid #2d2d44;
@@ -132,7 +127,6 @@
             outline: none;
         }
         input[type="text"]:focus { border-color: #6a82fb; }
-        input:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .upload-area {
             border: 2px dashed #2d2d44;
@@ -205,8 +199,8 @@
 
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab-btn active" id="tabBtnList" onclick="switchTab('list')">Presets List</button>
-            <button class="tab-btn" id="tabBtnForm" onclick="switchTab('form')">Create / Edit Preset</button>
+            <button class="tab-btn active" id="tabBtnList">Presets List</button>
+            <button class="tab-btn" id="tabBtnForm">Create / Edit Preset</button>
         </div>
 
         <!-- Tab: List -->
@@ -217,7 +211,7 @@
                     <div class="empty-state">Loading presets...</div>
                 </div>
                 <div style="margin-top: 16px;">
-                    <button class="btn btn-primary" onclick="createNew()">+ Create New Preset</button>
+                    <button class="btn btn-primary" id="btnCreateNew">+ Create New Preset</button>
                 </div>
             </div>
         </div>
@@ -226,251 +220,279 @@
         <div class="tab-content" id="tabForm">
             <div class="card">
                 <div class="section-title" id="formTitle">Create New Preset</div>
-                <form id="presetForm" onsubmit="return false;">
-                    <input type="hidden" id="presetId" value="">
-
-                    <div class="field-group">
-                        <div class="field-label">Display Name *</div>
-                        <input type="text" id="presetDisplayName" placeholder="e.g. Roofing" required>
+                <div class="field-group">
+                    <div class="field-label">Display Name *</div>
+                    <input type="text" id="presetDisplayName" placeholder="e.g. Roofing">
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Slug * (unique identifier)</div>
+                    <input type="text" id="presetSlug" placeholder="e.g. roofing">
+                    <div class="small" style="margin-top: 4px;">Auto-generated from name, but editable</div>
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Concept Image</div>
+                    <div class="upload-area" id="uploadArea">
+                        <div>📤 Click to upload image</div>
+                        <div class="small" style="margin-top: 6px;">PNG, JPG, WEBP (max 5MB)</div>
                     </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Slug * (unique identifier)</div>
-                        <input type="text" id="presetSlug" placeholder="e.g. roofing" required>
-                        <div class="small" style="margin-top: 4px;">Auto-generated from name, but editable</div>
-                    </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Concept Image</div>
-                        <div class="upload-area" id="uploadArea" onclick="document.getElementById('conceptImageInput').click()">
-                            <div>📤 Click or drag & drop to upload</div>
-                            <div class="small" style="margin-top: 6px;">PNG, JPG, WEBP (max 5MB)</div>
-                        </div>
-                        <input type="file" id="conceptImageInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;" onchange="handleImageSelect(event)">
-                        <div id="imagePreview"></div>
-                    </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Default Headline</div>
-                        <input type="text" id="presetHeadline" placeholder="e.g. More calls from your {city} {niche} website">
-                        <div class="small" style="margin-top: 4px;">Use <code>{city}</code> and <code>{niche}</code> as placeholders</div>
-                    </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Primary CTA</div>
-                        <input type="text" id="presetPrimaryCta" placeholder="e.g. Get a Quote">
-                    </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Secondary CTA</div>
-                        <input type="text" id="presetSecondaryCta" placeholder="e.g. Call Now">
-                    </div>
-
-                    <div class="field-group">
-                        <div class="field-label">Benefits Bullets (max 3)</div>
-                        <input type="text" id="presetBullet1" placeholder="Bullet 1" style="margin-bottom: 8px;">
-                        <input type="text" id="presetBullet2" placeholder="Bullet 2" style="margin-bottom: 8px;">
-                        <input type="text" id="presetBullet3" placeholder="Bullet 3">
-                    </div>
-
-                    <div class="actions-row" style="margin-top: 20px;">
-                        <button class="btn btn-primary" type="button" onclick="savePreset()">Save Preset</button>
-                        <button class="btn" type="button" onclick="cancelEdit()">Cancel</button>
-                    </div>
-                </form>
+                    <input type="file" id="conceptImageInput" accept="image/png,image/jpeg,image/jpg,image/webp" style="display: none;">
+                    <div id="imagePreview"></div>
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Default Headline</div>
+                    <input type="text" id="presetHeadline" placeholder="e.g. More calls from your {city} {niche} website">
+                    <div class="small" style="margin-top: 4px;">Use {city} and {niche} as placeholders</div>
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Primary CTA</div>
+                    <input type="text" id="presetPrimaryCta" placeholder="e.g. Get a Quote">
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Secondary CTA</div>
+                    <input type="text" id="presetSecondaryCta" placeholder="e.g. Call Now">
+                </div>
+                <div class="field-group">
+                    <div class="field-label">Benefits Bullets (max 3)</div>
+                    <input type="text" id="presetBullet1" placeholder="Bullet 1" style="margin-bottom: 8px;">
+                    <input type="text" id="presetBullet2" placeholder="Bullet 2" style="margin-bottom: 8px;">
+                    <input type="text" id="presetBullet3" placeholder="Bullet 3">
+                </div>
+                <input type="hidden" id="presetId" value="">
+                <div class="actions-row" style="margin-top: 20px;">
+                    <button class="btn btn-primary" id="btnSave">Save Preset</button>
+                    <button class="btn" id="btnCancel">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        const state = {
-            presets: [],
-            editingId: null
-        };
+    (function() {
+        'use strict';
 
-        function $(id) { return document.getElementById(id); }
+        var state = { presets: [], editingId: null };
+
+        function ge(id) { return document.getElementById(id); }
 
         function showAlert(type, msg) {
-            const el = $(type === 'success' ? 'alertSuccess' : 'alertError');
+            var el = ge(type === 'success' ? 'alertSuccess' : 'alertError');
             el.textContent = msg;
             el.style.display = 'block';
-            setTimeout(() => { el.style.display = 'none'; }, 4000);
+            setTimeout(function() { el.style.display = 'none'; }, 4000);
         }
 
         function switchTab(tab) {
-            $('tabBtnList').classList.toggle('active', tab === 'list');
-            $('tabBtnForm').classList.toggle('active', tab === 'form');
-            $('tabList').classList.toggle('active', tab === 'list');
-            $('tabForm').classList.toggle('active', tab === 'form');
+            ge('tabBtnList').classList.toggle('active', tab === 'list');
+            ge('tabBtnForm').classList.toggle('active', tab === 'form');
+            ge('tabList').classList.toggle('active', tab === 'list');
+            ge('tabForm').classList.toggle('active', tab === 'form');
         }
 
         function buildSlug(name) {
             return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         }
 
-        async function loadPresets() {
-            try {
-                const res = await fetch('/api/presets', { credentials: 'include' });
-                const data = await res.json();
-                state.presets = data.presets || [];
-                renderList();
-            } catch (e) {
-                $('presetsList').innerHTML = '<div class="empty-state" style="color:#ff9999;">Error loading presets</div>';
-            }
+        function clearForm() {
+            ge('presetId').value = '';
+            ge('presetDisplayName').value = '';
+            ge('presetSlug').value = '';
+            ge('presetHeadline').value = '';
+            ge('presetPrimaryCta').value = '';
+            ge('presetSecondaryCta').value = '';
+            ge('presetBullet1').value = '';
+            ge('presetBullet2').value = '';
+            ge('presetBullet3').value = '';
+            ge('imagePreview').innerHTML = '';
+            var fi = ge('conceptImageInput');
+            try { fi.value = ''; } catch(e) {}
+        }
+
+        function loadPresets() {
+            fetch('/api/presets', { credentials: 'include' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    state.presets = data.presets || [];
+                    renderList();
+                })
+                .catch(function() {
+                    ge('presetsList').innerHTML = '<div class="empty-state" style="color:#ff9999;">Error loading presets</div>';
+                });
         }
 
         function renderList() {
-            const container = $('presetsList');
+            var container = ge('presetsList');
             if (!state.presets.length) {
-                container.innerHTML = '<div class="empty-state">No presets yet. Create your first one!</div>';
+                container.innerHTML = '<div class="empty-state">No presets yet. Click "+ Create New Preset" to add one.</div>';
                 return;
             }
-            let html = '';
-            for (const p of state.presets) {
-                const imgSrc = p.concept_image_url ? '/' + p.concept_image_url : null;
-                const nameAttr = (p.display_name || '').replace(/"/g, '&quot;');
-                const nameEsc = (p.display_name || '').replace(/'/g, "\\'");
+            var html = '';
+            for (var i = 0; i < state.presets.length; i++) {
+                var p = state.presets[i];
+                var imgSrc = p.concept_image_url ? '/' + p.concept_image_url : null;
+                var nameAttr = (p.display_name || '').replace(/"/g, '&quot;');
                 html += '<div class="preset-card">';
                 if (imgSrc) {
                     html += '<img src="' + imgSrc + '" class="preset-thumbnail" alt="' + nameAttr + '">';
                 } else {
-                    html += '<div class="preset-thumbnail" style="background:#2d2d44; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No image</div>';
+                    html += '<div class="preset-thumbnail" style="background:#2d2d44;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.75rem;">No image</div>';
                 }
                 html += '<div class="preset-info">';
-                html += '<div style="font-weight:600; margin-bottom:4px;">' + (p.display_name || '') + '</div>';
+                html += '<div style="font-weight:600;margin-bottom:4px;">' + (p.display_name || '') + '</div>';
                 html += '<div class="small">Slug: <code>' + (p.slug || '') + '</code></div>';
-                if (p.default_headline) html += '<div class="small" style="margin-top:4px; color:#8888bb;">' + p.default_headline + '</div>';
-                const bullets = p.default_bullets_json || [];
+                if (p.default_headline) html += '<div class="small" style="margin-top:4px;color:#8888bb;">' + p.default_headline + '</div>';
+                var bullets = p.default_bullets_json || [];
                 if (bullets.length) html += '<div class="small" style="margin-top:4px;">Bullets: ' + bullets.join(' · ') + '</div>';
                 html += '</div>';
                 html += '<div class="preset-actions">';
-                html += '<button class="btn" onclick="editPreset(' + p.id + ')">Edit</button>';
-                html += '<button class="btn btn-danger" onclick="deletePreset(' + p.id + ', \'' + nameEsc + '\')">Delete</button>';
+                html += '<button class="btn" data-action="edit" data-id="' + p.id + '">Edit</button>';
+                html += '<button class="btn btn-danger" data-action="delete" data-id="' + p.id + '" data-name="' + nameAttr + '">Delete</button>';
                 html += '</div></div>';
             }
             container.innerHTML = html;
+
+            // Attach edit/delete listeners
+            var btns = container.querySelectorAll('button[data-action]');
+            for (var j = 0; j < btns.length; j++) {
+                btns[j].addEventListener('click', function(e) {
+                    var btn = e.currentTarget;
+                    var action = btn.getAttribute('data-action');
+                    var id = parseInt(btn.getAttribute('data-id'), 10);
+                    if (action === 'edit') {
+                        editPreset(id);
+                    } else if (action === 'delete') {
+                        deletePreset(id, btn.getAttribute('data-name'));
+                    }
+                });
+            }
         }
 
         function createNew() {
             state.editingId = null;
             switchTab('form');
-            $('formTitle').textContent = 'Create New Preset';
-            $('presetForm').reset();
-            $('presetId').value = '';
-            $('imagePreview').innerHTML = '';
-            try { $('conceptImageInput').value = ''; } catch(e) {}
-
-            $('presetDisplayName').oninput = function() {
-                if (!state.editingId) {
-                    $('presetSlug').value = buildSlug(this.value);
-                }
-            };
+            ge('formTitle').textContent = 'Create New Preset';
+            clearForm();
+            ge('presetDisplayName').focus();
         }
 
         function editPreset(id) {
-            const p = state.presets.find((x) => x.id === id);
+            var p = null;
+            for (var i = 0; i < state.presets.length; i++) {
+                if (state.presets[i].id === id) { p = state.presets[i]; break; }
+            }
             if (!p) { alert('Preset not found'); return; }
             state.editingId = id;
-            $('formTitle').textContent = 'Edit Preset: ' + (p.display_name || '');
-            $('presetId').value = String(id);
-            $('presetDisplayName').value = p.display_name || '';
-            $('presetSlug').value = p.slug || '';
-            $('presetHeadline').value = p.default_headline || '';
-            $('presetPrimaryCta').value = p.default_primary_cta || '';
-            $('presetSecondaryCta').value = p.default_secondary_cta || '';
-
-            const bullets = Array.isArray(p.default_bullets_json) ? p.default_bullets_json : [];
-            $('presetBullet1').value = bullets[0] || '';
-            $('presetBullet2').value = bullets[1] || '';
-            $('presetBullet3').value = bullets[2] || '';
-
-            const preview = $('imagePreview');
+            switchTab('form');
+            ge('formTitle').textContent = 'Edit Preset: ' + (p.display_name || '');
+            ge('presetId').value = String(id);
+            ge('presetDisplayName').value = p.display_name || '';
+            ge('presetSlug').value = p.slug || '';
+            ge('presetHeadline').value = p.default_headline || '';
+            ge('presetPrimaryCta').value = p.default_primary_cta || '';
+            ge('presetSecondaryCta').value = p.default_secondary_cta || '';
+            var bullets = Array.isArray(p.default_bullets_json) ? p.default_bullets_json : [];
+            ge('presetBullet1').value = bullets[0] || '';
+            ge('presetBullet2').value = bullets[1] || '';
+            ge('presetBullet3').value = bullets[2] || '';
+            var preview = ge('imagePreview');
             if (p.concept_image_url) {
                 preview.innerHTML = '<img src="/' + p.concept_image_url + '" class="preview-image" alt="Current image">';
             } else {
                 preview.innerHTML = '';
             }
-            $('conceptImageInput').value = '';
-
-            $('presetDisplayName').oninput = null;
-            switchTab('form');
+            try { ge('conceptImageInput').value = ''; } catch(e) {}
         }
 
-        function cancelEdit() {
-            state.editingId = null;
-            $('presetForm').reset();
-            $('imagePreview').innerHTML = '';
-            switchTab('list');
-        }
-
-        function handleImageSelect(event) {
-            const file = event && event.target && event.target.files && event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                $('imagePreview').innerHTML = '<img src="' + e.target.result + '" class="preview-image" alt="Preview">';
-            };
-            reader.readAsDataURL(file);
-        }
-
-        async function savePreset() {
-            const displayName = ($('presetDisplayName').value || '').trim();
-            const slug = ($('presetSlug').value || '').trim();
+        function savePreset() {
+            var displayName = (ge('presetDisplayName').value || '').trim();
+            var slug = (ge('presetSlug').value || '').trim();
             if (!displayName || !slug) { alert('Display name and slug are required'); return; }
 
-            const formData = new FormData();
+            var formData = new FormData();
             formData.append('display_name', displayName);
             formData.append('slug', slug);
-            formData.append('default_headline', ($('presetHeadline').value || '').trim());
-            formData.append('default_primary_cta', ($('presetPrimaryCta').value || '').trim());
-            formData.append('default_secondary_cta', ($('presetSecondaryCta').value || '').trim());
+            formData.append('default_headline', (ge('presetHeadline').value || '').trim());
+            formData.append('default_primary_cta', (ge('presetPrimaryCta').value || '').trim());
+            formData.append('default_secondary_cta', (ge('presetSecondaryCta').value || '').trim());
             formData.append('default_city', '');
-
-            const bullets = [
-                ($('presetBullet1').value || '').trim(),
-                ($('presetBullet2').value || '').trim(),
-                ($('presetBullet3').value || '').trim()
+            var bullets = [
+                (ge('presetBullet1').value || '').trim(),
+                (ge('presetBullet2').value || '').trim(),
+                (ge('presetBullet3').value || '').trim()
             ].filter(Boolean);
             formData.append('default_bullets_json', JSON.stringify(bullets));
-
-            const imgInput = $('conceptImageInput');
-            if (imgInput && imgInput.files && imgInput.files.length > 0) {
+            var imgInput = ge('conceptImageInput');
+            if (imgInput.files && imgInput.files.length > 0) {
                 formData.append('concept_image', imgInput.files[0]);
             }
 
-            const url = state.editingId ? '/api/presets/' + state.editingId : '/api/presets';
-            const method = state.editingId ? 'PUT' : 'POST';
+            var url = state.editingId ? '/api/presets/' + state.editingId : '/api/presets';
+            var method = state.editingId ? 'PUT' : 'POST';
 
-            try {
-                const res = await fetch(url, { method, body: formData, credentials: 'include' });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((data && data.error) ? data.error : 'HTTP ' + res.status);
-                showAlert('success', state.editingId ? 'Preset updated!' : 'Preset created!');
-                state.editingId = null;
-                $('presetForm').reset();
-                $('imagePreview').innerHTML = '';
-                await loadPresets();
-                switchTab('list');
-            } catch (err) {
-                showAlert('error', 'Error: ' + err.message);
-            }
+            ge('btnSave').disabled = true;
+            ge('btnSave').textContent = 'Saving...';
+
+            fetch(url, { method: method, body: formData, credentials: 'include' })
+                .then(function(r) {
+                    return r.json().then(function(data) { return { ok: r.ok, data: data }; });
+                })
+                .then(function(res) {
+                    ge('btnSave').disabled = false;
+                    ge('btnSave').textContent = 'Save Preset';
+                    if (!res.ok) throw new Error((res.data && res.data.error) ? res.data.error : 'HTTP error');
+                    showAlert('success', state.editingId ? 'Preset updated!' : 'Preset created!');
+                    state.editingId = null;
+                    clearForm();
+                    loadPresets();
+                    switchTab('list');
+                })
+                .catch(function(err) {
+                    ge('btnSave').disabled = false;
+                    ge('btnSave').textContent = 'Save Preset';
+                    showAlert('error', 'Error: ' + err.message);
+                });
         }
 
-        async function deletePreset(id, name) {
+        function deletePreset(id, name) {
             if (!confirm('Delete "' + (name || 'preset') + '"? This cannot be undone.')) return;
-            try {
-                const res = await fetch('/api/presets/' + id, { method: 'DELETE', credentials: 'include' });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((data && data.error) ? data.error : 'HTTP ' + res.status);
-                showAlert('success', 'Preset deleted.');
-                await loadPresets();
-            } catch (err) {
-                showAlert('error', 'Error: ' + err.message);
-            }
+            fetch('/api/presets/' + id, { method: 'DELETE', credentials: 'include' })
+                .then(function(r) {
+                    return r.json().then(function(data) { return { ok: r.ok, data: data }; });
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error((res.data && res.data.error) ? res.data.error : 'HTTP error');
+                    showAlert('success', 'Preset deleted.');
+                    loadPresets();
+                })
+                .catch(function(err) {
+                    showAlert('error', 'Error: ' + err.message);
+                });
         }
+
+        // Wire up static buttons
+        ge('tabBtnList').addEventListener('click', function() { switchTab('list'); });
+        ge('tabBtnForm').addEventListener('click', function() { createNew(); });
+        ge('btnCreateNew').addEventListener('click', function() { createNew(); });
+        ge('btnSave').addEventListener('click', function() { savePreset(); });
+        ge('btnCancel').addEventListener('click', function() { clearForm(); switchTab('list'); });
+        ge('uploadArea').addEventListener('click', function() { ge('conceptImageInput').click(); });
+        ge('conceptImageInput').addEventListener('change', function(e) {
+            var file = e.target.files && e.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                ge('imagePreview').innerHTML = '<img src="' + ev.target.result + '" class="preview-image" alt="Preview">';
+            };
+            reader.readAsDataURL(file);
+        });
+        ge('presetDisplayName').addEventListener('input', function() {
+            if (!state.editingId) {
+                ge('presetSlug').value = buildSlug(this.value);
+            }
+        });
 
         // Init
         loadPresets();
+    })();
     </script>
 </body>
 </html>
